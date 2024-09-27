@@ -1,8 +1,9 @@
+# npcsh
 
-- sometimes it causes me to tremble
+Welcome to npcsh, the shell for interacting with NPCs (AI agents).
 
-- tremble
 
-- tremble
+## Modes
+npcsh provides several useful modes.
 
-- were you there when they crucified my lord
+## Compilation
