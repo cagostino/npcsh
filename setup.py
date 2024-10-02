@@ -2,20 +2,14 @@ from setuptools import setup, find_packages
 
 setup(
     name="npcsh",
-    version="0.1.0",
+    version="0.1.1",
     packages=find_packages(exclude=["tests*"]),
-    install_requires=[
-        'jinja2',
-        'pandas', 
-        'ollama',
-        'requests',
-        'PyYAML'
-    ],
+    install_requires=["jinja2", "pandas", "ollama", "requests", "PyYAML"],
     entry_points={
-        'console_scripts': [
-            'npcsh=npcsh.npcsh:main',
+        "console_scripts": [
+            "npcsh=npcsh.npcsh:main",
         ],
-    },    
+    },
     author="Christopher Agostino",
     author_email="cjp.agostino@example.com",
     description="A way to use npcsh",

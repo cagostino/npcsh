@@ -4,6 +4,15 @@ Welcome to npcsh, the shell for interacting with NPCs (LLM-powered AI agents). n
 
 Additionally, npcsh introduces a new paradigm of programming for LLMs: npcsh allows users to set up NPC profiles (a la npc_profile.npc) where a user sets the primary directive of the NPC, the tools they want the NPC to use, and other properties of the NPC. NPCs can interact with each other and their primary directives and properties make these relationships explicit through jinja references.
 
+## Dependencies
+- ollama
+- python >3.10
+
+The default model is currently phi3. The user can change the model by setting the environment variable `NPCSH_MODEL` to the desired model name and to change the provider by setting the environment variable `NPCSH_PROVIDER` to the desired provider name.
+
+The provider must be one of ['ollama', 'openai', 'anthropic'] and the model must be one available from those providers.
+
+
 ## compilation
 
 Each NPC can be compiled to accomplish their primary directive and then any issues faced will be recorded and associated with the NPC so that it can reference it later through vector search. In any of the modes where a user requests input from an NPC, the NPC will include RAG search results before carrying out the request.
@@ -35,15 +44,17 @@ The LLM or specific NPC will take the user's request and try to write a command 
 Use the Command NPC by typing ```/cmd <command>```. Chat with the Command NPC in spool mode by typing ```/spool cmd```.
 Use the Command NPC in the profiles of other NPCs by referencing it  like ```{{cmd}}```.
 
-### observation mode
+### Data NPC
 
-Users can create schemas for recording observations. The idea here is to more easily facilitate the recording of data for individuals in essentially any realm (e.g. recipe testing, one's own blood pressure or  weight, books read, movies watched, daily mood, etc.) without needing to use a tangled web of applications to do so. Observations can be referenced by the generic npcsh LLM shell or by specific NPCs.
-Use the Observation NPC by typing ```/obs <observation>```.
+Users can create schemas for recording observations and for exploring and analyzing data.
+
+The Data NPC will asily facilitate the recording of data for individuals in essentially any realm (e.g. recipe testing, one's own blood pressure or  weight, books read, movies watched, daily mood, etc.) without needing to use a tangled web of applications to do so. Observations can be referenced by the generic npcsh LLM shell or by specific NPCs.
+Use the Observation NPC by typing ```/data <observation>```.
 Chat with the Observation NPC in spool mode by typing ```/spool obs```.
-Use the Observation NPC in the profiles of other NPCs by referencing it like ```{{obs}}```.
+Use the Observation NPC in the profiles of other NPCs by referencing it like ```{{obs}}```. Exit by typing ```/dq```.
 
 
-### question mode
+### Question NPC
 
 The user can submit a 1-shot question to a general LLM or to a specific NPC.
 Use it like

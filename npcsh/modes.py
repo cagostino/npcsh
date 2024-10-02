@@ -1,7 +1,11 @@
 # modes.py
 import os
 import subprocess
-from .llm_funcs import get_ollama_conversion
+from .llm_funcs import (
+    get_ollama_conversation,
+    get_llm_response,
+    execute_data_operations,
+)
 import sqlite3
 
 
@@ -83,36 +87,60 @@ def save_note(note, command_history):
 # enter_notes_mode()
 
 
+def initial_table_print(cursor):
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name != 'command_history'"
+    )
+    tables = cursor.fetchall()
+
+    print("\nAvailable tables:")
+    for i, table in enumerate(tables, 1):
+        print(f"{i}. {table[0]}")
+
+
 def enter_observation_mode(command_history):
     conn = command_history.conn
     cursor = command_history.cursor
 
-    print("Entering observation mode. Type '/obsq' or '/oq' to exit.")
-
+    print("Entering observation mode. Type '/dq' or to exit.")
+    n_times = 0
     while True:
         # Show available tables
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name != 'command_history'"
-        )
-        tables = cursor.fetchall()
+        if n_times == 0:
+            initial_table_print(cursor)
 
-        print("\nAvailable tables:")
-        for i, table in enumerate(tables, 1):
-            print(f"{i}. {table[0]}")
-        print("n. Create new table")
-        print("d. Delete a table")
-        print("q. Exit observation mode")
+            user_query = input(
+                """
+Enter a plain-text request or one using the dataframe manipulation framework of your choice. 
+    You can also have the data NPC ingest data into your database by pointing it to the right files.
+data>"""
+            )
 
-        choice = input("Choose an option: ").strip().lower()
+        else:
+            user_query = input(
+                """
+data>"""
+            )
+        print(user_query)
 
-        if choice == "q" or choice == "/obsq" or choice == "/oq":
-            break
-        elif choice == "n":
-            create_new_table(cursor, conn)
-        elif choice == "d":
-            delete_table(cursor, conn)
-        elif choice.isdigit() and 1 <= int(choice) <= len(tables):
-            add_observation(cursor, conn, tables[int(choice) - 1][0])
+        response = execute_data_operations(user_query, command_history)
+
+        answer_prompt = f"""
+
+        Here is an input from the user:
+        {user_query}
+        Here is some useful data relevant to the query:
+        {response}
+
+        Now write a query to write a final response to be delivered to the user.
+
+        Your answer must be in the format:
+        {{"response": "Your response here."}}
+
+        """
+        final_response = get_llm_response(answer_prompt, format="json")
+        print(final_response["response"])
+        n_times += 1
 
     conn.close()
     print("Exiting observation mode.")
@@ -140,7 +168,7 @@ def enter_spool_mode(command_history, inherit_last=0, model="llama3.1"):
             spool_context.append({"role": "user", "content": user_input})
 
             # Process the spool context with LLM
-            spool_context = get_ollama_conversion(spool_context, model=model)
+            spool_context = get_ollama_conversation(spool_context, model=model)
 
             command_history.add(
                 user_input, ["spool"], spool_context[-1]["content"], os.getcwd()

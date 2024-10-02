@@ -61,7 +61,7 @@ def execute_command(command, command_history, db_path, npc_compiler):
             output = enter_whisper_mode()
         elif command_name == "notes":
             output = enter_notes_mode(command_history)
-        elif command_name == "obs":
+        elif command_name == "data":
             print(db_path)
             output = enter_observation_mode(command_history)
         elif command_name == "cmd" or command_name == "command":
@@ -87,6 +87,9 @@ def execute_command(command, command_history, db_path, npc_compiler):
 def setup_readline():
     readline.set_history_length(1000)
     readline.parse_and_bind("set editing-mode vi")
+    readline.parse_and_bind('"\e[A": history-search-backward')
+    readline.parse_and_bind('"\e[B": history-search-forward')
+
     readline.parse_and_bind('"\C-r": reverse-search-history')
 
 

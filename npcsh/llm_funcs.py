@@ -3,12 +3,15 @@ import requests
 import os
 import json
 import ollama
+import sqlite3
 
-def get_ollama_conversion(messages, model):
-    # print(messages)
+npcsh_model = os.environ.get("NPCSH_MODEL", "phi3")
+npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
 
+
+def get_ollama_conversation(messages, model):
     response = ollama.chat(model=model, messages=messages)
-    messages.append(response["message"])
+    messages.append(response)
     # print(response["message"])
     return messages
 
@@ -62,7 +65,7 @@ def get_claude_response(prompt, model, format=None):
     pass
 
 
-def get_llm_response(prompt, provider="ollama", model="phi3", **kwargs):
+def get_llm_response(prompt, provider=npcsh_provider, model=npcsh_model, **kwargs):
     if provider == "ollama":
         return get_ollama_response(prompt, model, **kwargs)
     elif provider == "openai":
@@ -71,6 +74,80 @@ def get_llm_response(prompt, provider="ollama", model="phi3", **kwargs):
         return get_claude_response(prompt, model, **kwargs)
     else:
         return "Error: Invalid provider specified."
+
+
+def execute_data_operations(query, command_history):
+    location = os.getcwd()
+    prompt = f"""
+    A user submitted this query: {query}
+    You need to generate a script using python, R, or SQL that will accomplish the user's intent.
+    
+    Respond ONLY with the procedure that should be executed.
+
+    Here are some examples:
+    {{"data_operation": "<sql query>", 'engine': 'SQL'}}
+    {{'data_operation': '<python script>', 'engine': 'PYTHON'}}
+    {{'data_operation': '<r script>', 'engine': 'R'}} 
+
+    You must reply with only ONE output.
+    """
+
+    response = get_llm_response(prompt, format="json")
+    output = response
+    command_history.add(query, [], json.dumps(output), location)
+    print(response)
+
+    if response["engine"] == "SQL":
+        db_path = os.path.expanduser("~/.npcsh_history.db")
+        query = response["data_operation"]
+        try:
+            print(f"Executing query in SQLite database: {query}")
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                result = cursor.fetchall()
+                for row in result:
+                    print(row)
+        except sqlite3.Error as e:
+            print(f"SQLite error: {e}")
+        except Exception as e:
+            print(f"Error executing query: {e}")
+    elif response["engine"] == "PYTHON":
+        engine = "python"
+        script = response["data_operation"]
+        try:
+            result = subprocess.run(
+                f"echo '{script}' | {engine}",
+                shell=True,
+                text=True,
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                print(result.stdout)
+            else:
+                print(f"Error executing script: {result.stderr}")
+        except Exception as e:
+            print(f"Error executing script: {e}")
+    elif response["engine"] == "R":
+        engine = "Rscript"
+        script = response["data_operation"]
+        try:
+            result = subprocess.run(
+                f"echo '{script}' | {engine}",
+                shell=True,
+                text=True,
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                print(result.stdout)
+            else:
+                print(f"Error executing script: {result.stderr}")
+        except Exception as e:
+            print(f"Error executing script: {e}")
+    else:
+        print("Error: Invalid engine specified.")
+
+    return response
 
 
 def execute_llm_command(command, command_history):
