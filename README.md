@@ -9,45 +9,60 @@ Additionally, npcsh introduces a new paradigm of programming for LLMs: npcsh all
 Each NPC can be compiled to accomplish their primary directive and then any issues faced will be recorded and associated with the NPC so that it can reference it later through vector search. In any of the modes where a user requests input from an NPC, the NPC will include RAG search results before carrying out the request.
 
 
-
-## Modes
-
-
-### Base npcsh
+## Base npcsh
 
 
 In the base npcsh shell, inputs are processed by an LLM. The LLM first determines what kind of a request the user is making and decides which of the available tools or modes will best enable it to accomplish the request. 
 
 
-### Bash mode
-A way to enter bash commands without leaving the npcsh environment. The primary benefit for doing this is that each and every input and output in npcsh is recorded along with some environmental context (e.g. current directory). Bash command histories can also be referenced in L
+### spool mode
 
+Spool mode allows the users to have threaded conversations in the shell, i.e. conversations where context is retained over the course of several turns.
+Users can speak with specific NPCs in spool mode by doing ```/spool <npc_name>``` and can exit spool mode by doing ```/exit```.
 
-### command mode
+## Built-in NPCs
+Built-in NPCs are NPCs that should offer broad utility to the user and allow them to create more complicated NPCs. These built-in NPCs facilitate the carrying out of many common data processing tasks as well as the ability to run commands and to execute and test programs.
 
-The LLM or specific NPC will take the user's request and try to write a bash command to accomplish the task and then attempt to run it and to tweak it until it works or it's exceeded the number of retries (default=5).
+### Bash NPC
+The bash NPC is an NPC focused on running bash commands and scripts. The bash NPC can be used to run bash commands and the user can converse with the bash NPC by doing ```/spool bash``` to interrogate it about the commands it has run and the output it has produced.
+A user can enter bash mode by typing ```/bash``` and can exit bash mode by typing ```/bq```.
+Use the Bash NPC in the profiles of other NPCs by referencing it like ```{{bash}}```.
 
+### Command NPC
+
+The LLM or specific NPC will take the user's request and try to write a command or a script to accomplish the task and then attempt to run it and to tweak it until it works or it's exceeded the number of retries (default=5).
+
+Use the Command NPC by typing ```/cmd <command>```. Chat with the Command NPC in spool mode by typing ```/spool cmd```.
+Use the Command NPC in the profiles of other NPCs by referencing it  like ```{{cmd}}```.
 
 ### observation mode
 
 Users can create schemas for recording observations. The idea here is to more easily facilitate the recording of data for individuals in essentially any realm (e.g. recipe testing, one's own blood pressure or  weight, books read, movies watched, daily mood, etc.) without needing to use a tangled web of applications to do so. Observations can be referenced by the generic npcsh LLM shell or by specific NPCs.
+Use the Observation NPC by typing ```/obs <observation>```.
+Chat with the Observation NPC in spool mode by typing ```/spool obs```.
+Use the Observation NPC in the profiles of other NPCs by referencing it like ```{{obs}}```.
 
 
 ### question mode
 
-The user can submit a question to a general LLM or to a specific NPC.
+The user can submit a 1-shot question to a general LLM or to a specific NPC.
+Use it like
+```/question <question> <npc_name>```
+or
+```/question <question>```
+
+You can also chat with the Question NPC in spool mode by typing ```/spool question```.
 
 
 
 ### thought mode
-This will be like a way to write out some general thoughts to get some feedback from a general LLM or a specific NPC.
 
+This will be like a way to write out some general thoughts to get some 1-shot feedback from a general LLM or a specific NPC.
 
-
-### spool mode
-
-Spool mode allows the users to have threaded conversations in the shell, i.e. conversations where context is retained over the course of several turns.
-
+Use it like
+```/thought <thought> <npc_name>```
+or
+```/thought <thought>```
 
  
-
+You can also chat with the Thought NPC in spool mode by typing ```/spool thought```.
