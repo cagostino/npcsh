@@ -58,7 +58,7 @@ def execute_command(command, command_history, db_path, npc_compiler):
                 print(output)
 
         elif command_name == "whisper":
-            output = enter_whisper_mode()
+            output = enter_whisper_mode(command_history)
         elif command_name == "notes":
             output = enter_notes_mode(command_history)
         elif command_name == "data":

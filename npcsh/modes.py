@@ -54,8 +54,134 @@ def enter_bash_mode():
     return "\n".join(bash_output)
 
 
-def enter_whisper_mode():
-    pass
+import whisper
+import pyaudio
+import wave
+import numpy as np
+import tempfile
+import os
+
+
+def record_audio(duration=5, sample_rate=16000):
+    p = pyaudio.PyAudio()
+    stream = p.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=sample_rate,
+        input=True,
+        frames_per_buffer=1024,
+    )
+
+    print("Recording...")
+    frames = []
+    for _ in range(0, int(sample_rate / 1024 * duration)):
+        data = stream.read(1024)
+        frames.append(data)
+    print("Recording finished.")
+
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+    return b"".join(frames)
+
+
+def is_silent(audio_data, threshold=500):
+    """Check if the audio chunk is silent."""
+    return np.max(np.abs(np.frombuffer(audio_data, dtype=np.int16))) < threshold
+
+
+def record_audio(sample_rate=16000):
+    p = pyaudio.PyAudio()
+    stream = p.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=sample_rate,
+        input=True,
+        frames_per_buffer=1024,
+    )
+
+    print("Listening... (speak now)")
+    frames = []
+    silent_chunks = 0
+    has_speech = False
+    max_silent_chunks = int(sample_rate * 1.5 / 1024)  # 1.5 seconds of silence
+
+    while True:
+        data = stream.read(1024)
+        frames.append(data)
+
+        if is_silent(data):
+            silent_chunks += 1
+            if has_speech and silent_chunks > max_silent_chunks:
+                break
+        else:
+            silent_chunks = 0
+            has_speech = True
+
+        if len(frames) % 10 == 0:  # Print a dot every ~0.5 seconds
+            print(".", end="", flush=True)
+
+    print("\nProcessing...")
+
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+    return b"".join(frames)
+
+
+def enter_whisper_mode(command_history):
+    model = whisper.load_model("base")
+    whisper_output = []
+
+    print(
+        "Entering whisper mode. Speak after seeing 'Listening...'. Say 'exit' or type '/wq' to quit."
+    )
+
+    while True:
+        try:
+            audio_data = record_audio()
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+                wf = wave.open(temp_audio.name, "wb")
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                wf.writeframes(audio_data)
+                wf.close()
+
+                result = model.transcribe(temp_audio.name)
+                text = result["text"].strip()
+
+            os.unlink(temp_audio.name)
+
+            print(f"You said: {text}")
+            whisper_output.append(f"User: {text}")
+
+            if text.lower() == "exit":
+                print("Exiting whisper mode.")
+                break
+
+            # Pass the recognized text to the LLM
+            llm_response = get_llm_response(text)
+            print(f"LLM response: {llm_response}")
+            whisper_output.append(f"LLM: {llm_response}")
+
+            # Add to command history
+            command_history.add(text, ["whisper"], llm_response, os.getcwd())
+
+            print("\nPress Enter to speak again, or type '/wq' to quit.")
+            user_input = input()
+            if user_input.lower() == "/wq":
+                print("Exiting whisper mode.")
+                break
+
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting whisper mode.")
+            break
+
+    return "\n".join(whisper_output)
 
 
 def enter_notes_mode(command_history):

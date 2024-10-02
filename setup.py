@@ -4,7 +4,15 @@ setup(
     name="npcsh",
     version="0.1.1",
     packages=find_packages(exclude=["tests*"]),
-    install_requires=["jinja2", "pandas", "ollama", "requests", "PyYAML"],
+    install_requires=[
+        "jinja2",
+        "pandas",
+        "ollama",
+        "requests",
+        "PyYAML",
+        "openai-whisper",
+        "pyaudio",
+    ],
     entry_points={
         "console_scripts": [
             "npcsh=npcsh.npcsh:main",
