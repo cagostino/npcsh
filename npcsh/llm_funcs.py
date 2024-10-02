@@ -64,7 +64,7 @@ def get_claude_response(prompt, model, format=None):
     pass
 
 
-def get_llm_response(prompt, provider="ollama", model="llama3.2", **kwargs):
+def get_llm_response(prompt, provider="ollama", model="phi3", **kwargs):
     if provider == "ollama":
         return get_ollama_response(prompt, model, **kwargs)
     elif provider == "openai":
@@ -198,6 +198,13 @@ def check_llm_command(command, command_history):
     Return your response in valid json key "request_type". 
     
     Provide an explanation in key "explanation".
+    Your answer must be like
+    
+    {{"request_type": "Command", 
+        "explanation": "This is a command because..."}}
+    or
+    {{"request_type": "Thought", 
+        "explanation": "This is a thought because..."}}
     """
 
     response = get_llm_response(prompt, format="json")
