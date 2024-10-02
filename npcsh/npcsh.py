@@ -9,23 +9,23 @@ import pandas as pd
 # Configure logging
 
 
-from command_history import CommandHistory
-from llm_funcs import (
+from .command_history import CommandHistory
+from .llm_funcs import (
     get_llm_response,
     execute_llm_command,
     check_llm_command,
     execute_llm_question,
     execute_llm_thought,
 )
-from modes import (
+from .modes import (
     enter_bash_mode,
     enter_whisper_mode,
     enter_notes_mode,
     enter_observation_mode,
     enter_spool_mode,
 )
-from helpers import log_action, list_directory, read_file
-from npc_compiler import NPCCompiler
+from .helpers import log_action, list_directory, read_file
+from .npc_compiler import NPCCompiler
 
 
 def execute_command(command, command_history, db_path, npc_compiler):

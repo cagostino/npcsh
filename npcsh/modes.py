@@ -1,7 +1,7 @@
 # modes.py
 import os
 import subprocess
-from llm_funcs import get_ollama_conversion
+from .llm_funcs import get_ollama_conversion
 import sqlite3
 
 

@@ -64,7 +64,7 @@ def get_claude_response(prompt, model, format=None):
     pass
 
 
-def get_llm_response(prompt, provider="ollama", model="llama3.1", **kwargs):
+def get_llm_response(prompt, provider="ollama", model="llama3.2", **kwargs):
     if provider == "ollama":
         return get_ollama_response(prompt, model, **kwargs)
     elif provider == "openai":
@@ -187,13 +187,17 @@ def check_llm_command(command, command_history):
     prompt = f"""
     A user submitted this query: {command}
     What kind of request is this? 
-    [Command, Question, Thought]
-    Commands are requests for an action to be performed.
-    Questions are requests for information. 
+    [Command, Thought]
     Thoughts are simply musings or ideas.
+    Commands are requests for a specific action to be performed.
+    
+    Most requests are likely to be commands so only use the other options if
+    the request is clearly not a command.
 
 
-    Return your response in valid json key "request_type".
+    Return your response in valid json key "request_type". 
+    
+    Provide an explanation in key "explanation".
     """
 
     response = get_llm_response(prompt, format="json")
