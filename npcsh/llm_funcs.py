@@ -4,7 +4,6 @@ import os
 import json
 import ollama
 
-
 def get_ollama_conversion(messages, model):
     # print(messages)
 
