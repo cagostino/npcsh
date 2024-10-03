@@ -8,9 +8,31 @@ Additionally, npcsh introduces a new paradigm of programming for LLMs: npcsh all
 - ollama
 - python >3.10
 
-The default model is currently phi3. The user can change the model by setting the environment variable `NPCSH_MODEL` to the desired model name and to change the provider by setting the environment variable `NPCSH_PROVIDER` to the desired provider name.
+The default model is currently phi3. 
+Download it by running
+```
+ollama run phi3
+```
+
+The user can change the model by setting the environment variable `NPCSH_MODEL` to the desired model name and to change the provider by setting the environment variable `NPCSH_PROVIDER` to the desired provider name.
 
 The provider must be one of ['ollama', 'openai', 'anthropic'] and the model must be one available from those providers.
+
+
+## Linux install
+sudo apt-get install espeak
+
+sudo apt-get install portaudio19-dev python3-pyaudio
+sudo apt-get install alsa-base alsa-utils
+
+
+pip install npcsh
+##Mac install
+brew install portaudio
+brew install ffmpeg
+brew install ollama
+brew services start ollama
+pip install npcsh
 
 
 ## compilation

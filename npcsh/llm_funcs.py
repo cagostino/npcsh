@@ -10,17 +10,20 @@ npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
 
 
 def get_ollama_conversation(messages, model):
+    messages_copy = messages.copy()
     response = ollama.chat(model=model, messages=messages)
-    messages.append(response)
-    # print(response["message"])
-    return messages
+    messages_copy.append(response["message"])
+    return messages_copy
 
 
 """
-test_messages = [
+
+messages = [
 {"role": "user", "content": "hows it going"}]
+response = ollama.chat(model=model, messages=messages)
+
 model = "llama3.1"
-ea =   get_ollama_conversion(ea, model)
+messages =   get_ollama_conversation(messages, model)
 
 ea.append({"role": "user", "content": "then can you help me design something really spectacular?"})
 
