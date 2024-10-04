@@ -20,18 +20,30 @@ The provider must be one of ['ollama', 'openai', 'anthropic'] and the model must
 
 
 ## Linux install
+```bash
 sudo apt-get install espeak
 
 sudo apt-get install portaudio19-dev python3-pyaudio
+
 sudo apt-get install alsa-base alsa-utils
+
+sudo apt-get install libcairo2-dev
+
+sudo apt-get install libgirepository1.0-dev
+
+
+```
 
 
 pip install npcsh
+
 ##Mac install
 brew install portaudio
 brew install ffmpeg
 brew install ollama
+
 brew services start ollama
+brew install pygobject3
 pip install npcsh
 
 
