@@ -118,11 +118,6 @@ def calibrate_silence(sample_rate=16000, duration=2):
     return silence_threshold
 
 
-def is_silent(audio_data, threshold=500):
-    """Check if the audio chunk is silent."""
-    return np.max(np.abs(np.frombuffer(audio_data, dtype=np.int16))) < threshold
-
-
 def is_silent(audio_data, threshold):
     return get_audio_level(audio_data) < threshold
 
@@ -291,6 +286,12 @@ def initial_table_print(cursor):
     print("\nAvailable tables:")
     for i, table in enumerate(tables, 1):
         print(f"{i}. {table[0]}")
+
+
+def get_data_response(request, npc=None):
+    data_output = npc.get_data_response(request)
+
+    return response
 
 
 def enter_observation_mode(command_history):

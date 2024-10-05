@@ -10,18 +10,10 @@ import pandas as pd
 
 
 from .command_history import CommandHistory
-from .llm_funcs import (
-    get_llm_response,
-    execute_llm_command,
-    check_llm_command,
-    execute_llm_question,
-    execute_llm_thought,
-)
+from .llm_funcs import execute_llm_command, execute_llm_question, check_llm_command
 from .modes import (
-    enter_bash_mode,
     enter_whisper_mode,
     enter_notes_mode,
-    enter_observation_mode,
     enter_spool_mode,
 )
 from .helpers import log_action, list_directory, read_file
@@ -40,17 +32,13 @@ def execute_command(command, command_history, db_path, npc_compiler):
         command_parts = command.split()
         command_name = command_parts[0]
         args = command_parts[1:]
+        # get the args that start with "npc="
+        # if the args that start with npc= are more than 1 then raise an error
+        # extract the npc
 
-        if (
-            command_name == "b"
-            or command_name == "bash"
-            or command_name == "zsh"
-            or command_name == "sh"
-        ):
-            output = enter_bash_mode()
         if command_name == "compile" or command_name == "com":
             try:
-                compiled_script = npc_compiler.compile(args[0])
+                compiled_script = npc_compiler.compile(npc)
                 output = f"Compiled NPC profile: {compiled_script}"
                 print(output)
             except Exception as e:
@@ -58,27 +46,36 @@ def execute_command(command, command_history, db_path, npc_compiler):
                 print(output)
 
         elif command_name == "whisper":
-            output = enter_whisper_mode(command_history)
+            output = enter_whisper_mode(command_history, npc=npc)
         elif command_name == "notes":
-            output = enter_notes_mode(command_history)
+            output = enter_notes_mode(command_history, npc=npc)
         elif command_name == "data":
-            print(db_path)
-            output = enter_observation_mode(command_history)
+            request = " ".join(args)
+            output = get_data_response(request, npc=npc)
+            # output = enter_observation_mode(command_history, npc=npc)
         elif command_name == "cmd" or command_name == "command":
-            output = execute_llm_command(command, command_history)
-        elif command_name == "?":
-            output = execute_llm_question(command, command_history)
-        elif command_name == "th" or command_name == "thought":
-            output = execute_llm_thought(command, command_history)
+            output = execute_llm_command(command, command_history, npc=npc)
+        elif command_name == "sample":
+            output = execute_llm_question(command, command_history, npc=npc)
         elif command_name == "spool" or command_name == "sp":
             inherit_last = int(args[0]) if args else 0
 
-            output = enter_spool_mode(command_history, inherit_last)
+            output = enter_spool_mode(command_history, inherit_last, npc=npc)
         else:
             output = f"Unknown command: {command_name}"
 
         subcommands = [f"/{command}"]
+
+        ## flush  the current shell context
     else:
+        # try to check if the command is a valid bash command
+
+        # if the command starts with "python", "R", "sql", "scala"...
+        # we will try to run it using those engines
+        # if it doesnt work we will end with checking the llm command.
+
+        # the llm will
+
         output = check_llm_command(command, command_history)
 
     command_history.add(command, subcommands, output, location)
