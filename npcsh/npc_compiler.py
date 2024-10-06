@@ -130,13 +130,13 @@ class NPCCompiler:
 class NPC:
     def __init__(
         self,
-        name,
-        primary_directive,
-        suggested_tools_to_use,
-        restrictions,
-        model,
-        provider,
-        db_conn,
+        name: str,
+        db_conn : sqlite3.Connection,        
+        primary_directive : str = None,
+        suggested_tools_to_use : str = None,
+        restrictions : list = None,
+        model : str = None,
+        provider : str = None,
     ):
         self.name = name
         self.primary_directive = primary_directive
