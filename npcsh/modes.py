@@ -6,6 +6,12 @@ from .llm_funcs import (
     get_llm_response,
     execute_data_operations,
 )
+from .helpers import (
+    calibrate_silence,
+    record_audio,
+    speak_text, 
+    is_silent
+)
 import sqlite3
 import time
 from gtts import gTTS
@@ -18,176 +24,7 @@ import numpy as np
 import tempfile
 import os
 
-
-def enter_bash_mode():
-    print("Entering bash mode. Type '/bq' to exit bash mode.")
-    current_dir = os.getcwd()
-    bash_output = []
-    while True:
-        try:
-            bash_input = input(f"bash {current_dir}> ").strip()
-            if bash_input == "/bq":
-                print("Exiting bash mode.")
-                break
-            else:
-                try:
-                    if bash_input.startswith("cd "):
-                        new_dir = bash_input[3:].strip()
-                        try:
-                            os.chdir(os.path.expanduser(new_dir))
-                            current_dir = os.getcwd()
-                            bash_output.append(f"Changed directory to {current_dir}")
-                            print(f"Changed directory to {current_dir}")
-                        except FileNotFoundError:
-                            bash_output.append(
-                                f"bash: cd: {new_dir}: No such file or directory"
-                            )
-                    else:
-                        result = subprocess.run(
-                            bash_input,
-                            shell=True,
-                            text=True,
-                            capture_output=True,
-                            cwd=current_dir,
-                        )
-                        if result.stdout:
-                            print(result.stdout.strip())
-                            bash_output.append(result.stdout.strip())
-                        if result.stderr:
-                            bash_output.append(f"Error: {result.stderr.strip()}")
-                except Exception as e:
-                    bash_output.append(f"Error executing bash command: {e}")
-        except (KeyboardInterrupt, EOFError):
-            print("\nExiting bash mode.")
-            break
-    os.chdir(current_dir)
-    return "\n".join(bash_output)
-
-
-def record_audio(duration=5, sample_rate=16000):
-    p = pyaudio.PyAudio()
-    stream = p.open(
-        format=pyaudio.paInt16,
-        channels=1,
-        rate=sample_rate,
-        input=True,
-        frames_per_buffer=1024,
-    )
-
-    print("Recording...")
-    frames = []
-    for _ in range(0, int(sample_rate / 1024 * duration)):
-        data = stream.read(1024)
-        frames.append(data)
-    print("Recording finished.")
-
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-
-    return b"".join(frames)
-
-
-def get_audio_level(audio_data):
-    return np.max(np.abs(np.frombuffer(audio_data, dtype=np.int16)))
-
-
-def calibrate_silence(sample_rate=16000, duration=2):
-    p = pyaudio.PyAudio()
-    stream = p.open(
-        format=pyaudio.paInt16,
-        channels=1,
-        rate=sample_rate,
-        input=True,
-        frames_per_buffer=1024,
-    )
-
-    print("Calibrating silence level. Please remain quiet...")
-    levels = []
-    for _ in range(int(sample_rate * duration / 1024)):
-        data = stream.read(1024)
-        levels.append(get_audio_level(data))
-
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-
-    avg_level = np.mean(levels)
-    silence_threshold = avg_level * 1.5  # Set threshold slightly above average
-    print(f"Silence threshold set to: {silence_threshold}")
-    return silence_threshold
-
-
-def is_silent(audio_data, threshold=500):
-    """Check if the audio chunk is silent."""
-    return np.max(np.abs(np.frombuffer(audio_data, dtype=np.int16))) < threshold
-
-
-def is_silent(audio_data, threshold):
-    return get_audio_level(audio_data) < threshold
-
-
-def record_audio(sample_rate=16000, max_duration=10, silence_threshold=None):
-    if silence_threshold is None:
-        silence_threshold = calibrate_silence()
-
-    p = pyaudio.PyAudio()
-    stream = p.open(
-        format=pyaudio.paInt16,
-        channels=1,
-        rate=sample_rate,
-        input=True,
-        frames_per_buffer=1024,
-    )
-
-    print("Listening... (speak now)")
-    frames = []
-    silent_chunks = 0
-    has_speech = False
-    max_silent_chunks = int(sample_rate * 1.0 / 1024)  # 1.0 seconds of silence
-    max_chunks = int(sample_rate * max_duration / 1024)  # Maximum duration in chunks
-
-    start_time = time.time()
-    for _ in range(max_chunks):
-        data = stream.read(1024)
-        frames.append(data)
-
-        if is_silent(data, silence_threshold):
-            silent_chunks += 1
-            if has_speech and silent_chunks > max_silent_chunks:
-                break
-        else:
-            silent_chunks = 0
-            has_speech = True
-
-        if len(frames) % 10 == 0:  # Print a dot every ~0.5 seconds
-            print(".", end="", flush=True)
-
-        if time.time() - start_time > max_duration:
-            print("\nMax duration reached.")
-            break
-
-    print("\nProcessing...")
-
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-
-    return b"".join(frames)
-
-
-def speak_text(text):
-    try:
-        tts = gTTS(text=text, lang="en")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-            tts.save(fp.name)
-            playsound(fp.name)
-        os.unlink(fp.name)
-    except Exception as e:
-        print(f"Text-to-speech error: {e}")
-
-
-def enter_whisper_mode(command_history):
+def enter_whisper_mode(command_history, npc=None):
     try:
         model = whisper.load_model("base")
     except Exception as e:
@@ -195,8 +32,9 @@ def enter_whisper_mode(command_history):
         return "Error: Unable to load Whisper model"
 
     whisper_output = []
+    npc_info = f" (NPC: {npc.name})" if npc else ""
 
-    print("Entering whisper mode. Calibrating silence level...")
+    print(f"Entering whisper mode{npc_info}. Calibrating silence level...")
     try:
         silence_threshold = calibrate_silence()
     except Exception as e:
@@ -231,13 +69,13 @@ def enter_whisper_mode(command_history):
                 speak_text("Exiting whisper mode. Goodbye!")
                 break
 
-            llm_response = get_llm_response(text)
+            llm_response = get_llm_response(text, npc=npc)
             print(f"LLM response: {llm_response}")
             whisper_output.append(f"LLM: {llm_response}")
 
             speak_text(llm_response)
 
-            command_history.add(text, ["whisper"], llm_response, os.getcwd())
+            command_history.add(text, ["whisper", npc.name if npc else ""], llm_response, os.getcwd())
 
             print("\nPress Enter to speak again, or type '/wq' to quit.")
             user_input = input()
@@ -252,76 +90,79 @@ def enter_whisper_mode(command_history):
 
     return "\n".join(whisper_output)
 
+import datetime
 
-def enter_notes_mode(command_history):
-    print("Entering notes mode. Type '/nq' to exit.")
+
+def enter_notes_mode(command_history, npc=None):
+    npc_name = npc.name if npc else 'base'
+    print(f"Entering notes mode (NPC: {npc_name}). Type '/nq' to exit.")
 
     while True:
         note = input("Enter your note (or '/nq' to quit): ").strip()
 
-        if note.lower() == "/nq":
+        if note.lower() == '/nq':
             break
 
-        save_note(note, command_history)
+        save_note(note, command_history, npc)
 
     print("Exiting notes mode.")
 
-
-def save_note(note, command_history):
+def save_note(note, command_history, npc=None):
     current_dir = os.getcwd()
-    readme_path = os.path.join(current_dir, "README.md")
+    timestamp = datetime.datetime.now().isoformat()
+    npc_name = npc.name if npc else 'base'
 
-    with open(readme_path, "a") as f:
-        f.write(f"\n- {note}\n")
+    # Assuming command_history has a method to access the database connection
+    conn = command_history.conn
+    cursor = conn.cursor()
 
-    print("Note added to README.md")
-    command_history.add(f"/note {note}", ["note"], "", current_dir)
-
-
-# Usage in your main script:
-# enter_notes_mode()
-
-
-def initial_table_print(cursor):
-    cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name != 'command_history'"
+    # Create notes table if it doesn't exist
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT,
+        note TEXT,
+        npc TEXT,
+        directory TEXT
     )
-    tables = cursor.fetchall()
+    ''')
 
-    print("\nAvailable tables:")
-    for i, table in enumerate(tables, 1):
-        print(f"{i}. {table[0]}")
+    # Insert the note into the database
+    cursor.execute('''
+    INSERT INTO notes (timestamp, note, npc, directory)
+    VALUES (?, ?, ?, ?)
+    ''', (timestamp, note, npc_name, current_dir))
+
+    conn.commit()
+
+    print("Note saved to database.")
 
 
-def enter_observation_mode(command_history):
+
+def enter_observation_mode(command_history, npc=None):
     conn = command_history.conn
     cursor = command_history.cursor
 
-    print("Entering observation mode. Type '/dq' or to exit.")
+    npc_info = f" (NPC: {npc.name})" if npc else ""
+    print(f"Entering observation mode{npc_info}. Type '/dq' to exit.")
     n_times = 0
     while True:
         # Show available tables
         if n_times == 0:
             initial_table_print(cursor)
 
-            user_query = input(
-                """
+        user_query = input(
+            """
 Enter a plain-text request or one using the dataframe manipulation framework of your choice. 
-    You can also have the data NPC ingest data into your database by pointing it to the right files.
+You can also have the data NPC ingest data into your database by pointing it to the right files.
 data>"""
-            )
+        )
 
-        else:
-            user_query = input(
-                """
-data>"""
-            )
         print(user_query)
 
-        response = execute_data_operations(user_query, command_history)
+        response = execute_data_operations(user_query, command_history, npc)
 
         answer_prompt = f"""
-
         Here is an input from the user:
         {user_query}
         Here is some useful data relevant to the query:
@@ -331,18 +172,20 @@ data>"""
 
         Your answer must be in the format:
         {{"response": "Your response here."}}
-
         """
-        final_response = get_llm_response(answer_prompt, format="json")
+        final_response = get_llm_response(answer_prompt, format="json", npc=npc)
         print(final_response["response"])
         n_times += 1
+
+        if user_query.lower() == "/dq":
+            break
 
     conn.close()
     print("Exiting observation mode.")
 
-
-def enter_spool_mode(command_history, inherit_last=0, model="llama3.1"):
-    print("Entering spool mode. Type '/sq' to exit spool mode.")
+def enter_spool_mode(command_history, inherit_last=0, model="llama3.1", npc=None):
+    npc_info = f" (NPC: {npc.name})" if npc else ""
+    print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
     spool_context = []
 
     # Inherit last n messages if specified
@@ -360,13 +203,12 @@ def enter_spool_mode(command_history, inherit_last=0, model="llama3.1"):
                 break
 
             # Add user input to spool context
-            spool_context.append({"role": "user", "content": user_input})
-
+            spool_context.append({"role": "user", "content": user_input})            
             # Process the spool context with LLM
-            spool_context = get_ollama_conversation(spool_context, model=model)
+            spool_context = get_ollama_conversation(spool_context, model=model, npc=npc)
 
             command_history.add(
-                user_input, ["spool"], spool_context[-1]["content"], os.getcwd()
+                user_input, ["spool", npc.name if npc else ""], spool_context[-1]["content"], os.getcwd()
             )
             print(spool_context[-1]["content"])
         except (KeyboardInterrupt, EOFError):
@@ -377,6 +219,19 @@ def enter_spool_mode(command_history, inherit_last=0, model="llama3.1"):
         [msg["content"] for msg in spool_context if msg["role"] == "assistant"]
     )
 
+def initial_table_print(cursor):
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name != 'command_history'"
+    )
+    tables = cursor.fetchall()
+
+    print("\nAvailable tables:")
+    for i, table in enumerate(tables, 1):
+        print(f"{i}. {table[0]}")
+
+def get_data_response(request, npc=None):
+    data_output = npc.get_data_response(request) if npc else None
+    return data_output
 
 def create_new_table(cursor, conn):
     table_name = input("Enter new table name: ").strip()
@@ -389,13 +244,11 @@ def create_new_table(cursor, conn):
     conn.commit()
     print(f"Table '{table_name}' created successfully.")
 
-
 def delete_table(cursor, conn):
     table_name = input("Enter table name to delete: ").strip()
     cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
     conn.commit()
     print(f"Table '{table_name}' deleted successfully.")
-
 
 def add_observation(cursor, conn, table_name):
     cursor.execute(f"PRAGMA table_info({table_name})")

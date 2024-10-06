@@ -12,6 +12,7 @@ setup(
         "PyYAML",
         "openai-whisper",
         "pyaudio",
+        "pyttsx3",
     ],
     entry_points={
         "console_scripts": [

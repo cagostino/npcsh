@@ -8,6 +8,9 @@ import os
 import yaml
 from jinja2 import Environment, FileSystemLoader, TemplateError, Template, Undefined
 
+import pandas as pd
+from .llm_funcs import get_llm_response, process_data_output, get_data_response
+
 
 class SilentUndefined(Undefined):
     def _fail_with_undefined_error(self, *args, **kwargs):
@@ -122,3 +125,35 @@ class NPCCompiler:
 # Usage:
 # compiler = NPCCompiler('/path/to/npc/directory')
 # compiled_script = compiler.compile('your_npc_file.npc')
+
+
+class NPC:
+    def __init__(
+        self,
+        name: str,
+        db_conn : sqlite3.Connection,        
+        primary_directive : str = None,
+        suggested_tools_to_use : str = None,
+        restrictions : list = None,
+        model : str = None,
+        provider : str = None,
+    ):
+        self.name = name
+        self.primary_directive = primary_directive
+        self.suggested_tools_to_use = suggested_tools_to_use
+        self.restrictions = restrictions
+        self.model = model
+        self.db_conn = db_conn
+        self.tables = self.db_conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table';"
+        ).fetchall()
+        self.provider = provider
+
+    def __str__(self):
+        return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
+
+    def get_data_response(self, request):
+        return get_data_response(request, self.db_conn, self.tables)
+
+    def get_llm_response(self, request, **kwargs):
+        return get_llm_response(request, self.model, self.provider, **kwargs)
