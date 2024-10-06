@@ -10,9 +10,65 @@ npcsh_model = os.environ.get("NPCSH_MODEL", "phi3")
 npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
 npcsh_db_path = os.path.expanduser(os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db"))
 
-def get_ollama_conversation(messages, model):
+def get_system_message(npc):
+    system_message = f"""
+    .
+    ..
+    ...
+    ....
+    .....
+    ......
+    .......
+    ........
+    .........
+    ..........
+    Hello!
+    Welcome to the team.
+    You are an NPC working as part of our team. 
+    You are the {npc.name} NPC with the following primary directive: {npc.primary_directive}.
+    In some cases, users may request insights into data contained in a local database.
+    For these purposes, you may use any data contained within these sql tables 
+    {npc.tables}        
+    which are contained in the database at {npcsh_db_path}.
+    
+    So if you need to obtain data you may use sqlite3 and write queries
+    to obtain the data you need. 
+    
+    When formulating SQLite queries:
+
+        1. Remember that SQLite doesn't support TOP. Use LIMIT instead for selecting a limited number of rows.
+        2. To get the last row, use: "SELECT * FROM table_name ORDER BY rowid DESC LIMIT 1;"
+        3. To check if a table exists, use: "SELECT name FROM sqlite_master WHERE type='table' AND name='table_name';"
+        4. Always use single quotes for string literals in SQLite queries.
+        5. When executing SQLite commands from bash, ensure proper escaping of quotes.
+
+        For bash commands interacting with SQLite:
+        1. Use this format: sqlite3 /path/to/database.db 'SQL query here'
+        2. Example: sqlite3 /home/caug/npcsh_history.db 'SELECT * FROM command_history ORDER BY rowid DESC LIMIT 1;'
+
+        When encountering errors:
+        1. "no such function: TOP" - Remember to use LIMIT instead.
+        2. "syntax error" - Double-check quote usage and escaping in bash commands.
+        3. "no such table" - Verify the table name and check if it exists first.
+
+        Always consider data integrity, security, and privacy in your operations. Offer clear explanations and examples for complex data concepts and SQLite queries.
+
+    
+    --------------
+    --------------
+    
+    """
+
+    return system_message
+
+def get_ollama_conversation(messages, model, npc = None):
     messages_copy = messages.copy()
-    response = ollama.chat(model=model, messages=messages)
+    if messages_copy[0]["role"] !='system':
+        if npc is not None:
+            system_message = get_system_message(npc)
+            messages_copy.insert(0, {"role": "system", "content": system_message})        
+
+    response = ollama.chat(model=model, messages=messages_copy)
     messages_copy.append(response["message"])
     return messages_copy
 
@@ -307,57 +363,8 @@ def lookupprovider(model):
 
 def get_llm_response(prompt, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs):
     # Prepare the system message
-    system_message = ""
-    #print('NPC=', npc)
     if npc:
-        system_message = f"""
-        .
-        ..
-        ...
-        ....
-        .....
-        ......
-        .......
-        ........
-        .........
-        ..........
-        Hello!
-        Welcome to the team.
-        You are an NPC working as part of our team. 
-        You are the {npc.name} NPC with the following primary directive: {npc.primary_directive}.
-        In some cases, users may request insights into data contained in a local database.
-        For these purposes, you may use any data contained within these sql tables 
-        {npc.tables}        
-        which are contained in the database at {npcsh_db_path}.
-        
-        So if you need to obtain data you may use sqlite3 and write queries
-        to obtain the data you need. 
-        
-        When formulating SQLite queries:
-
-            1. Remember that SQLite doesn't support TOP. Use LIMIT instead for selecting a limited number of rows.
-            2. To get the last row, use: "SELECT * FROM table_name ORDER BY rowid DESC LIMIT 1;"
-            3. To check if a table exists, use: "SELECT name FROM sqlite_master WHERE type='table' AND name='table_name';"
-            4. Always use single quotes for string literals in SQLite queries.
-            5. When executing SQLite commands from bash, ensure proper escaping of quotes.
-
-            For bash commands interacting with SQLite:
-            1. Use this format: sqlite3 /path/to/database.db 'SQL query here'
-            2. Example: sqlite3 /home/caug/npcsh_history.db 'SELECT * FROM command_history ORDER BY rowid DESC LIMIT 1;'
-
-            When encountering errors:
-            1. "no such function: TOP" - Remember to use LIMIT instead.
-            2. "syntax error" - Double-check quote usage and escaping in bash commands.
-            3. "no such table" - Verify the table name and check if it exists first.
-
-            Always consider data integrity, security, and privacy in your operations. Offer clear explanations and examples for complex data concepts and SQLite queries.
-
-        
-        --------------
-        --------------
-        
-        """
-        # Prepare the full prompt
+        system_message = get_system_message(npc)
         full_prompt = f"{system_message}\n\n{prompt}" 
     else:
         full_prompt = prompt

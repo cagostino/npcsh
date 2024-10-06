@@ -203,8 +203,7 @@ def enter_spool_mode(command_history, inherit_last=0, model="llama3.1", npc=None
                 break
 
             # Add user input to spool context
-            spool_context.append({"role": "user", "content": user_input})
-
+            spool_context.append({"role": "user", "content": user_input})            
             # Process the spool context with LLM
             spool_context = get_ollama_conversation(spool_context, model=model, npc=npc)
 
