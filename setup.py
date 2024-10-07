@@ -14,7 +14,7 @@ extra_files = package_files("npc_profiles")
 
 setup(
     name="npcsh",
-    version="0.1.4",
+    version="0.1.5",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "jinja2",
