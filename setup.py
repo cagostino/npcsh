@@ -1,4 +1,16 @@
 from setuptools import setup, find_packages
+import os
+
+
+def package_files(directory):
+    paths = []
+    for path, directories, filenames in os.walk(directory):
+        for filename in filenames:
+            paths.append(os.path.join(path, filename))
+    return paths
+
+
+extra_files = package_files("npc_profiles")
 
 setup(
     name="npcsh",
@@ -32,8 +44,6 @@ setup(
         "License :: OSI Approved :: MIT License",
     ],
     include_package_data=True,
-    package_data={
-        "npcsh": ["npc_profiles/*"],
-    },
+    data_files=[("npc_profiles", extra_files)],
     python_requires=">=3.10",
 )
