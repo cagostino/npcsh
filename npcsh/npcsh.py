@@ -7,6 +7,7 @@ from datetime import datetime
 import pandas as pd
 # Configure logging
 import sqlite3
+from termcolor import colored
 
 import subprocess
 from .command_history import CommandHistory
@@ -22,6 +23,7 @@ from .helpers import (
     list_directory, 
     read_file, 
     ensure_npcshrc_exists,
+    setup_npcsh_config,
     execute_java, 
     execute_scala, 
     execute_r, 
@@ -35,31 +37,58 @@ from .helpers import (
     get_npc_path, 
     initialize_base_npcs_if_needed, 
     is_npcsh_initialized,
-    set_npcsh_initialized
+    set_npcsh_initialized, 
+    get_valid_npcs
 )
 
 from .npc_compiler import NPCCompiler, NPC
+from colorama import Fore, Back, Style
 
 import shlex
 import subprocess
-
-def execute_command(command, command_history, db_path, npc_compiler):
+def get_file_color(filepath):
+    if os.path.isdir(filepath):
+        return "blue", ["bold"]
+    elif os.access(filepath, os.X_OK):
+        return "green", []
+    elif filepath.endswith(('.zip', '.tar', '.gz', '.bz2', '.xz', '.7z')):
+        return "red", []
+    elif filepath.endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff')):
+        return "magenta", []
+    elif filepath.endswith(('.py', '.pyw')):
+        return "yellow", []
+    elif filepath.endswith(('.sh', '.bash', '.zsh')):
+        return "green", []
+    elif filepath.endswith(('.c', '.cpp', '.h', '.hpp')):
+        return "cyan", []
+    elif filepath.endswith(('.js', '.ts', '.jsx', '.tsx')):
+        return "yellow", []
+    elif filepath.endswith(('.html', '.css', '.scss', '.sass')):
+        return "magenta", []
+    elif filepath.endswith(('.md', '.txt', '.log')):
+        return "white", []
+    elif filepath.startswith('.'):
+        return "cyan", []
+    else:
+        return "white", []
+def execute_command(command, command_history, db_path, npc_compiler, current_npc=None):
     subcommands = []
     output = ""
     location = os.getcwd()
     # Extract NPC from command
-    npc_name = get_npc_from_command(command)
-    #print(npc_name)
     db_conn = sqlite3.connect(db_path)
-    if npc_name is None:
-        npc_name = "base"  # Default NPC
-    #print(npc_name)
-    npc_path = get_npc_path(npc_name, db_path)
-    
-    #print(npc_path)
-    npc = load_npc_from_file(npc_path, db_conn)
-    #print(npc)
-    
+
+    if current_npc is None:
+        valid_npcs = get_valid_npcs(db_path)
+        
+        npc_name = get_npc_from_command(command)
+        if npc_name is None:
+            npc_name = "base"  # Default NPC
+        #print(npc_name)
+        npc_path = get_npc_path(npc_name, db_path)
+        npc = load_npc_from_file(npc_path, db_conn)    
+    else:
+        npc = current_npc    
     if command.startswith("/"):
         command = command[1:]
         log_action("Command Executed", command)
@@ -67,10 +96,10 @@ def execute_command(command, command_history, db_path, npc_compiler):
         command_parts = command.split()
         command_name = command_parts[0]
         args = command_parts[1:]
-        # get the args that start with "npc="
-        # if the args that start with npc= are more than 1 then raise an error
-        # extract the npc
-        
+        if current_npc is None and command_name in valid_npcs:
+            npc_path = get_npc_path(command_name, db_path)
+            npc = load_npc_from_file(npc_path, db_conn)  
+               
         if command_name == "compile" or command_name == "com":
             try:    
                 compiled_script = npc_compiler.compile(npc)
@@ -138,26 +167,49 @@ def execute_command(command, command_history, db_path, npc_compiler):
         # Check if it's a bash command
         #print(command)
         command_parts = shlex.split(command)
-        if command_parts[0] in BASH_COMMANDS:
+    
+        if command_parts[0] == 'cd':
+            try:
+                if len(command_parts) > 1:
+                    new_dir = os.path.expanduser(command_parts[1])
+                else:
+                    new_dir = os.path.expanduser('~')
+                os.chdir(new_dir)
+                return f"Changed directory to {os.getcwd()}"
+            except FileNotFoundError:
+                return f"Directory not found: {new_dir}"
+            except PermissionError:
+                return f"Permission denied: {new_dir}"
+                
+        elif command_parts[0] in BASH_COMMANDS:
             if command_parts[0] in TERMINAL_EDITORS:
-                # Handle terminal editors
                 return open_terminal_editor(command)
             else:
                 try:
-                    # Run the command and capture output
                     result = subprocess.run(command_parts, capture_output=True, text=True)
                     output = result.stdout
                     if result.stderr:
-                        output += f"\nError: {result.stderr}"
+                        output += colored(f"\nError: {result.stderr}", "red")
                     
-                    # If output is empty but the command ran successfully, mention that
+                    # Color code the output
+                    colored_output = ""
+                    for line in output.split('\n'):
+                        parts = line.split()
+                        if parts:
+                            filepath = parts[-1]
+                            color, attrs = get_file_color(filepath)
+                            colored_filepath = colored(filepath, color, attrs=attrs)
+                            colored_line = ' '.join(parts[:-1] + [colored_filepath])
+                            colored_output += colored_line + "\n"
+                        else:
+                            colored_output += line + "\n"
+                    
+                    output = colored_output.rstrip()
+                    
                     if not output and result.returncode == 0:
-                        output = f"Command '{command}' executed successfully (no output)."
+                        output = colored(f"Command '{command}' executed successfully (no output).", "green")
                 except Exception as e:
-                    output = f"Error executing command: {e}"
-        else:
-            # If not a recognized bash command, fall back to LLM
-            output = check_llm_command(command, command_history, npc=npc)
+                    output = colored(f"Error executing command: {e}", "red")
 
     # Add command to history
     command_history.add(command, subcommands, output, location)
@@ -170,63 +222,88 @@ def execute_command(command, command_history, db_path, npc_compiler):
 
 
 def setup_readline():
+    history_file = os.path.expanduser("~/.npcsh_history")
+    try:
+        readline.read_history_file(history_file)
+    except FileNotFoundError:
+        pass
+    
     readline.set_history_length(1000)
     readline.parse_and_bind("set editing-mode vi")
     readline.parse_and_bind('"\e[A": history-search-backward')
     readline.parse_and_bind('"\e[B": history-search-forward')
-
     readline.parse_and_bind('"\C-r": reverse-search-history')
 
+    return history_file
 
 def save_readline_history():
     readline.write_history_file(os.path.expanduser("~/.npcsh_readline_history"))
 
+def orange(text):
+    return f"\033[38;2;255;165;0m{text}{Style.RESET_ALL}"
 
 def main():
-    ensure_npcshrc_exists()
-    # check if theres a set path to a local db in the os env
+    setup_npcsh_config()
     if "NPCSH_DB_PATH" in os.environ:
-        if '~' in os.environ["NPCSH_DB_PATH"]:
-
-            db_path = os.path.expanduser(os.environ["NPCSH_DB_PATH"])
-        else:
-            db_path = os.environ["NPCSH_DB_PATH"]
-        command_history = CommandHistory(db_path)
-
+        db_path = os.path.expanduser(os.environ["NPCSH_DB_PATH"])
     else:
         db_path = os.path.expanduser('~/npcsh_history.db')
-        command_history = CommandHistory()
-    # Initialize NPCCompiler
+    
+    command_history = CommandHistory(db_path)
     
     os.makedirs("./npc_profiles", exist_ok=True)
-    npc_directory = os.path.expanduser(
-        "./npc_profiles"
-    )  # You can change this to your preferred directory
+    npc_directory = os.path.expanduser("./npc_profiles")
     npc_compiler = NPCCompiler(npc_directory)
-    #print(os.environ)
+    
     if not is_npcsh_initialized():
         print("Initializing NPCSH...")
         initialize_base_npcs_if_needed(db_path)
         print("NPCSH initialization complete. Please restart your terminal or run 'source ~/.npcshrc' for the changes to take effect.")
-    
-    
-    setup_readline()
-    atexit.register(save_readline_history)
+    history_file = setup_readline()
+    atexit.register(readline.write_history_file, history_file)
     atexit.register(command_history.close)
-
+    
     print("Welcome to npcsh!")
+    
+    current_npc = None
     while True:
         try:
-            user_input = input("npcsh> ").strip()
-            if user_input.lower() in ["exit", "quit"]:
-                print("Goodbye!")
-                break
+            if current_npc:
+                prompt = f"{colored(os.getcwd(), 'blue')}:{orange(current_npc.name)}> "
             else:
-                execute_command(user_input, command_history, db_path, npc_compiler)
+                prompt = f"{colored(os.getcwd(), 'blue')}:{orange('npcsh')}> "
+            
+            # After executing the command
+            #print(f"{colored(os.getcwd(), 'blue')}$")
+            user_input = input(prompt).strip()
+            
+            if user_input.lower() in ["exit", "quit"]:
+                if current_npc:
+                    print(f"Exiting {current_npc.name} mode.")
+                    current_npc = None
+                    continue
+                else:
+                    print("Goodbye!")
+                    break
+            elif user_input.startswith("/") and not current_npc:
+                command_parts = user_input[1:].split()
+                command_name = command_parts[0]
+                valid_npcs = get_valid_npcs(db_path)
+                if command_name in valid_npcs:
+                    npc_path = get_npc_path(command_name, db_path)
+                    db_conn = sqlite3.connect(db_path)
+                    current_npc = load_npc_from_file(npc_path, db_conn)
+                    print(f"Entered {current_npc.name} mode. Type 'exit' to return to main shell.")
+                    continue
+            
+            execute_command(user_input, command_history, db_path, npc_compiler, current_npc)
         except (KeyboardInterrupt, EOFError):
-            print("\nGoodbye!")
-            break
-
+            if current_npc:
+                print(f"\nExiting {current_npc.name} mode.")
+                current_npc = None
+            else:
+                print("\nGoodbye!")
+                break
 
 if __name__ == "__main__":
     main()

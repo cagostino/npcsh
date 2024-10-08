@@ -10,6 +10,7 @@ import os
 import sqlite3
 import subprocess
 from .npc_compiler import NPC
+import platform
 
 BASH_COMMANDS = [
     "alias",
@@ -18,7 +19,6 @@ BASH_COMMANDS = [
     "break",
     "builtin",
     "case",
-    "cd",
     "command",
     "compgen",
     "complete",
@@ -150,6 +150,7 @@ BASH_COMMANDS = [
     "vim",
     "emacs",
     "nano",
+    "pip"
 ]
 
 TERMINAL_EDITORS = ["vim", "emacs", "nano"]
@@ -235,6 +236,22 @@ def execute_set_command(command, value):
 
     return f"{command.capitalize()} has been set to: {value}"
 
+def get_shell_config_file():
+    # Check the current shell
+    shell = os.environ.get('SHELL', '')
+    
+    if 'zsh' in shell:
+        return os.path.expanduser("~/.zshrc")
+    elif 'bash' in shell:
+        # On macOS, use .bash_profile for login shells
+        if platform.system() == 'Darwin':
+            return os.path.expanduser("~/.bash_profile")
+        else:
+            return os.path.expanduser("~/.bashrc")
+    else:
+        # Default to .bashrc if we can't determine the shell
+        return os.path.expanduser("~/.bashrc")
+
 
 def ensure_npcshrc_exists():
     npcshrc_path = os.path.expanduser("~/.npcshrc")
@@ -248,18 +265,22 @@ def ensure_npcshrc_exists():
     return npcshrc_path
 
 
-def add_npcshrc_to_bashrc():
-    bashrc_path = os.path.expanduser("~/.bashrc")
+def add_npcshrc_to_shell_config():
+    config_file = get_shell_config_file()
     npcshrc_line = "\n# Source NPCSH configuration\nif [ -f ~/.npcshrc ]; then\n    . ~/.npcshrc\nfi\n"
 
-    with open(bashrc_path, "a+") as bashrc:
-        bashrc.seek(0)
-        content = bashrc.read()
+    with open(config_file, "a+") as shell_config:
+        shell_config.seek(0)
+        content = shell_config.read()
         if "source ~/.npcshrc" not in content and ". ~/.npcshrc" not in content:
-            bashrc.write(npcshrc_line)
-            print("Added .npcshrc sourcing to .bashrc")
+            shell_config.write(npcshrc_line)
+            print(f"Added .npcshrc sourcing to {config_file}")
         else:
-            print(".npcshrc already sourced in .bashrc")
+            print(f".npcshrc already sourced in {config_file}")
+
+def setup_npcsh_config():
+    ensure_npcshrc_exists()
+    add_npcshrc_to_shell_config()
 
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
@@ -324,7 +345,13 @@ def set_npcsh_initialized():
     # Also set it for the current session
     os.environ["NPCSH_INITIALIZED"] = "1"
     print("NPCSH initialization flag set in .npcshrc")
-
+def get_valid_npcs(db_path):
+    db_conn = sqlite3.connect(db_path)
+    cursor = db_conn.cursor()
+    cursor.execute("SELECT name FROM compiled_npcs")
+    npcs = [row[0] for row in cursor.fetchall()]
+    db_conn.close()
+    return npcs
 
 def get_npc_from_command(command):
     parts = command.split()
@@ -353,7 +380,6 @@ def get_npc_path(npc, db_path):
     cursor.execute("SELECT source_path FROM compiled_npcs WHERE name = ?", (npc,))
 
     result = cursor.fetchone()
-    print(result)
     conn.close()
     return result[0] if result else None
 

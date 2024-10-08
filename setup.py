@@ -27,6 +27,8 @@ setup(
         "pyttsx3",
         "gtts",
         "playsound",
+        "termcolor", 
+        
     ],
     entry_points={
         "console_scripts": [
