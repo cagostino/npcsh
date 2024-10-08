@@ -1,8 +1,13 @@
 # npcsh
 
-Welcome to npcsh, the shell for interacting with NPCs (LLM-powered AI agents). npcsh is meant to be a drop-in replacement shell for any kind of bash/zsh/powershell and allows the user to directly operate their machine through the use of the LLM-powered shell.
+Welcome to npcsh, the shell for interacting with NPCs (LLM-powered AI agents) and for coordinating actions and information between the NPCs. 
 
-Additionally, npcsh introduces a new paradigm of programming for LLMs: npcsh allows users to set up NPC profiles (a la npc_profile.npc) where a user sets the primary directive of the NPC, the tools they want the NPC to use, and other properties of the NPC. NPCs can interact with each other and their primary directives and properties make these relationships explicit through jinja references.
+npcsh is meant to be a drop-in replacement shell for any kind of bash/zsh/powershell and allows the user to directly operate their machine through the use of the LLM-powered shell.
+
+npcsh introduces a new paradigm of programming for LLMs: npcsh allows users to set up NPC profiles (a la npc_profile.npc) where a user sets the primary directive of the NPC, the tools they want the NPC to use, and other properties of the NPC. NPCs can interact with each other and their primary directives and properties make these relationships explicit through jinja references.
+
+With npcsh, we can more seamlessly stick together complex workflows and data processing tasks to form NPC Assembly Lines where pieces of information are evaluated in a sequence by different NPCs and the results are passed along to the next NPC in the sequence. 
+
 
 ## Dependencies
 - ollama
@@ -13,6 +18,9 @@ Download it by running
 ```
 ollama run phi3
 ```
+
+Support for openai, anthropic, and general huggingface transformers to be added.
+
 
 The user can change the model by setting the environment variable `NPCSH_MODEL` to the desired model name and to change the provider by setting the environment variable `NPCSH_PROVIDER` to the desired provider name.
 
@@ -99,15 +107,3 @@ or
 You can also chat with the Question NPC in spool mode by typing ```/spool question```.
 
 
-
-### thought mode
-
-This will be like a way to write out some general thoughts to get some 1-shot feedback from a general LLM or a specific NPC.
-
-Use it like
-```/thought <thought> <npc_name>```
-or
-```/thought <thought>```
-
- 
-You can also chat with the Thought NPC in spool mode by typing ```/spool thought```.
