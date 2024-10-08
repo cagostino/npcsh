@@ -14,7 +14,7 @@ extra_files = package_files("npcsh/npc_profiles")
 
 setup(
     name="npcsh",
-    version="0.1.8",
+    version="0.1.9",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "jinja2",
@@ -27,8 +27,8 @@ setup(
         "pyttsx3",
         "gtts",
         "playsound",
-        "termcolor", 
-        
+        "termcolor",
+        "colorama",
     ],
     entry_points={
         "console_scripts": [

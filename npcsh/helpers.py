@@ -150,7 +150,7 @@ BASH_COMMANDS = [
     "vim",
     "emacs",
     "nano",
-    "pip"
+    "pip",
 ]
 
 TERMINAL_EDITORS = ["vim", "emacs", "nano"]
@@ -236,15 +236,16 @@ def execute_set_command(command, value):
 
     return f"{command.capitalize()} has been set to: {value}"
 
+
 def get_shell_config_file():
     # Check the current shell
-    shell = os.environ.get('SHELL', '')
-    
-    if 'zsh' in shell:
+    shell = os.environ.get("SHELL", "")
+
+    if "zsh" in shell:
         return os.path.expanduser("~/.zshrc")
-    elif 'bash' in shell:
+    elif "bash" in shell:
         # On macOS, use .bash_profile for login shells
-        if platform.system() == 'Darwin':
+        if platform.system() == "Darwin":
             return os.path.expanduser("~/.bash_profile")
         else:
             return os.path.expanduser("~/.bashrc")
@@ -277,6 +278,7 @@ def add_npcshrc_to_shell_config():
             print(f"Added .npcshrc sourcing to {config_file}")
         else:
             print(f".npcshrc already sourced in {config_file}")
+
 
 def setup_npcsh_config():
     ensure_npcshrc_exists()
@@ -345,6 +347,8 @@ def set_npcsh_initialized():
     # Also set it for the current session
     os.environ["NPCSH_INITIALIZED"] = "1"
     print("NPCSH initialization flag set in .npcshrc")
+
+
 def get_valid_npcs(db_path):
     db_conn = sqlite3.connect(db_path)
     cursor = db_conn.cursor()
@@ -352,6 +356,7 @@ def get_valid_npcs(db_path):
     npcs = [row[0] for row in cursor.fetchall()]
     db_conn.close()
     return npcs
+
 
 def get_npc_from_command(command):
     parts = command.split()
@@ -434,7 +439,7 @@ def initialize_base_npcs_if_needed(db_path):
 
     conn.close()
     set_npcsh_initialized()
-    add_npcshrc_to_bashrc()
+    add_npcshrc_to_shell_config()
 
 
 def is_valid_npc(npc, db_path):
