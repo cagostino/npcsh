@@ -11,6 +11,16 @@ import sqlite3
 import subprocess
 from .npc_compiler import NPC
 import platform
+import pyaudio
+
+import sqlite3
+import time
+from gtts import gTTS
+import numpy as np
+from playsound import playsound
+
+import whisper
+import wave
 
 BASH_COMMANDS = [
     "alias",
