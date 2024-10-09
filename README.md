@@ -39,20 +39,22 @@ sudo apt-get install libcairo2-dev
 
 sudo apt-get install libgirepository1.0-dev
 
-
+sudo apt-get install ffmpeg
 ```
 
 
 pip install npcsh
 
 ##Mac install
+```bash
 brew install portaudio
 brew install ffmpeg
 brew install ollama
-
 brew services start ollama
 brew install pygobject3
+
 pip install npcsh
+```
 
 
 ## compilation
