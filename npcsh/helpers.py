@@ -23,6 +23,7 @@ import whisper
 import wave
 
 BASH_COMMANDS = [
+    "open", 
     "alias",
     "bg",
     "bind",
@@ -165,6 +166,46 @@ BASH_COMMANDS = [
 
 TERMINAL_EDITORS = ["vim", "emacs", "nano"]
 import yaml
+import os
+import subprocess
+import platform
+import time
+
+def capture_screenshot():
+    # Ensure the directory exists
+    directory = os.path.expanduser("~/.npcsh/screenshots")
+    os.makedirs(directory, exist_ok=True)
+
+    # Generate a unique filename
+    filename = f"screenshot_{int(time.time())}.png"
+    file_path = os.path.join(directory, filename)
+
+    system = platform.system()
+
+    if system == "Darwin":  # macOS
+        subprocess.run(["screencapture", "-i", file_path])
+    elif system == "Linux":
+        # Try different Linux screenshot tools
+        if subprocess.run(["which", "gnome-screenshot"], capture_output=True).returncode == 0:
+            subprocess.run(["gnome-screenshot", "-a", "-f", file_path])
+        elif subprocess.run(["which", "scrot"], capture_output=True).returncode == 0:
+            subprocess.run(["scrot", "-s", file_path])
+        else:
+            print("No supported screenshot tool found. Please install gnome-screenshot or scrot.")
+            return None
+    else:
+        print(f"Unsupported operating system: {system}")
+        return None
+
+    if os.path.exists(file_path):
+        return {
+            "filename": filename,
+            "file_path": file_path
+        }
+    else:
+        print("Screenshot capture failed or was cancelled.")
+        return None
+
 
 
 def execute_set_command(command, value):

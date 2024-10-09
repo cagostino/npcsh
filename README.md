@@ -71,6 +71,8 @@ In the base npcsh shell, inputs are processed by an LLM. The LLM first determine
 Spool mode allows the users to have threaded conversations in the shell, i.e. conversations where context is retained over the course of several turns.
 Users can speak with specific NPCs in spool mode by doing ```/spool <npc_name>``` and can exit spool mode by doing ```/exit```.
 
+
+
 ## Built-in NPCs
 Built-in NPCs are NPCs that should offer broad utility to the user and allow them to create more complicated NPCs. These built-in NPCs facilitate the carrying out of many common data processing tasks as well as the ability to run commands and to execute and test programs.
 
@@ -106,4 +108,12 @@ or
 
 You can also chat with the Question NPC in spool mode by typing ```/spool question```.
 
+
+
+## Other useful tools
+
+
+### Over-the-shoulder 
+
+Over the shoulder allows the user to select an area of the screen and the area will be passed to a vision LLM and then the user can inquire about the image or ask for help with it.
 

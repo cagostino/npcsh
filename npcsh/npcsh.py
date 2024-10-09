@@ -20,6 +20,7 @@ from .modes import (
 )
 from .helpers import (
     log_action,
+    capture_screenshot,
     load_npc_from_file,
     list_directory,
     read_file,
@@ -75,6 +76,77 @@ def get_file_color(filepath):
     else:
         return "white", []
 
+import pty
+import select
+import termios
+import tty
+import sys
+
+import time 
+import signal 
+def start_interactive_session(command):
+    """
+    Start an interactive session for the given command.
+    """
+    # Save the current terminal settings
+    old_tty = termios.tcgetattr(sys.stdin)
+    try:
+        # Create a pseudo-terminal
+        master_fd, slave_fd = pty.openpty()
+        
+        # Start the process
+        p = subprocess.Popen(
+            command,
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            shell=True,
+            preexec_fn=os.setsid  # Create a new process group
+        )
+
+        # Set the terminal to raw mode
+        tty.setraw(sys.stdin.fileno())
+
+        def handle_timeout(signum, frame):
+            raise TimeoutError("Process did not terminate in time")
+
+        while p.poll() is None:
+            r, w, e = select.select([sys.stdin, master_fd], [], [], 0.1)
+            if sys.stdin in r:
+                d = os.read(sys.stdin.fileno(), 10240)
+                os.write(master_fd, d)
+            elif master_fd in r:
+                o = os.read(master_fd, 10240)
+                if o:
+                    os.write(sys.stdout.fileno(), o)
+                else:
+                    break
+
+        # Wait for the process to terminate with a timeout
+        signal.signal(signal.SIGALRM, handle_timeout)
+        signal.alarm(5)  # 5 second timeout
+        try:
+            p.wait()
+        except TimeoutError:
+            print("\nProcess did not terminate. Force killing...")
+            os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+            time.sleep(1)
+            if p.poll() is None:
+                os.killpg(os.getpgid(p.pid), signal.SIGKILL)
+        finally:
+            signal.alarm(0)
+
+    finally:
+        # Restore the terminal settings
+        termios.tcsetattr(sys.stdin, termios.TCSAFLUSH, old_tty)
+
+    return p.returncode
+
+interactive_commands = {
+    'ipython': ['ipython'],
+    'python': ['python', '-i'],
+    'sqlite3': ['sqlite3'],
+    'r': ['R', '--interactive'],}
 
 def execute_command(command, command_history, db_path, npc_compiler, current_npc=None):
     subcommands = []
@@ -113,7 +185,11 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
             except Exception as e:
                 output = f"Error compiling NPC profile: {str(e)}"
                 print(output)
-
+        elif command_name == 'ots':
+            output = capture_screenshot()
+            #add llm part
+            output =  f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
+            return output
         elif command_name == "whisper":
             output = enter_whisper_mode(command_history, npc=npc)
         elif command_name == "notes":
@@ -173,7 +249,12 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
         # print(command)
         command_parts = shlex.split(command)
 
-        if command_parts[0] == "cd":
+        if command_parts[0] in interactive_commands:
+            print(f"Starting interactive {command_parts[0]} session...")
+            return_code = start_interactive_session(interactive_commands[command_parts[0]])
+            return f"Interactive {command_parts[0]} session ended with return code {return_code}"
+
+        elif command_parts[0] == "cd":
             try:
                 if len(command_parts) > 1:
                     new_dir = os.path.expanduser(command_parts[1])
@@ -189,7 +270,17 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
         elif command_parts[0] in BASH_COMMANDS:
             if command_parts[0] in TERMINAL_EDITORS:
                 return open_terminal_editor(command)
-            else:
+            elif command.startswith("open "):
+                try:
+                    expanded_command = os.path.expanduser(command)
+                    subprocess.Popen(shlex.split(expanded_command), 
+                                 stdout=subprocess.DEVNULL, 
+                                 stderr=subprocess.DEVNULL,
+                                 start_new_session=True)
+                    output = f"Launched: {command}"
+                except Exception as e:
+                    output = colored(f"Error executing command: {str(e)}", "red")
+            else:                
                 try:
                     result = subprocess.run(
                         command_parts, capture_output=True, text=True
@@ -291,8 +382,6 @@ def main():
             else:
                 prompt = f"{colored(os.getcwd(), 'blue')}:{orange('npcsh')}> "
 
-            # After executing the command
-            # print(f"{colored(os.getcwd(), 'blue')}$")
             user_input = input(prompt).strip()
 
             if user_input.lower() in ["exit", "quit"]:
@@ -316,9 +405,17 @@ def main():
                     )
                     continue
 
-            execute_command(
+            # Execute the command and capture the result
+            result = execute_command(
                 user_input, command_history, db_path, npc_compiler, current_npc
             )
+            
+            # If there's a result, print it
+            # This is important for interactive sessions, which will return a message
+            # when they end
+            if result:
+                print(result)
+
         except (KeyboardInterrupt, EOFError):
             if current_npc:
                 print(f"\nExiting {current_npc.name} mode.")
@@ -326,7 +423,3 @@ def main():
             else:
                 print("\nGoodbye!")
                 break
-
-
-if __name__ == "__main__":
-    main()
