@@ -5,6 +5,7 @@ import json
 import ollama
 import sqlite3
 import pandas as pd
+import openai
 
 npcsh_model = os.environ.get("NPCSH_MODEL", "phi3")
 npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
@@ -282,35 +283,6 @@ ea.append({"role": "user", "content": "then can you help me design something rea
 
 """
 
-
-def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
-    try:
-        url = "http://localhost:11434/api/generate"
-        
-
-        data = {
-            "model": model,
-            "prompt": prompt,
-            "stream": False,
-        }
-        if format is not None:
-            data["format"] = format
-
-        response = requests.post(url, json=data)
-        response.raise_for_status()
-        llm_response = json.loads(response.text)["response"]
-
-        if format == "json":
-            try:
-                return json.loads(llm_response)
-            except json.JSONDecodeError:
-                print(f"Warning: Expected JSON response, but received: {llm_response}")
-                return {"error": "Invalid JSON response"}
-        else:
-            return llm_response
-    except Exception as e:
-        return f"Error interacting with LLM: {e}"
-
 def test_get_ollama_response():
     prompt = "This is a test prompt."
     model = "phi3"
@@ -339,14 +311,93 @@ def test_get_ollama_response():
     assert "script_to_test" in response
 
 
-def get_openai_response(prompt, model, functional_requirements=None):
-    pass
+def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
+    try:
+        url = "http://localhost:11434/api/generate"
+        
+        system_message = get_system_message(npc) if npc else ""
+        full_prompt = f"{system_message}\n\n{prompt}"
+
+        data = {
+            "model": model,
+            "prompt": full_prompt,
+            "stream": False,
+        }
+        if format is not None:
+            data["format"] = format
+
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        llm_response = json.loads(response.text)["response"]
+
+        if format == "json":
+            try:
+                return json.loads(llm_response)
+            except json.JSONDecodeError:
+                print(f"Warning: Expected JSON response, but received: {llm_response}")
+                return {"error": "Invalid JSON response"}
+        else:
+            return llm_response
+    except Exception as e:
+        return f"Error interacting with LLM: {e}"
+
+def get_openai_response(prompt, model, npc=None, format=None, **kwargs):
+    try:
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+        
+        system_message = get_system_message(npc) if npc else ""
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt}
+        ]
+        
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=messages,
+            **kwargs
+        )
+        
+        llm_response = response.choices[0].message.content
+        
+        if format == "json":
+            try:
+                return json.loads(llm_response)
+            except json.JSONDecodeError:
+                print(f"Warning: Expected JSON response, but received: {llm_response}")
+                return {"error": "Invalid JSON response"}
+        else:
+            return llm_response
+    except Exception as e:
+        return f"Error interacting with OpenAI: {e}"
+
+def get_claude_response(prompt, model, npc=None, format=None, **kwargs):
+    try:
+        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        
+        system_message = get_system_message(npc) if npc else ""
+        full_prompt = f"{system_message}\n\nHuman: {prompt}\n\nAssistant:"
+        
+        response = client.completions.create(
+            model=model,
+            prompt=full_prompt,
+            **kwargs
+        )
+        
+        llm_response = response.completion
+        
+        if format == "json":
+            try:
+                return json.loads(llm_response)
+            except json.JSONDecodeError:
+                print(f"Warning: Expected JSON response, but received: {llm_response}")
+                return {"error": "Invalid JSON response"}
+        else:
+            return llm_response
+    except Exception as e:
+        return f"Error interacting with Anthropic: {e}"
 
 
-def get_claude_response(prompt, model, format=None):
-    pass
-
-
+    
 def lookupprovider(model):
     if model in [
         "phi3",
