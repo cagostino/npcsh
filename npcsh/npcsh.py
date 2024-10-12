@@ -9,7 +9,7 @@ import pandas as pd
 # Configure logging
 import sqlite3
 from termcolor import colored
-
+from dotenv import load_dotenv
 import subprocess
 from .command_history import CommandHistory
 from .llm_funcs import execute_llm_command, execute_llm_question, check_llm_command
@@ -49,7 +49,9 @@ from colorama import Fore, Back, Style
 import shlex
 import subprocess
 
-
+load_dotenv()
+anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+print(anthropic_api_key)
 def get_file_color(filepath):
     if os.path.isdir(filepath):
         return "blue", ["bold"]

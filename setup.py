@@ -29,6 +29,8 @@ setup(
         "playsound",
         "termcolor",
         "colorama",
+        "python-dotenv", 
+        "pytest",
     ],
     entry_points={
         "console_scripts": [
@@ -37,7 +39,7 @@ setup(
     },
     author="Christopher Agostino",
     author_email="cjp.agostino@example.com",
-    description="A way to use npcsh",
+    description="npcsh is a command line tool for integrating LLMs into everyday workflows",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/cagostino/npcsh",
@@ -49,3 +51,4 @@ setup(
     data_files=[("npcsh/npc_profiles", extra_files)],
     python_requires=">=3.10",
 )
+

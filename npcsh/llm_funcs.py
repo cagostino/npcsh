@@ -6,6 +6,15 @@ import ollama
 import sqlite3
 import pandas as pd
 import openai
+from dotenv import load_dotenv
+from openai import OpenAI
+import anthropic
+# Load environment variables from .env file
+load_dotenv()
+
+# Get API keys from environment variables
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 npcsh_model = os.environ.get("NPCSH_MODEL", "phi3")
 npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
@@ -283,32 +292,6 @@ ea.append({"role": "user", "content": "then can you help me design something rea
 
 """
 
-def test_get_ollama_response():
-    prompt = "This is a test prompt."
-    model = "phi3"
-    response = get_ollama_response(prompt, model)
-    print(response)
-    assert response is not None
-    assert isinstance(response, str)
-
-    prompt = """A user submitted this query: "SELECT * FROM table_name". 
-    You need to generate a script that will accomplish the user\'s intent. 
-    Respond ONLY with the procedure that should be executed. Place it in a JSON object with the key 
-    "script_to_test".
-    The format and requiremrents of the output are as follows:
-    {
-    "script_to_test": {"type": "string", 
-    "description": "a valid SQL query that will accomplish the task"}
-    }
-
-    """
-    model = "phi3"
-
-    response = get_ollama_response(prompt, model, format="json")
-    print(response)
-    assert response is not None
-    assert isinstance(response, dict)
-    assert "script_to_test" in response
 
 
 def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
@@ -341,23 +324,25 @@ def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
     except Exception as e:
         return f"Error interacting with LLM: {e}"
 
-def get_openai_response(prompt, model, npc=None, format=None, **kwargs):
+def get_openai_response(prompt, model, npc=None, format=None, api_key=None, **kwargs):
     try:
-        openai.api_key = os.environ["OPENAI_API_KEY"]
+        if api_key is None:        
+            api_key = os.environ["OPENAI_API_KEY"]                
+        client = OpenAI(api_key=api_key)
         
-        system_message = get_system_message(npc) if npc else ""
+        system_message = get_system_message(npc) if npc else "You are a helpful assistant."
         messages = [
             {"role": "system", "content": system_message},
             {"role": "user", "content": prompt}
         ]
         
-        response = openai.ChatCompletion.create(
+        completion = client.chat.completions.create(
             model=model,
             messages=messages,
             **kwargs
         )
         
-        llm_response = response.choices[0].message.content
+        llm_response = completion.choices[0].message.content
         
         if format == "json":
             try:
@@ -370,21 +355,27 @@ def get_openai_response(prompt, model, npc=None, format=None, **kwargs):
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
 
-def get_claude_response(prompt, model, npc=None, format=None, **kwargs):
+def get_anthropic_response(prompt, model, npc=None, format=None, api_key=None, **kwargs):
     try:
-        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-        
+        if api_key is None:
+            api_key = os.getenv("ANTHROPIC_API_KEY", None)
+        print(api_key, 'api_key')
         system_message = get_system_message(npc) if npc else ""
-        full_prompt = f"{system_message}\n\nHuman: {prompt}\n\nAssistant:"
         
-        response = client.completions.create(
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        message = client.messages.create(
             model=model,
-            prompt=full_prompt,
-            **kwargs
+            max_tokens=1024,
+            system=system_message,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
         )
         
-        llm_response = response.completion
-        
+        llm_response = message.content
+        print(llm_response)
+
         if format == "json":
             try:
                 return json.loads(llm_response)
@@ -393,9 +384,9 @@ def get_claude_response(prompt, model, npc=None, format=None, **kwargs):
                 return {"error": "Invalid JSON response"}
         else:
             return llm_response
+    
     except Exception as e:
         return f"Error interacting with Anthropic: {e}"
-
 
     
 def lookupprovider(model):
@@ -419,7 +410,8 @@ def get_llm_response(prompt, provider=npcsh_provider, model=npcsh_model, npc=Non
         full_prompt = f"{system_message}\n\n{prompt}" 
     else:
         full_prompt = prompt
-        
+    print(provider)
+    print(model)   
     if provider is None and model is None:
         provider = "ollama"
         model = "phi3"
@@ -433,10 +425,10 @@ def get_llm_response(prompt, provider=npcsh_provider, model=npcsh_model, npc=Non
         if model is None:
             model = "gpt-4o-mini"
         return get_openai_response(full_prompt, model, npc=npc, **kwargs)
-    elif provider == "claude":
+    elif provider == "anthropic":
         if model is None:
-            model = "claude-3.5-haiku"
-        return get_claude_response(full_prompt, model, npc=npc, **kwargs)
+            model = "claude-3-haiku-20240307"
+        return get_anthropic_response(full_prompt, model, npc=npc, **kwargs)
     else:
         return "Error: Invalid provider specified."
 
@@ -601,7 +593,7 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
     return "Max attempts reached. Unable to execute the command successfully."
 
 
-def check_llm_command(command, command_history, model=None, provider=None, npc=None):
+def check_llm_command(command, command_history, model=npcsh_model, provider=npcsh_provider, npc=None):
     location = os.getcwd()
     prompt = f"""
     A user submitted this query: {command}
@@ -647,7 +639,7 @@ def check_llm_command(command, command_history, model=None, provider=None, npc=N
         )
 
 def execute_llm_question(
-    command, command_history, model=None, provider=None, npc=None, messages=None
+    command, command_history, model=npcsh_model, provider=npcsh_provider, npc=None, messages=None
 ):
     location = os.getcwd()
 
