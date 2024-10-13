@@ -23,7 +23,7 @@ import whisper
 import wave
 
 BASH_COMMANDS = [
-    "open", 
+    "open",
     "alias",
     "bg",
     "bind",
@@ -171,6 +171,7 @@ import subprocess
 import platform
 import time
 
+
 def capture_screenshot():
     # Ensure the directory exists
     directory = os.path.expanduser("~/.npcsh/screenshots")
@@ -186,26 +187,29 @@ def capture_screenshot():
         subprocess.run(["screencapture", "-i", file_path])
     elif system == "Linux":
         # Try different Linux screenshot tools
-        if subprocess.run(["which", "gnome-screenshot"], capture_output=True).returncode == 0:
+        if (
+            subprocess.run(
+                ["which", "gnome-screenshot"], capture_output=True
+            ).returncode
+            == 0
+        ):
             subprocess.run(["gnome-screenshot", "-a", "-f", file_path])
         elif subprocess.run(["which", "scrot"], capture_output=True).returncode == 0:
             subprocess.run(["scrot", "-s", file_path])
         else:
-            print("No supported screenshot tool found. Please install gnome-screenshot or scrot.")
+            print(
+                "No supported screenshot tool found. Please install gnome-screenshot or scrot."
+            )
             return None
     else:
         print(f"Unsupported operating system: {system}")
         return None
 
     if os.path.exists(file_path):
-        return {
-            "filename": filename,
-            "file_path": file_path
-        }
+        return {"filename": filename, "file_path": file_path}
     else:
         print("Screenshot capture failed or was cancelled.")
         return None
-
 
 
 def execute_set_command(command, value):
@@ -469,7 +473,7 @@ def initialize_base_npcs_if_needed(db_path):
 
         # Insert base NPCs
         base_npcs = [
-            ("base", os.path.join(npc_profiles_dir, "base.npc")),
+            ("sibiji", os.path.join(npc_profiles_dir, "sibiji.npc")),
             ("bash", os.path.join(npc_profiles_dir, "bash.npc")),
             ("data", os.path.join(npc_profiles_dir, "data.npc")),
         ]

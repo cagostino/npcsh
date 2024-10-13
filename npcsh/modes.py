@@ -6,23 +6,18 @@ from .llm_funcs import (
     get_llm_response,
     execute_data_operations,
 )
-from .helpers import (
-    calibrate_silence,
-    record_audio,
-    speak_text, 
-    is_silent
-)
+from .helpers import calibrate_silence, record_audio, speak_text, is_silent
 import sqlite3
 import time
 from gtts import gTTS
 from playsound import playsound
 
 import whisper
-import pyaudio
 import wave
 import numpy as np
 import tempfile
 import os
+
 
 def enter_whisper_mode(command_history, npc=None):
     try:
@@ -75,7 +70,9 @@ def enter_whisper_mode(command_history, npc=None):
 
             speak_text(llm_response)
 
-            command_history.add(text, ["whisper", npc.name if npc else ""], llm_response, os.getcwd())
+            command_history.add(
+                text, ["whisper", npc.name if npc else ""], llm_response, os.getcwd()
+            )
 
             print("\nPress Enter to speak again, or type '/wq' to quit.")
             user_input = input()
@@ -90,34 +87,37 @@ def enter_whisper_mode(command_history, npc=None):
 
     return "\n".join(whisper_output)
 
+
 import datetime
 
 
 def enter_notes_mode(command_history, npc=None):
-    npc_name = npc.name if npc else 'base'
+    npc_name = npc.name if npc else "base"
     print(f"Entering notes mode (NPC: {npc_name}). Type '/nq' to exit.")
 
     while True:
         note = input("Enter your note (or '/nq' to quit): ").strip()
 
-        if note.lower() == '/nq':
+        if note.lower() == "/nq":
             break
 
         save_note(note, command_history, npc)
 
     print("Exiting notes mode.")
 
+
 def save_note(note, command_history, npc=None):
     current_dir = os.getcwd()
     timestamp = datetime.datetime.now().isoformat()
-    npc_name = npc.name if npc else 'base'
+    npc_name = npc.name if npc else "base"
 
     # Assuming command_history has a method to access the database connection
     conn = command_history.conn
     cursor = conn.cursor()
 
     # Create notes table if it doesn't exist
-    cursor.execute('''
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS notes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timestamp TEXT,
@@ -125,18 +125,21 @@ def save_note(note, command_history, npc=None):
         npc TEXT,
         directory TEXT
     )
-    ''')
+    """
+    )
 
     # Insert the note into the database
-    cursor.execute('''
+    cursor.execute(
+        """
     INSERT INTO notes (timestamp, note, npc, directory)
     VALUES (?, ?, ?, ?)
-    ''', (timestamp, note, npc_name, current_dir))
+    """,
+        (timestamp, note, npc_name, current_dir),
+    )
 
     conn.commit()
 
     print("Note saved to database.")
-
 
 
 def enter_observation_mode(command_history, npc=None):
@@ -183,6 +186,7 @@ data>"""
     conn.close()
     print("Exiting observation mode.")
 
+
 def enter_spool_mode(command_history, inherit_last=0, model="llama3.1", npc=None):
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
@@ -203,12 +207,15 @@ def enter_spool_mode(command_history, inherit_last=0, model="llama3.1", npc=None
                 break
 
             # Add user input to spool context
-            spool_context.append({"role": "user", "content": user_input})            
+            spool_context.append({"role": "user", "content": user_input})
             # Process the spool context with LLM
             spool_context = get_ollama_conversation(spool_context, model=model, npc=npc)
 
             command_history.add(
-                user_input, ["spool", npc.name if npc else ""], spool_context[-1]["content"], os.getcwd()
+                user_input,
+                ["spool", npc.name if npc else ""],
+                spool_context[-1]["content"],
+                os.getcwd(),
             )
             print(spool_context[-1]["content"])
         except (KeyboardInterrupt, EOFError):
@@ -218,6 +225,7 @@ def enter_spool_mode(command_history, inherit_last=0, model="llama3.1", npc=None
     return "\n".join(
         [msg["content"] for msg in spool_context if msg["role"] == "assistant"]
     )
+
 
 def initial_table_print(cursor):
     cursor.execute(
@@ -229,9 +237,11 @@ def initial_table_print(cursor):
     for i, table in enumerate(tables, 1):
         print(f"{i}. {table[0]}")
 
+
 def get_data_response(request, npc=None):
     data_output = npc.get_data_response(request) if npc else None
     return data_output
+
 
 def create_new_table(cursor, conn):
     table_name = input("Enter new table name: ").strip()
@@ -244,11 +254,13 @@ def create_new_table(cursor, conn):
     conn.commit()
     print(f"Table '{table_name}' created successfully.")
 
+
 def delete_table(cursor, conn):
     table_name = input("Enter table name to delete: ").strip()
     cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
     conn.commit()
     print(f"Table '{table_name}' deleted successfully.")
+
 
 def add_observation(cursor, conn, table_name):
     cursor.execute(f"PRAGMA table_info({table_name})")

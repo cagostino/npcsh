@@ -9,16 +9,35 @@ import openai
 from dotenv import load_dotenv
 from openai import OpenAI
 import anthropic
-# Load environment variables from .env file
-load_dotenv()
 
-# Get API keys from environment variables
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+
+# Load environment variables from .env file
+def load_env_from_execution_dir():
+    # Get the directory where the script is being executed
+    execution_dir = os.path.abspath(os.getcwd())
+    # print(f"Execution directory: {execution_dir}")
+    # Construct the path to the .env file
+    env_path = os.path.join(execution_dir, ".env")
+
+    # Load the .env file if it exists
+    if os.path.exists(env_path):
+        load_dotenv(dotenv_path=env_path)
+        print(f"Loaded .env file from {execution_dir}")
+    else:
+        print(f"Warning: No .env file found in {execution_dir}")
+
+
+load_env_from_execution_dir()
+
+anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", None)
+openai_api_key = os.getenv("OPENAI_API_KEY", None)
 
 npcsh_model = os.environ.get("NPCSH_MODEL", "phi3")
 npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
-npcsh_db_path = os.path.expanduser(os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db"))
+npcsh_db_path = os.path.expanduser(
+    os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
+)
+
 
 def get_system_message(npc):
     system_message = f"""
@@ -71,12 +90,13 @@ def get_system_message(npc):
 
     return system_message
 
-def get_ollama_conversation(messages, model, npc = None):
+
+def get_ollama_conversation(messages, model, npc=None):
     messages_copy = messages.copy()
-    if messages_copy[0]["role"] !='system':
+    if messages_copy[0]["role"] != "system":
         if npc is not None:
             system_message = get_system_message(npc)
-            messages_copy.insert(0, {"role": "system", "content": system_message})        
+            messages_copy.insert(0, {"role": "system", "content": system_message})
 
     response = ollama.chat(model=model, messages=messages_copy)
     messages_copy.append(response["message"])
@@ -93,7 +113,13 @@ def debug_loop(prompt, error, model):
 
 
 def get_data_response(
-    request, db_conn, tables=None, n_try_freq=5, extra_context=None, history=None, npc = None
+    request,
+    db_conn,
+    tables=None,
+    n_try_freq=5,
+    extra_context=None,
+    history=None,
+    npc=None,
 ):
     prompt = f"""
             Here is a request from a user: 
@@ -142,15 +168,19 @@ def get_data_response(
             }}
             Do not return any extra information. Respond only with the json.
             """
-    llm_response = get_llm_response(prompt, format="json", npc= npc)
+    llm_response = get_llm_response(prompt, format="json", npc=npc)
 
     list_failures = []
     success = False
     n_tries = 0
     while not success:
         response_json = process_data_output(
-            llm_response, db_conn, request, tables=tables, history=list_failures, 
-            npc = npc
+            llm_response,
+            db_conn,
+            request,
+            tables=tables,
+            history=list_failures,
+            npc=npc,
         )
         if response_json["code"] == 200:
             return response_json["response"]
@@ -169,7 +199,9 @@ def get_data_response(
     return llm_response
 
 
-def check_output_sufficient(request, response, query, model=None, provider=None, npc = None):
+def check_output_sufficient(
+    request, response, query, model=None, provider=None, npc=None
+):
     prompt = f"""
 
             A user made this request:
@@ -201,7 +233,7 @@ def check_output_sufficient(request, response, query, model=None, provider=None,
                                                         
             """
     llm_response = get_llm_response(
-        prompt, format="json", model=model, provider=provider, npc = npc
+        prompt, format="json", model=model, provider=provider, npc=npc
     )
     if llm_response["IS_SUFFICIENT"] == True:
         return response
@@ -210,7 +242,7 @@ def check_output_sufficient(request, response, query, model=None, provider=None,
 
 
 def process_data_output(
-    llm_response, db_conn, request, tables=None, n_try_freq=5, history=None, npc = None
+    llm_response, db_conn, request, tables=None, n_try_freq=5, history=None, npc=None
 ):
     if llm_response["choice"] == 1:
         query = llm_response["query"]
@@ -293,11 +325,10 @@ ea.append({"role": "user", "content": "then can you help me design something rea
 """
 
 
-
 def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
     try:
         url = "http://localhost:11434/api/generate"
-        
+
         system_message = get_system_message(npc) if npc else ""
         full_prompt = f"{system_message}\n\n{prompt}"
 
@@ -324,26 +355,27 @@ def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
     except Exception as e:
         return f"Error interacting with LLM: {e}"
 
+
 def get_openai_response(prompt, model, npc=None, format=None, api_key=None, **kwargs):
     try:
-        if api_key is None:        
-            api_key = os.environ["OPENAI_API_KEY"]                
+        if api_key is None:
+            api_key = os.environ["OPENAI_API_KEY"]
         client = OpenAI(api_key=api_key)
-        
-        system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+
+        system_message = (
+            get_system_message(npc) if npc else "You are a helpful assistant."
+        )
         messages = [
             {"role": "system", "content": system_message},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ]
-        
+
         completion = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            **kwargs
+            model=model, messages=messages, **kwargs
         )
-        
+
         llm_response = completion.choices[0].message.content
-        
+
         if format == "json":
             try:
                 return json.loads(llm_response)
@@ -355,40 +387,40 @@ def get_openai_response(prompt, model, npc=None, format=None, api_key=None, **kw
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
 
-def get_anthropic_response(prompt, model, npc=None, format=None, api_key=None, **kwargs):
+
+def get_anthropic_response(
+    prompt, model, npc=None, format=None, api_key=None, **kwargs
+):
     try:
         if api_key is None:
             api_key = os.getenv("ANTHROPIC_API_KEY", None)
-        print(api_key, 'api_key')
         system_message = get_system_message(npc) if npc else ""
-        
         client = anthropic.Anthropic(api_key=api_key)
-        
+
         message = client.messages.create(
             model=model,
             max_tokens=1024,
             system=system_message,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+            messages=[{"role": "user", "content": prompt}],
         )
-        
-        llm_response = message.content
-        print(llm_response)
+
+        llm_response = message.content[0].text  # This is the AI's text response
 
         if format == "json":
             try:
+                # Attempt to parse the response as JSON
                 return json.loads(llm_response)
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
-                return {"error": "Invalid JSON response"}
+                # If parsing fails, return the raw response wrapped in a dictionary
+                return {"response": llm_response, "error": "Invalid JSON response"}
         else:
             return llm_response
-    
+
     except Exception as e:
         return f"Error interacting with Anthropic: {e}"
 
-    
+
 def lookupprovider(model):
     if model in [
         "phi3",
@@ -403,15 +435,17 @@ def lookupprovider(model):
         return "claude"
 
 
-def get_llm_response(prompt, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs):
+def get_llm_response(
+    prompt, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs
+):
     # Prepare the system message
     if npc:
         system_message = get_system_message(npc)
-        full_prompt = f"{system_message}\n\n{prompt}" 
+        full_prompt = f"{system_message}\n\n{prompt}"
     else:
         full_prompt = prompt
-    print(provider)
-    print(model)   
+    # print(provider)
+    # print(model)
     if provider is None and model is None:
         provider = "ollama"
         model = "phi3"
@@ -431,7 +465,6 @@ def get_llm_response(prompt, provider=npcsh_provider, model=npcsh_model, npc=Non
         return get_anthropic_response(full_prompt, model, npc=npc, **kwargs)
     else:
         return "Error: Invalid provider specified."
-
 
 
 def execute_data_operations(query, command_history, model=None, provider=None):
@@ -508,13 +541,15 @@ def execute_data_operations(query, command_history, model=None, provider=None):
     return response
 
 
-
 def execute_llm_command(command, command_history, model=None, provider=None, npc=None):
     max_attempts = 5
     attempt = 0
     subcommands = []
+    if npc is None:
+        npc_name = "sibiji"
 
     location = os.getcwd()
+    print(f"{npc_name} generating command")
     while attempt < max_attempts:
         prompt = f"""
         A user submitted this query: {command}.
@@ -527,10 +562,11 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
         response = get_llm_response(
             prompt, model=model, provider=provider, npc=npc, format="json"
         )
-        print(f"LLM suggests: {response}")
-
+        print(f"LLM suggests the following bash command: {response['bash_command']}")
+        print(f"running command")
         if isinstance(response, dict) and "bash_command" in response:
             bash_command = response["bash_command"]
+
         else:
             print("Error: Invalid response format from LLM")
             attempt += 1
@@ -549,16 +585,16 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
 
                     {result.stdout}
 
-                    Provide a simple short description that provides the most
-                    useful information about the command's result.
+                    Provide a simple response to the user that explains to them
+                    what you did and how it accomplishes what they asked for. 
+                    
 
                         """
                 response = get_llm_response(
                     prompt,
                     model=model,
                     provider=provider,
-                    npc = npc,
-
+                    npc=npc,
                 )
                 print(response)
                 output = response
@@ -576,7 +612,7 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
             Respond with a JSON object containing the key "bash_command" with the suggested command.
             """
             fix_suggestion = get_llm_response(
-                error_prompt, model=model, provider=provider, npc = npc,  format="json"
+                error_prompt, model=model, provider=provider, npc=npc, format="json"
             )
             if isinstance(fix_suggestion, dict) and "bash_command" in fix_suggestion:
                 print(f"LLM suggests fix: {fix_suggestion['bash_command']}")
@@ -593,7 +629,9 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
     return "Max attempts reached. Unable to execute the command successfully."
 
 
-def check_llm_command(command, command_history, model=npcsh_model, provider=npcsh_provider, npc=None):
+def check_llm_command(
+    command, command_history, model=npcsh_model, provider=npcsh_provider, npc=None
+):
     location = os.getcwd()
     prompt = f"""
     A user submitted this query: {command}
@@ -624,11 +662,32 @@ def check_llm_command(command, command_history, model=npcsh_model, provider=npcs
     Use these to hone your output and only respond with the actual filled-in json.
     Do not return any extra information. Respond only with the json.
     """
-    response = get_llm_response(prompt, model=model, provider=provider, npc=npc, format="json")
-    print(f"LLM suggests: {response}")
-    
+    response = get_llm_response(
+        prompt, model=model, provider=provider, npc=npc, format="json"
+    )
+
+    # Handle potential errors and non-JSON responses
+    if not isinstance(response, dict):
+        print(f"Error: Expected a dictionary, but got {type(response)}")
+        return "Error: Invalid response from LLM"
+    if "error" in response:
+        print(f"LLM Error: {response['error']}")
+        return f"LLM Error: {response['error']}"
+
+    # Check for the 'is_command' key, handle cases where it's missing
+    if "is_command" not in response:
+        print("Error: 'is_command' key missing in LLM response")
+        return "Error: 'is_command' key missing in LLM response"
+    if response["is_command"] == "yes":
+        cmd_stt = "a command"
+    else:
+        cmd_stt = "a question"
+
+    print(f"The request is {cmd_stt} .")
+
     output = response
     command_history.add(command, [], json.dumps(output), location)
+
     if response["is_command"] == "yes":
         return execute_llm_command(
             command, command_history, model=model, provider=provider, npc=npc
@@ -638,20 +697,23 @@ def check_llm_command(command, command_history, model=npcsh_model, provider=npcs
             command, command_history, model=model, provider=provider, npc=npc
         )
 
+
 def execute_llm_question(
-    command, command_history, model=npcsh_model, provider=npcsh_provider, npc=None, messages=None
+    command,
+    command_history,
+    model=npcsh_model,
+    provider=npcsh_provider,
+    npc=None,
+    messages=None,
 ):
     location = os.getcwd()
-
-    prompt = f"""
-    A user submitted this query: {command}
-    You need to generate a response to the user's inquiry.
-    Respond ONLY with the response that should be given.
-    in the json key "response".
-    You must reply with valid json and nothing else.
-    """
-    response = get_llm_response(prompt, model=model, provider=provider, npc=npc, format="json")
-    print(f"LLM suggests: {response}")
-    output = response["response"]
+    response = get_llm_response(
+        command,
+        model=model,
+        provider=provider,
+        npc=npc,
+    )
+    # print(f"LLM: {response}")
+    output = response
     command_history.add(command, [], output, location)
-    return response["response"]
+    return response

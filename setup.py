@@ -14,9 +14,11 @@ extra_files = package_files("npcsh/npc_profiles")
 
 setup(
     name="npcsh",
-    version="0.1.12",
+    version="0.1.13",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
+        "anthropic",
+        "openai",
         "jinja2",
         "pandas",
         "ollama",
@@ -29,7 +31,7 @@ setup(
         "playsound",
         "termcolor",
         "colorama",
-        "python-dotenv", 
+        "python-dotenv",
         "pytest",
     ],
     entry_points={
@@ -51,4 +53,3 @@ setup(
     data_files=[("npcsh/npc_profiles", extra_files)],
     python_requires=">=3.10",
 )
-
