@@ -127,7 +127,7 @@ def get_openai_conversation(messages, model, npc=None, api_key=None, **kwargs):
             raise ValueError("No user message found in the conversation history.")
 
 
-        messages.append({"role": "user", "content": last_user_message})
+        #messages.append({"role": "user", "content": last_user_message})
 
 
         completion = client.chat.completions.create(
