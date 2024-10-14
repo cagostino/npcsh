@@ -101,6 +101,8 @@ def get_ollama_conversation(messages, model, npc=None):
     response = ollama.chat(model=model, messages=messages_copy)
     messages_copy.append(response["message"])
     return messages_copy
+
+
 def get_openai_conversation(messages, model, npc=None, api_key=None, **kwargs):
     try:
         if api_key is None:
@@ -115,7 +117,6 @@ def get_openai_conversation(messages, model, npc=None, api_key=None, **kwargs):
         if messages is None or len(messages) == 0:
             messages = [{"role": "system", "content": system_message}]
 
-
         # Extract the last user message
         last_user_message = None
         for msg in reversed(messages):
@@ -126,25 +127,20 @@ def get_openai_conversation(messages, model, npc=None, api_key=None, **kwargs):
         if last_user_message is None:
             raise ValueError("No user message found in the conversation history.")
 
-
-        #messages.append({"role": "user", "content": last_user_message})
-
+        # messages.append({"role": "user", "content": last_user_message})
 
         completion = client.chat.completions.create(
             model=model, messages=messages, **kwargs
         )
 
         response_message = completion.choices[0].message
-        
-        messages.append({
-            "role": "assistant",
-            "content": response_message.content})
+
+        messages.append({"role": "assistant", "content": response_message.content})
 
         return messages
 
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
-
 
 
 def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs):
@@ -153,7 +149,6 @@ def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs
             api_key = os.getenv("ANTHROPIC_API_KEY", None)
         system_message = get_system_message(npc) if npc else ""
         client = anthropic.Anthropic(api_key=api_key)
-
 
         # If no messages are provided, start a new conversation
         if messages is None or len(messages) == 0:
@@ -169,15 +164,15 @@ def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs
         if last_user_message is None:
             raise ValueError("No user message found in the conversation history.")
 
-
         message = client.messages.create(
             model=model,
             max_tokens=1024,
             system=system_message,  # Include system message in each turn for Anthropic
-            messages=[{"role": "user", "content": last_user_message}], # Send only the last user message
-            **kwargs
+            messages=[
+                {"role": "user", "content": last_user_message}
+            ],  # Send only the last user message
+            **kwargs,
         )
-
 
         messages.append({"role": "assistant", "content": message.content[0].text})
 
@@ -187,7 +182,9 @@ def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs
         return f"Error interacting with Anthropic: {e}"
 
 
-def get_conversation(messages, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs):
+def get_conversation(
+    messages, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs
+):
     print(provider, model)
     if provider == "ollama":
         return get_ollama_conversation(messages, model, npc=npc, **kwargs)
@@ -197,7 +194,6 @@ def get_conversation(messages, provider=npcsh_provider, model=npcsh_model, npc=N
         return get_anthropic_conversation(messages, model, npc=npc, **kwargs)
     else:
         return "Error: Invalid provider specified."
-
 
 
 def debug_loop(prompt, error, model):
@@ -420,9 +416,10 @@ ea.append({"role": "user", "content": "then can you help me design something rea
 
 
 """
+import base64  # For image encoding
 
 
-def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
+def get_ollama_response(prompt, model, image=None, npc=None, format=None, **kwargs):
     try:
         url = "http://localhost:11434/api/generate"
 
@@ -434,6 +431,11 @@ def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
             "prompt": full_prompt,
             "stream": False,
         }
+        if image:  # Add image to the request if provided
+            with open(image["file_path"], "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+                data["image"] = base64_image
+
         if format is not None:
             data["format"] = format
 
@@ -453,7 +455,9 @@ def get_ollama_response(prompt, model, npc=None, format=None, **kwargs):
         return f"Error interacting with LLM: {e}"
 
 
-def get_openai_response(prompt, model, npc=None, format=None, api_key=None, **kwargs):
+def get_openai_response(
+    prompt, model, image=None, npc=None, format=None, api_key=None, **kwargs
+):
     try:
         if api_key is None:
             api_key = os.environ["OPENAI_API_KEY"]
@@ -466,6 +470,22 @@ def get_openai_response(prompt, model, npc=None, format=None, api_key=None, **kw
             {"role": "system", "content": system_message},
             {"role": "user", "content": prompt},
         ]
+        if image:  # Add image if provided
+            with open(image["file_path"], "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}"
+                                },
+                            }
+                        ],
+                    }
+                )
 
         completion = client.chat.completions.create(
             model=model, messages=messages, **kwargs
@@ -486,19 +506,45 @@ def get_openai_response(prompt, model, npc=None, format=None, api_key=None, **kw
 
 
 def get_anthropic_response(
-    prompt, model, npc=None, format=None, api_key=None, **kwargs
+    prompt, model, image=None, npc=None, format=None, api_key=None, **kwargs
 ):
     try:
         if api_key is None:
             api_key = os.getenv("ANTHROPIC_API_KEY", None)
         system_message = get_system_message(npc) if npc else ""
         client = anthropic.Anthropic(api_key=api_key)
+        messages = []
+
+        if image:
+            with open(image["file_path"], "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",  # Or the appropriate media type
+                                    "data": base64_image,
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": prompt,  # Include the prompt here with the image
+                            },
+                        ],
+                    }
+                )
+        else:
+            messages.append({"role": "user", "content": prompt})
 
         message = client.messages.create(
             model=model,
             max_tokens=1024,
             system=system_message,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
         )
 
         llm_response = message.content[0].text  # This is the AI's text response
@@ -807,14 +853,14 @@ def execute_llm_question(
 
     # Use get_conversation if messages are provided
     if messages:
-        response = get_conversation(
-            messages, model=model, provider=provider, npc=npc
-        )
+        response = get_conversation(messages, model=model, provider=provider, npc=npc)
 
-        if isinstance(response, str) and "Error" in response: # Check for errors
+        if isinstance(response, str) and "Error" in response:  # Check for errors
             output = response
-        elif isinstance(response, list) and len(response) > 0: # Check for valid response
-            output = response[-1]['content'] # Extract assistant's reply
+        elif (
+            isinstance(response, list) and len(response) > 0
+        ):  # Check for valid response
+            output = response[-1]["content"]  # Extract assistant's reply
         else:
             output = "Error: Invalid response from conversation function"
 
@@ -828,4 +874,4 @@ def execute_llm_question(
         output = response
 
     command_history.add(command, [], output, location)
-    return response # return the full conversation
+    return response  # return the full conversation
