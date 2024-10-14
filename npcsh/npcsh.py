@@ -17,6 +17,8 @@ from .modes import (
     enter_whisper_mode,
     enter_notes_mode,
     enter_spool_mode,
+    enter_data_mode, 
+
 )
 from .helpers import (
     log_action,
@@ -163,7 +165,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
     location = os.getcwd()
     # Extract NPC from command
     db_conn = sqlite3.connect(db_path)
-
+    print(command)
     if current_npc is None:
         valid_npcs = get_valid_npcs(db_path)
 
@@ -244,8 +246,8 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
         elif command_name == "notes":
             output = enter_notes_mode(command_history, npc=npc)
         elif command_name == "data":
-            request = " ".join(args)
-            output = get_data_response(request, npc=npc)
+            print('data')
+            output = enter_data_mode( command_history, npc=npc)
             # output = enter_observation_mode(command_history, npc=npc)
         elif command_name == "cmd" or command_name == "command":
             output = execute_llm_command(command, command_history, npc=npc)
@@ -414,6 +416,7 @@ def main():
     os.makedirs("./npc_profiles", exist_ok=True)
     npc_directory = os.path.expanduser("./npc_profiles")
     npc_compiler = NPCCompiler(npc_directory)
+    #print(command_name, 'command_name')
 
     if not is_npcsh_initialized():
         print("Initializing NPCSH...")
