@@ -5,7 +5,8 @@ from .llm_funcs import (
     get_llm_response,
     get_conversation,
     execute_data_operations,
-    get_system_message
+    get_system_message,
+    check_llm_command,
 )
 from .helpers import calibrate_silence, record_audio, speak_text, is_silent
 import sqlite3
@@ -20,7 +21,12 @@ import tempfile
 import os
 import json
 
+
 def enter_whisper_mode(command_history, npc=None):
+    if npc is not None:
+        llm_name = npc.name
+    else:
+        llm_name = "LLM"
     try:
         model = whisper.load_model("base")
     except Exception as e:
@@ -29,6 +35,7 @@ def enter_whisper_mode(command_history, npc=None):
 
     whisper_output = []
     npc_info = f" (NPC: {npc.name})" if npc else ""
+    messages = []  # Initialize messages list for conversation history
 
     print(f"Entering whisper mode{npc_info}. Calibrating silence level...")
     try:
@@ -41,50 +48,66 @@ def enter_whisper_mode(command_history, npc=None):
     speak_text("Whisper mode activated. Ready for your input.")
 
     while True:
-        try:
-            audio_data = record_audio(silence_threshold=silence_threshold)
+        # try:
+        audio_data = record_audio(silence_threshold=silence_threshold)
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
-                wf = wave.open(temp_audio.name, "wb")
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(16000)
-                wf.writeframes(audio_data)
-                wf.close()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+            wf = wave.open(temp_audio.name, "wb")
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(audio_data)
+            wf.close()
 
-                result = model.transcribe(temp_audio.name)
-                text = result["text"].strip()
+            result = model.transcribe(temp_audio.name)
+            text = result["text"].strip()
 
-            os.unlink(temp_audio.name)
+        os.unlink(temp_audio.name)
 
-            print(f"You said: {text}")
-            whisper_output.append(f"User: {text}")
+        print(f"You said: {text}")
+        whisper_output.append(f"User: {text}")
 
-            if text.lower() == "exit":
-                print("Exiting whisper mode.")
-                speak_text("Exiting whisper mode. Goodbye!")
-                break
+        if text.lower() == "exit":
+            print("Exiting whisper mode.")
+            speak_text("Exiting whisper mode. Goodbye!")
+            break
 
-            llm_response = get_llm_response(text, npc=npc)
-            print(f"LLM response: {llm_response}")
-            whisper_output.append(f"LLM: {llm_response}")
+        messages.append({"role": "user", "content": text})  # Add user message
 
+        llm_response = check_llm_command(
+            text, command_history, npc=npc, messages=messages
+        )  # Use check_llm_command
+        # print(type(llm_response))
+        if isinstance(llm_response, dict):
+            print(f"{llm_name}: {llm_response['response']}")  # Print assistant's reply
+            whisper_output.append(
+                f"{llm_name}: {llm_response['response']}"
+            )  # Add to output
+            speak_text(llm_response["response"])  # Speak assistant's reply
+        elif isinstance(llm_response, list) and len(llm_response) > 0:
+            assistant_reply = messages[-1]["content"]
+            print(f"{llm_name}: {assistant_reply}")  # Print assistant's reply
+            whisper_output.append(f"{llm_name}: {assistant_reply}")  # Add to output
+            speak_text(assistant_reply)  # Speak assistant's reply
+        elif isinstance(
+            llm_response, str
+        ):  # Handle string responses (errors or direct replies)
+            print(f"{llm_name}: {llm_response}")
+            whisper_output.append(f"{llm_name}: {llm_response}")
             speak_text(llm_response)
 
-            command_history.add(
-                text, ["whisper", npc.name if npc else ""], llm_response, os.getcwd()
-            )
+        # command_history.add(...)  This is now handled inside check_llm_command
 
-            print("\nPress Enter to speak again, or type '/wq' to quit.")
-            user_input = input()
-            if user_input.lower() == "/wq":
-                print("Exiting whisper mode.")
-                speak_text("Exiting whisper mode. Goodbye!")
-                break
+        print("\nPress Enter to speak again, or type '/wq' to quit.")
+        user_input = input()
+        if user_input.lower() == "/wq":
+            print("Exiting whisper mode.")
+            speak_text("Exiting whisper mode. Goodbye!")
+            break
 
-        except Exception as e:
-            print(f"Error in whisper mode: {e}")
-            whisper_output.append(f"Error: {e}")
+    # except Exception as e:
+    #    print(f"Error in whisper mode: {e}")
+    #    whisper_output.append(f"Error: {e}")
 
     return "\n".join(whisper_output)
 
@@ -187,17 +210,14 @@ data>"""
     conn.close()
     print("Exiting observation mode.")
 
+
 def enter_spool_mode(command_history, inherit_last=0, npc=None):
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
     spool_context = []
-    system_message = (
-                get_system_message(npc) if npc else "You are a helpful assistant."
-            )
-    #insert at the first position
-    spool_context.insert(0, 
-                         {"role": "assistant",
-                          "content": system_message})
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+    # insert at the first position
+    spool_context.insert(0, {"role": "assistant", "content": system_message})
     # Inherit last n messages if specified
     if inherit_last > 0:
         last_commands = command_history.get_all(limit=inherit_last)
@@ -230,22 +250,26 @@ def enter_spool_mode(command_history, inherit_last=0, npc=None):
             # Handle potential errors in conversation_result
             if isinstance(conversation_result, str) and "Error" in conversation_result:
                 print(conversation_result)  # Print the error message
-                continue # Skip to the next iteration of the loop
-            elif not isinstance(conversation_result, list) or len(conversation_result) == 0:
+                continue  # Skip to the next iteration of the loop
+            elif (
+                not isinstance(conversation_result, list)
+                or len(conversation_result) == 0
+            ):
                 print("Error: Invalid response from get_conversation")
                 continue
 
-
-            spool_context = conversation_result # update spool_context
+            spool_context = conversation_result  # update spool_context
 
             # Extract assistant's reply, handling potential KeyError
             try:
-                #import pdb ; pdb.set_trace()
+                # import pdb ; pdb.set_trace()
 
-                assistant_reply = spool_context[-1]['content']
+                assistant_reply = spool_context[-1]["content"]
             except (KeyError, IndexError) as e:
                 print(f"Error extracting assistant's reply: {e}")
-                print(f"Conversation result: {conversation_result}") # Print for debugging
+                print(
+                    f"Conversation result: {conversation_result}"
+                )  # Print for debugging
                 continue
 
             command_history.add(
@@ -255,7 +279,6 @@ def enter_spool_mode(command_history, inherit_last=0, npc=None):
                 os.getcwd(),
             )
             print(assistant_reply)
-
 
         except (KeyboardInterrupt, EOFError):
             print("\nExiting spool mode.")
