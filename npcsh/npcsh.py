@@ -174,6 +174,8 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
         npc = load_npc_from_file(npc_path, db_conn)
     else:
         npc = current_npc
+    if len(command.strip()) == 0:
+        return output
     if command.startswith("/"):
         command = command[1:]
         log_action("Command Executed", command)
