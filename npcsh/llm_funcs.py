@@ -419,13 +419,14 @@ ea.append({"role": "user", "content": "then can you help me design something rea
 import base64  # For image encoding
 
 
-def get_ollama_response(prompt, model, image=None, npc=None, format=None, **kwargs):
+def get_ollama_response(
+    prompt, model, image=None, npc=None, format=None, messages=None, **kwargs
+):
     try:
         url = "http://localhost:11434/api/generate"
 
         system_message = get_system_message(npc) if npc else ""
         full_prompt = f"{system_message}\n\n{prompt}"
-
         data = {
             "model": model,
             "prompt": full_prompt,
@@ -442,21 +443,33 @@ def get_ollama_response(prompt, model, image=None, npc=None, format=None, **kwar
         response = requests.post(url, json=data)
         response.raise_for_status()
         llm_response = json.loads(response.text)["response"]
+        items_to_return = {"response": llm_response}
+        if messages is not None:
+            messages.append({"role": "assistant", "content": llm_response})
+            items_to_return["messages"] = messages
 
         if format == "json":
             try:
-                return json.loads(llm_response)
+                items_to_return["response"] = json.loads(llm_response)
+                return items_to_return
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
                 return {"error": "Invalid JSON response"}
         else:
-            return llm_response
+            return items_to_return
     except Exception as e:
         return f"Error interacting with LLM: {e}"
 
 
 def get_openai_response(
-    prompt, model, image=None, npc=None, format=None, api_key=None, **kwargs
+    prompt,
+    model,
+    image=None,
+    npc=None,
+    format=None,
+    api_key=None,
+    messages=None,
+    **kwargs,
 ):
     try:
         if api_key is None:
@@ -466,10 +479,11 @@ def get_openai_response(
         system_message = (
             get_system_message(npc) if npc else "You are a helpful assistant."
         )
-        messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": prompt},
-        ]
+        if messages is None:
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ]
         if image:  # Add image if provided
             with open(image["file_path"], "rb") as image_file:
                 base64_image = base64.b64encode(image_file.read()).decode("utf-8")
@@ -493,27 +507,44 @@ def get_openai_response(
 
         llm_response = completion.choices[0].message.content
 
+        items_to_return = {"response": llm_response}
+
+        if messages is not None:
+            messages.append({"role": "assistant", "content": llm_response})
+            items_to_return["messages"] = messages
         if format == "json":
             try:
-                return json.loads(llm_response)
+                items_to_return["response"] = json.loads(llm_response)
+                return items_to_return
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
                 return {"error": "Invalid JSON response"}
         else:
-            return llm_response
+            return items_to_return
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
 
 
 def get_anthropic_response(
-    prompt, model, image=None, npc=None, format=None, api_key=None, **kwargs
+    prompt,
+    model,
+    image=None,
+    npc=None,
+    format=None,
+    api_key=None,
+    messages=None,
+    **kwargs,
 ):
     try:
         if api_key is None:
             api_key = os.getenv("ANTHROPIC_API_KEY", None)
-        system_message = get_system_message(npc) if npc else ""
+        system_message = (
+            get_system_message(npc) if npc else "You are a helpful assistant."
+        )
         client = anthropic.Anthropic(api_key=api_key)
-        messages = []
+        if messages is None:
+            messages = []
+            messages.append({"role": "system", "content": system_message})
 
         if image:
             with open(image["file_path"], "rb") as image_file:
@@ -544,21 +575,27 @@ def get_anthropic_response(
             model=model,
             max_tokens=1024,
             system=system_message,
-            messages=messages,
+            messages=messages[1:],
         )
 
         llm_response = message.content[0].text  # This is the AI's text response
+        items_to_return = {"response": llm_response}
+
+        if messages is not None:
+            messages.append({"role": "assistant", "content": llm_response})
+            items_to_return["messages"] = messages
 
         if format == "json":
             try:
-                # Attempt to parse the response as JSON
-                return json.loads(llm_response)
+                items_to_return["response"] = json.loads(llm_response)
+                return items_to_return
+
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
                 # If parsing fails, return the raw response wrapped in a dictionary
                 return {"response": llm_response, "error": "Invalid JSON response"}
         else:
-            return llm_response
+            return items_to_return
 
     except Exception as e:
         return f"Error interacting with Anthropic: {e}"
@@ -579,14 +616,13 @@ def lookupprovider(model):
 
 
 def get_llm_response(
-    prompt, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs
+    prompt,
+    provider=npcsh_provider,
+    model=npcsh_model,
+    npc=None,
+    messages=None,
+    **kwargs,
 ):
-    # Prepare the system message
-    if npc:
-        system_message = get_system_message(npc)
-        full_prompt = f"{system_message}\n\n{prompt}"
-    else:
-        full_prompt = prompt
     # print(provider)
     # print(model)
     if provider is None and model is None:
@@ -597,15 +633,17 @@ def get_llm_response(
     if provider == "ollama":
         if model is None:
             model = "phi3"
-        return get_ollama_response(full_prompt, model, npc=npc, **kwargs)
+        return get_ollama_response(prompt, model, npc=npc, messages=messages, **kwargs)
     elif provider == "openai":
         if model is None:
             model = "gpt-4o-mini"
-        return get_openai_response(full_prompt, model, npc=npc, **kwargs)
+        return get_openai_response(prompt, model, npc=npc, messages=messages, **kwargs)
     elif provider == "anthropic":
         if model is None:
             model = "claude-3-haiku-20240307"
-        return get_anthropic_response(full_prompt, model, npc=npc, **kwargs)
+        return get_anthropic_response(
+            prompt, model, npc=npc, messages=messages, **kwargs
+        )
     else:
         return "Error: Invalid provider specified."
 
@@ -684,7 +722,9 @@ def execute_data_operations(query, command_history, model=None, provider=None):
     return response
 
 
-def execute_llm_command(command, command_history, model=None, provider=None, npc=None):
+def execute_llm_command(
+    command, command_history, model=None, provider=None, npc=None, messages=None
+):
     max_attempts = 5
     attempt = 0
     subcommands = []
@@ -703,8 +743,16 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
         """
 
         response = get_llm_response(
-            prompt, model=model, provider=provider, npc=npc, format="json"
+            prompt,
+            model=model,
+            provider=provider,
+            messages=messages,
+            npc=npc,
+            format="json",
         )
+        messages = response["messages"]
+        response = response["response"]
+
         print(f"LLM suggests the following bash command: {response['bash_command']}")
         print(f"running command")
         if isinstance(response, dict) and "bash_command" in response:
@@ -738,7 +786,11 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
                     model=model,
                     provider=provider,
                     npc=npc,
+                    messages=messages,
                 )
+                messages = response["messages"]
+                response = response["response"]
+
                 print(response)
                 output = response
                 command_history.add(command, subcommands, output, location)
@@ -755,8 +807,16 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
             Respond with a JSON object containing the key "bash_command" with the suggested command.
             """
             fix_suggestion = get_llm_response(
-                error_prompt, model=model, provider=provider, npc=npc, format="json"
+                error_prompt,
+                model=model,
+                provider=provider,
+                npc=npc,
+                format="json",
+                messages=messages,
             )
+            messages = fix_suggestion["messages"]
+            fix_suggestion = fix_suggestion["response"]
+
             if isinstance(fix_suggestion, dict) and "bash_command" in fix_suggestion:
                 print(f"LLM suggests fix: {fix_suggestion['bash_command']}")
                 command = fix_suggestion["bash_command"]
@@ -773,9 +833,17 @@ def execute_llm_command(command, command_history, model=None, provider=None, npc
 
 
 def check_llm_command(
-    command, command_history, model=npcsh_model, provider=npcsh_provider, npc=None
+    command,
+    command_history,
+    model=npcsh_model,
+    messages=None,
+    provider=npcsh_provider,
+    npc=None,
 ):
     location = os.getcwd()
+
+    if messages is None:
+        messages = []
     prompt = f"""
     A user submitted this query: {command}
     Is this query a specific request for a task to be accomplished?
@@ -805,9 +873,20 @@ def check_llm_command(
     Use these to hone your output and only respond with the actual filled-in json.
     Do not return any extra information. Respond only with the json.
     """
+
     response = get_llm_response(
-        prompt, model=model, provider=provider, npc=npc, format="json"
+        prompt,
+        model=model,
+        provider=provider,
+        npc=npc,
+        messages=messages,
+        format="json",
     )
+    # import pdb
+
+    # pdb.set_trace()
+    messages = response["messages"]
+    response = response["response"]
 
     # Handle potential errors and non-JSON responses
     if not isinstance(response, dict):
@@ -833,11 +912,21 @@ def check_llm_command(
 
     if response["is_command"] == "yes":
         return execute_llm_command(
-            command, command_history, model=model, provider=provider, npc=npc
+            command,
+            command_history,
+            model=model,
+            provider=provider,
+            messages=messages,
+            npc=npc,
         )
     else:
         return execute_llm_question(
-            command, command_history, model=model, provider=provider, npc=npc
+            command,
+            command_history,
+            model=model,
+            provider=provider,
+            # messages=messages,
+            npc=npc,
         )
 
 
@@ -863,6 +952,7 @@ def execute_llm_question(
             output = response[-1]["content"]  # Extract assistant's reply
         else:
             output = "Error: Invalid response from conversation function"
+        # print(response)
 
     else:  # Use get_llm_response for single turn queries
         response = get_llm_response(
@@ -870,8 +960,10 @@ def execute_llm_question(
             model=model,
             provider=provider,
             npc=npc,
+            messages=messages,
         )
+        # print(response["response"])
         output = response
 
-    command_history.add(command, [], output, location)
+    command_history.add(command, [], json.dumps(output), location)
     return response  # return the full conversation

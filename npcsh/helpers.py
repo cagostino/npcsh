@@ -22,6 +22,7 @@ from .llm_funcs import get_llm_response
 
 import whisper
 import wave
+import tempfile
 
 BASH_COMMANDS = [
     "open",
