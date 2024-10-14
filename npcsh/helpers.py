@@ -18,6 +18,7 @@ import time
 from gtts import gTTS
 import numpy as np
 from playsound import playsound
+from .llm_funcs import get_llm_response
 
 import whisper
 import wave
@@ -172,7 +173,7 @@ import platform
 import time
 
 
-def capture_screenshot():
+def capture_screenshot(npc=None):
     # Ensure the directory exists
     directory = os.path.expanduser("~/.npcsh/screenshots")
     os.makedirs(directory, exist_ok=True)
@@ -182,20 +183,35 @@ def capture_screenshot():
     file_path = os.path.join(directory, filename)
 
     system = platform.system()
+    model_kwargs = {}
+
+    if npc is not None:
+        if npc.provider is not None:
+            model_kwargs["provider"] = npc.provider
+
+        if npc.model is not None:
+            model_kwargs["model"] = npc.model
 
     if system == "Darwin":  # macOS
-        subprocess.run(["screencapture", "-i", file_path])
+        subprocess.run(["screencapture", "-i", file_path])  # This waits on macOS
     elif system == "Linux":
-        # Try different Linux screenshot tools
+        # Use a loop to check for the file's existence
         if (
             subprocess.run(
                 ["which", "gnome-screenshot"], capture_output=True
             ).returncode
             == 0
         ):
-            subprocess.run(["gnome-screenshot", "-a", "-f", file_path])
+            subprocess.Popen(
+                ["gnome-screenshot", "-a", "-f", file_path]
+            )  # Use Popen for non-blocking
+            while not os.path.exists(file_path):  # Wait for file to exist
+                time.sleep(0.1)  # Check every 100ms
         elif subprocess.run(["which", "scrot"], capture_output=True).returncode == 0:
-            subprocess.run(["scrot", "-s", file_path])
+            subprocess.Popen(["scrot", "-s", file_path])  # Use Popen for non-blocking
+            while not os.path.exists(file_path):  # Wait for file to exist
+                time.sleep(0.1)  # Check every 100ms
+
         else:
             print(
                 "No supported screenshot tool found. Please install gnome-screenshot or scrot."
@@ -205,9 +221,42 @@ def capture_screenshot():
         print(f"Unsupported operating system: {system}")
         return None
 
+    print(f"Screenshot saved to: {file_path}")
+    return {"filename": filename, "file_path": file_path, "model_kwargs": model_kwargs}
+
+
+def analyze_image(
+    command_history, user_prompt, file_path, filename, npc=None, **model_kwargs
+):
     if os.path.exists(file_path):
-        return {"filename": filename, "file_path": file_path}
-    else:
+        image_info = {"filename": filename, "file_path": file_path}
+
+        if user_prompt:
+            try:
+                response = get_llm_response(
+                    user_prompt, image=image_info, npc=npc, **model_kwargs
+                )
+
+                # Add to command history *inside* the try block
+                command_history.add(
+                    f"screenshot with prompt: {user_prompt}",
+                    ["screenshot", npc.name if npc else ""],
+                    response,
+                    os.getcwd(),
+                )
+
+                # print(response)  # Print response after adding to history
+                return response
+
+            except Exception as e:
+                error_message = f"Error during LLM processing: {e}"
+                print(error_message)
+                return error_message
+
+        else:  # This part needs to be inside the outer 'if os.path.exists...' block
+            print("Skipping LLM processing.")
+            return image_info  # Return image info if no prompt is given
+    else:  # This else also needs to be part of the outer 'if os.path.exists...' block
         print("Screenshot capture failed or was cancelled.")
         return None
 

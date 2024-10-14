@@ -23,6 +23,7 @@ from .helpers import (
     capture_screenshot,
     load_npc_from_file,
     list_directory,
+    analyze_image,
     read_file,
     ensure_npcshrc_exists,
     setup_npcsh_config,
@@ -174,8 +175,8 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
         npc = load_npc_from_file(npc_path, db_conn)
     else:
         npc = current_npc
-    #print(command, 'command', len(command), len(command.strip()))
-    
+    # print(command, 'command', len(command), len(command.strip()))
+
     if len(command.strip()) == 0:
         return output
     if command.startswith("/"):
@@ -197,11 +198,47 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
             except Exception as e:
                 output = f"Error compiling NPC profile: {str(e)}"
                 print(output)
-        elif command_name == "ots":
-            output = capture_screenshot()
-            # add llm part
-            output = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
-            return output
+        elif command.startswith("ots"):
+            # check if there is a filename
+            if len(command_parts) > 1:
+                filename = command_parts[1]
+                file_path = os.path.join(os.getcwd(), filename)
+                # Get user prompt about the image
+                user_prompt = input(
+                    "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                )
+
+                output = analyze_image(
+                    command_history,
+                    user_prompt,
+                    file_path,
+                    filename,
+                    npc=npc,
+                )
+
+            else:
+                output = capture_screenshot(npc=npc)
+                user_prompt = input(
+                    "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                )
+                output = analyze_image(
+                    command_history,
+                    user_prompt,
+                    output["file_path"],
+                    output["filename"],
+                    npc=npc,
+                    **output["model_kwargs"],
+                )
+            if output:
+                if isinstance(output, dict) and "filename" in output:
+                    message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
+                else:  # This handles both LLM responses and error messages (both strings)
+                    message = output
+                return message  # Return the message
+            else:  # Handle the case where capture_screenshot returns None
+                print("Screenshot capture failed.")
+                return None  # Return None to indicate failure
+
         elif command_name == "whisper":
             output = enter_whisper_mode(command_history, npc=npc)
         elif command_name == "notes":
