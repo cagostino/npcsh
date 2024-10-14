@@ -101,6 +101,103 @@ def get_ollama_conversation(messages, model, npc=None):
     response = ollama.chat(model=model, messages=messages_copy)
     messages_copy.append(response["message"])
     return messages_copy
+def get_openai_conversation(messages, model, npc=None, api_key=None, **kwargs):
+    try:
+        if api_key is None:
+            api_key = os.environ["OPENAI_API_KEY"]
+        client = OpenAI(api_key=api_key)
+
+        system_message = (
+            get_system_message(npc) if npc else "You are a helpful assistant."
+        )
+
+        # If no messages are provided, start a new conversation
+        if messages is None or len(messages) == 0:
+            messages = [{"role": "system", "content": system_message}]
+
+
+        # Extract the last user message
+        last_user_message = None
+        for msg in reversed(messages):
+            if msg["role"] == "user":
+                last_user_message = msg["content"]
+                break
+
+        if last_user_message is None:
+            raise ValueError("No user message found in the conversation history.")
+
+
+        messages.append({"role": "user", "content": last_user_message})
+
+
+        completion = client.chat.completions.create(
+            model=model, messages=messages, **kwargs
+        )
+
+        response_message = completion.choices[0].message
+        
+        messages.append({
+            "role": "assistant",
+            "content": response_message.content})
+
+        return messages
+
+    except Exception as e:
+        return f"Error interacting with OpenAI: {e}"
+
+
+
+def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs):
+    try:
+        if api_key is None:
+            api_key = os.getenv("ANTHROPIC_API_KEY", None)
+        system_message = get_system_message(npc) if npc else ""
+        client = anthropic.Anthropic(api_key=api_key)
+
+
+        # If no messages are provided, start a new conversation
+        if messages is None or len(messages) == 0:
+            messages = [{"role": "system", "content": system_message}]
+
+        # Extract the last user message
+        last_user_message = None
+        for msg in reversed(messages):
+            if msg["role"] == "user":
+                last_user_message = msg["content"]
+                break
+
+        if last_user_message is None:
+            raise ValueError("No user message found in the conversation history.")
+
+
+        message = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            system=system_message,  # Include system message in each turn for Anthropic
+            messages=[{"role": "user", "content": last_user_message}], # Send only the last user message
+            **kwargs
+        )
+
+
+        messages.append({"role": "assistant", "content": message.content[0].text})
+
+        return messages
+
+    except Exception as e:
+        return f"Error interacting with Anthropic: {e}"
+
+
+def get_conversation(messages, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs):
+    print(provider, model)
+    if provider == "ollama":
+        return get_ollama_conversation(messages, model, npc=npc, **kwargs)
+    elif provider == "openai":
+        return get_openai_conversation(messages, model, npc=npc, **kwargs)
+    elif provider == "anthropic":
+        return get_anthropic_conversation(messages, model, npc=npc, **kwargs)
+    else:
+        return "Error: Invalid provider specified."
+
 
 
 def debug_loop(prompt, error, model):
@@ -707,13 +804,28 @@ def execute_llm_question(
     messages=None,
 ):
     location = os.getcwd()
-    response = get_llm_response(
-        command,
-        model=model,
-        provider=provider,
-        npc=npc,
-    )
-    # print(f"LLM: {response}")
-    output = response
+
+    # Use get_conversation if messages are provided
+    if messages:
+        response = get_conversation(
+            messages, model=model, provider=provider, npc=npc
+        )
+
+        if isinstance(response, str) and "Error" in response: # Check for errors
+            output = response
+        elif isinstance(response, list) and len(response) > 0: # Check for valid response
+            output = response[-1]['content'] # Extract assistant's reply
+        else:
+            output = "Error: Invalid response from conversation function"
+
+    else:  # Use get_llm_response for single turn queries
+        response = get_llm_response(
+            command,
+            model=model,
+            provider=provider,
+            npc=npc,
+        )
+        output = response
+
     command_history.add(command, [], output, location)
-    return response
+    return response # return the full conversation
