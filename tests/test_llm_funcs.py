@@ -2,8 +2,52 @@ import pytest
 import json
 import sqlite3
 import pandas as pd
-from unittest.mock import patch, MagicMock
-from llm_funcs import *
+
+
+import pytest
+import json
+from npcsh.llm_funcs import get_openai_response, get_anthropic_response
+
+def test_get_openai_response():
+    prompt = """Generate a short JSON object with a
+    'greeting' key and a 'farewell' key.
+    Respond only with the formatted JSON object. 
+    Do not include any extra text or markdown formatting.
+    """
+    response = get_openai_response(prompt, 'gpt-4o-mini')
+    
+    # Check if the response is a valid JSON
+    try:
+        json_response = json.loads(response)
+        assert isinstance(json_response, dict)
+        assert 'greeting' in json_response
+        assert 'farewell' in json_response
+    except json.JSONDecodeError:
+        pytest.fail("OpenAI response is not a valid JSON")
+
+
+def test_openai_response_content():
+    prompt = "What is the capital of France?"
+    response = get_openai_response(prompt)
+    assert "Paris" in response, "OpenAI response should contain 'Paris'"
+
+def test_anthropic_response_content():
+    prompt = "What is the capital of Japan?"
+    response = get_anthropic_response(prompt, 'claude-3-haiku-20240307')
+    assert "Tokyo" in response, "Anthropic response should contain 'Tokyo'"
+
+def test_openai_response_length():
+    prompt = "Write a short paragraph about artificial intelligence."
+    response = get_openai_response(prompt)
+    words = response.split()
+    assert 20 <= len(words) <= 100, "OpenAI response should be between 20 and 100 words"
+
+def test_anthropic_response_length():
+    prompt = "Write a short paragraph about machine learning."
+    response = get_anthropic_response(prompt)
+    words = response.split()
+    assert 20 <= len(words) <= 100, "Anthropic response should be between 20 and 100 words"
+
 
 @pytest.fixture
 def mock_ollama_response():
@@ -30,6 +74,33 @@ def test_get_ollama_conversation(mock_ollama_response):
         assert len(result) == 2
         assert result[1]['role'] == 'assistant'
         assert result[1]['content'] == "This is a test response."
+def test_get_ollama_response():
+    prompt = "This is a test prompt."
+    model = "phi3"
+    response = get_ollama_response(prompt, model)
+    print(response)
+    assert response is not None
+    assert isinstance(response, str)
+
+    prompt = """A user submitted this query: "SELECT * FROM table_name". 
+    You need to generate a script that will accomplish the user\'s intent. 
+    Respond ONLY with the procedure that should be executed. Place it in a JSON object with the key 
+    "script_to_test".
+    The format and requiremrents of the output are as follows:
+    {
+    "script_to_test": {"type": "string", 
+    "description": "a valid SQL query that will accomplish the task"}
+    }
+
+    """
+    model = "phi3"
+
+    response = get_ollama_response(prompt, model, format="json")
+    print(response)
+    assert response is not None
+    assert isinstance(response, dict)
+    assert "script_to_test" in response
+
 
 def test_debug_loop():
     with patch('llm_funcs.get_ollama_response', side_effect=["Error occurred", "No error"]):

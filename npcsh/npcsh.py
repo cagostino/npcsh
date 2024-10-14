@@ -9,7 +9,7 @@ import pandas as pd
 # Configure logging
 import sqlite3
 from termcolor import colored
-
+from dotenv import load_dotenv
 import subprocess
 from .command_history import CommandHistory
 from .llm_funcs import execute_llm_command, execute_llm_question, check_llm_command
@@ -48,6 +48,8 @@ from colorama import Fore, Back, Style
 
 import shlex
 import subprocess
+import os
+from dotenv import load_dotenv
 
 
 def get_file_color(filepath):
@@ -76,14 +78,17 @@ def get_file_color(filepath):
     else:
         return "white", []
 
+
 import pty
 import select
 import termios
 import tty
 import sys
 
-import time 
-import signal 
+import time
+import signal
+
+
 def start_interactive_session(command):
     """
     Start an interactive session for the given command.
@@ -93,7 +98,7 @@ def start_interactive_session(command):
     try:
         # Create a pseudo-terminal
         master_fd, slave_fd = pty.openpty()
-        
+
         # Start the process
         p = subprocess.Popen(
             command,
@@ -101,7 +106,7 @@ def start_interactive_session(command):
             stdout=slave_fd,
             stderr=slave_fd,
             shell=True,
-            preexec_fn=os.setsid  # Create a new process group
+            preexec_fn=os.setsid,  # Create a new process group
         )
 
         # Set the terminal to raw mode
@@ -142,11 +147,14 @@ def start_interactive_session(command):
 
     return p.returncode
 
+
 interactive_commands = {
-    'ipython': ['ipython'],
-    'python': ['python', '-i'],
-    'sqlite3': ['sqlite3'],
-    'r': ['R', '--interactive'],}
+    "ipython": ["ipython"],
+    "python": ["python", "-i"],
+    "sqlite3": ["sqlite3"],
+    "r": ["R", "--interactive"],
+}
+
 
 def execute_command(command, command_history, db_path, npc_compiler, current_npc=None):
     subcommands = []
@@ -160,12 +168,16 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
 
         npc_name = get_npc_from_command(command)
         if npc_name is None:
-            npc_name = "base"  # Default NPC
+            npc_name = "sibiji"  # Default NPC
         # print(npc_name)
         npc_path = get_npc_path(npc_name, db_path)
         npc = load_npc_from_file(npc_path, db_conn)
     else:
         npc = current_npc
+    #print(command, 'command', len(command), len(command.strip()))
+    
+    if len(command.strip()) == 0:
+        return output
     if command.startswith("/"):
         command = command[1:]
         log_action("Command Executed", command)
@@ -185,10 +197,10 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
             except Exception as e:
                 output = f"Error compiling NPC profile: {str(e)}"
                 print(output)
-        elif command_name == 'ots':
+        elif command_name == "ots":
             output = capture_screenshot()
-            #add llm part
-            output =  f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
+            # add llm part
+            output = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
             return output
         elif command_name == "whisper":
             output = enter_whisper_mode(command_history, npc=npc)
@@ -251,7 +263,9 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
 
         if command_parts[0] in interactive_commands:
             print(f"Starting interactive {command_parts[0]} session...")
-            return_code = start_interactive_session(interactive_commands[command_parts[0]])
+            return_code = start_interactive_session(
+                interactive_commands[command_parts[0]]
+            )
             return f"Interactive {command_parts[0]} session ended with return code {return_code}"
 
         elif command_parts[0] == "cd":
@@ -273,14 +287,16 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
             elif command.startswith("open "):
                 try:
                     expanded_command = os.path.expanduser(command)
-                    subprocess.Popen(shlex.split(expanded_command), 
-                                 stdout=subprocess.DEVNULL, 
-                                 stderr=subprocess.DEVNULL,
-                                 start_new_session=True)
+                    subprocess.Popen(
+                        shlex.split(expanded_command),
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
                     output = f"Launched: {command}"
                 except Exception as e:
                     output = colored(f"Error executing command: {str(e)}", "red")
-            else:                
+            else:
                 try:
                     result = subprocess.run(
                         command_parts, capture_output=True, text=True
@@ -319,8 +335,8 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
     command_history.add(command, subcommands, output, location)
 
     # Print the output
-    if output:
-        print(output)
+    # if output:
+    #    print(output)
 
     return output
 
@@ -409,7 +425,7 @@ def main():
             result = execute_command(
                 user_input, command_history, db_path, npc_compiler, current_npc
             )
-            
+
             # If there's a result, print it
             # This is important for interactive sessions, which will return a message
             # when they end

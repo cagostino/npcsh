@@ -14,9 +14,11 @@ extra_files = package_files("npcsh/npc_profiles")
 
 setup(
     name="npcsh",
-    version="0.1.12",
+    version="0.1.13",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
+        "anthropic",
+        "openai",
         "jinja2",
         "pandas",
         "ollama",
@@ -29,6 +31,8 @@ setup(
         "playsound",
         "termcolor",
         "colorama",
+        "python-dotenv",
+        "pytest",
     ],
     entry_points={
         "console_scripts": [
@@ -37,7 +41,7 @@ setup(
     },
     author="Christopher Agostino",
     author_email="cjp.agostino@example.com",
-    description="A way to use npcsh",
+    description="npcsh is a command line tool for integrating LLMs into everyday workflows",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/cagostino/npcsh",
