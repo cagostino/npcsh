@@ -525,7 +525,7 @@ def initialize_base_npcs_if_needed(db_path):
         base_npcs = [
             ("sibiji", os.path.join(npc_profiles_dir, "sibiji.npc")),
             ("bash", os.path.join(npc_profiles_dir, "bash.npc")),
-            ("data", os.path.join(npc_profiles_dir, "data.npc")),
+            #("data", os.path.join(npc_profiles_dir, "data.npc")),
         ]
 
         for npc_name, source_path in base_npcs:

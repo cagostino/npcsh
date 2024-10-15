@@ -479,7 +479,7 @@ def get_openai_response(
         system_message = (
             get_system_message(npc) if npc else "You are a helpful assistant."
         )
-        if messages is None:
+        if messages is None or len(messages) ==0:
             messages = [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt},
@@ -500,7 +500,7 @@ def get_openai_response(
                         ],
                     }
                 )
-
+        print('openai_messages', messages)
         completion = client.chat.completions.create(
             model=model, messages=messages, **kwargs
         )
@@ -646,82 +646,138 @@ def get_llm_response(
         )
     else:
         return "Error: Invalid provider specified."
+import matplotlib.pyplot as plt  # Import for showing plots
+from IPython.display import display # For displaying DataFrames in a more interactive way
+import numpy as np
+import pandas as pd
 
 
-def execute_data_operations(query, command_history, model=None, provider=None):
+def load_data(file_path, name):
+    dataframes[name] = pd.read_csv(file_path)
+    print(f"Data loaded as '{name}'")
+def execute_data_operations(query, command_history, dataframes, npc=None, db_path="~/npcsh_history.db"):
     location = os.getcwd()
-    prompt = f"""
-    A user submitted this query: {query}
-    You need to generate a script using python, R, or SQL that will accomplish the user's intent.
-    
-    Respond ONLY with the procedure that should be executed.
+    db_path = os.path.expanduser(db_path)
 
-    Here are some examples:
-    {{"data_operation": "<sql query>", 'engine': 'SQL'}}
-    {{'data_operation': '<python script>', 'engine': 'PYTHON'}}
-    {{'data_operation': '<r script>', 'engine': 'R'}} 
-
-    You must reply with only ONE output.
-    """
-
-    response = get_llm_response(prompt, model=model, provider=provider, format="json")
-    output = response
-    command_history.add(query, [], json.dumps(output), location)
-    print(response)
-
-    if response["engine"] == "SQL":
-        db_path = os.path.expanduser("~/.npcsh_history.db")
-        query = response["data_operation"]
+    try:
         try:
-            print(f"Executing query in SQLite database: {query}")
+            # Create a safe namespace for pandas execution
+            namespace = {
+                'pd': pd,
+                'np': np,
+                'plt': plt,
+                **dataframes  # This includes all our loaded dataframes
+            }
+            # Execute the query
+            result = eval(query, namespace)
+
+            # Handle the result
+            if isinstance(result, (pd.DataFrame, pd.Series)):
+                print(result)
+                return result, 'pd'
+            elif isinstance(result, plt.Figure):
+                plt.show()
+                return result, 'pd'
+            elif result is not None:
+                print(result)
+
+                return result, 'pd'
+
+        except Exception as exec_error:
+            print(f"Pandas Error: {exec_error}")
+
+
+
+        # 2. Try SQL
+        print(db_path)
+        try:
             with sqlite3.connect(db_path) as conn:
                 cursor = conn.cursor()
+                print(query)
+                print(get_available_tables(db_path))
+                
                 cursor.execute(query)
+                #get available tables
+                
                 result = cursor.fetchall()
-                for row in result:
-                    print(row)
-        except sqlite3.Error as e:
-            print(f"SQLite error: {e}")
+                if result:
+                    for row in result:
+                        print(row)
+                    return result, 'sql'
         except Exception as e:
-            print(f"Error executing query: {e}")
-    elif response["engine"] == "PYTHON":
-        engine = "python"
-        script = response["data_operation"]
+            print(f"SQL Error: {e}")
+            
+
+        # 3. Try R
         try:
             result = subprocess.run(
-                f"echo '{script}' | {engine}",
-                shell=True,
-                text=True,
-                capture_output=True,
+                ["Rscript", "-e", query], capture_output=True, text=True
             )
             if result.returncode == 0:
                 print(result.stdout)
+                return result.stdout, 'r'
             else:
-                print(f"Error executing script: {result.stderr}")
+                print(f"R Error: {result.stderr}")
         except Exception as e:
-            print(f"Error executing script: {e}")
-    elif response["engine"] == "R":
-        engine = "Rscript"
-        script = response["data_operation"]
+            pass
+
+        # If all engines fail, ask the LLM
+        print("Direct execution failed. Asking LLM for SQL query...")
+        llm_prompt = f"""
+        The user entered the following query which could not be executed directly using pandas, SQL, R, Scala, or PySpark:
+        ```
+        {query}
+        ```
+
+        The available tables in the SQLite database at {db_path} are:
+        ```sql
+        {get_available_tables(db_path)}
+        ```
+
+        Please provide a valid SQL query that accomplishes the user's intent.  If the query requires data from a file, provide instructions on how to load the data into a table first.
+        Return only the SQL query, or instructions for loading data followed by the SQL query.
+        """
+
+        llm_response = get_llm_response(llm_prompt,  npc=npc)
+        
+        print(f"LLM suggested SQL: {llm_response}")
+        command =  llm_response.get('response', '')
+        if command == '':
+            return "LLM did not provide a valid SQL query.", None
+        # Execute the LLM-generated SQL
         try:
-            result = subprocess.run(
-                f"echo '{script}' | {engine}",
-                shell=True,
-                text=True,
-                capture_output=True,
-            )
-            if result.returncode == 0:
-                print(result.stdout)
-            else:
-                print(f"Error executing script: {result.stderr}")
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(command)
+                result = cursor.fetchall()
+                if result:
+                    for row in result:
+                        print(row)
+                    return result, 'llm'
         except Exception as e:
-            print(f"Error executing script: {e}")
-    else:
-        print("Error: Invalid engine specified.")
+            print(f"Error executing LLM-generated SQL: {e}")
+            return f"Error executing LLM-generated SQL: {e}", None
 
-    return response
+    except Exception as e:
+        print(f"Error executing query: {e}")
+        return f"Error executing query: {e}", None
 
 
+def get_available_tables(db_path):
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name != 'command_history'"
+            )
+            tables = cursor.fetchall()
+
+            
+            return tables
+    except Exception as e:
+        print(f"Error getting available tables: {e}")
+        return ""
+    
 def execute_llm_command(
     command, command_history, model=None, provider=None, npc=None, messages=None
 ):
@@ -730,7 +786,8 @@ def execute_llm_command(
     subcommands = []
     if npc is None:
         npc_name = "sibiji"
-
+    else:
+        npc_name = npc.name
     location = os.getcwd()
     print(f"{npc_name} generating command")
     while attempt < max_attempts:
@@ -750,9 +807,12 @@ def execute_llm_command(
             npc=npc,
             format="json",
         )
-        messages = response["messages"]
-        response = response["response"]
+        if messages is not None:
+            messages = response.get("messages", None)
+        response = response.get("response", None)
 
+        import pdb 
+        pdb.set_trace()
         print(f"LLM suggests the following bash command: {response['bash_command']}")
         print(f"running command")
         if isinstance(response, dict) and "bash_command" in response:
@@ -788,8 +848,9 @@ def execute_llm_command(
                     npc=npc,
                     messages=messages,
                 )
-                messages = response["messages"]
-                response = response["response"]
+                if messages is not None:
+                    messages = response.get("messages", None)
+                response = response.get("response", None)
 
                 print(response)
                 output = response
@@ -814,8 +875,9 @@ def execute_llm_command(
                 format="json",
                 messages=messages,
             )
-            messages = fix_suggestion["messages"]
-            fix_suggestion = fix_suggestion["response"]
+            if messages is not None:
+                messages = fix_suggestion.get("messages", None)
+            fix_suggestion = fix_suggestion.get("response", None)
 
             if isinstance(fix_suggestion, dict) and "bash_command" in fix_suggestion:
                 print(f"LLM suggests fix: {fix_suggestion['bash_command']}")
@@ -885,8 +947,10 @@ def check_llm_command(
     # import pdb
 
     # pdb.set_trace()
-    messages = response["messages"]
-    response = response["response"]
+    print(response)
+    if messages is not None:
+        messages = response.get("messages",None)
+    response = response.get("response", None)
 
     # Handle potential errors and non-JSON responses
     if not isinstance(response, dict):
@@ -908,7 +972,7 @@ def check_llm_command(
     print(f"The request is {cmd_stt} .")
 
     output = response
-    command_history.add(command, [], json.dumps(output), location)
+    command_history.add(command, [],output, location)
 
     if response["is_command"] == "yes":
         return execute_llm_command(
@@ -965,5 +1029,5 @@ def execute_llm_question(
         # print(response["response"])
         output = response
 
-    command_history.add(command, [], json.dumps(output), location)
+    command_history.add(command, [], output, location)
     return response  # return the full conversation
