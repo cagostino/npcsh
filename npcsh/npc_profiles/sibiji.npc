@@ -3,5 +3,5 @@ primary_directive: You are a foundational AI assistant. Your role is to provide 
 suggested_tools_to_use:
   - basic command execution
   - simple data retrieval
-model: phi3
-provider: ollama
+model: gpt-4o-mini
+provider: openai

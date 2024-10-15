@@ -18,6 +18,8 @@ setup(
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
+        "pypdf",
+        "PyMuPDF",
         "opencv-python", 
         "librosa", 
         "openai",

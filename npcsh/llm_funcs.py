@@ -650,75 +650,63 @@ import matplotlib.pyplot as plt  # Import for showing plots
 from IPython.display import display # For displaying DataFrames in a more interactive way
 import numpy as np
 import pandas as pd
-def execute_data_operations(query, command_history, npc=None, db_path="~/.npcsh_history.db"):
+
+
+def load_data(file_path, name):
+    dataframes[name] = pd.read_csv(file_path)
+    print(f"Data loaded as '{name}'")
+def execute_data_operations(query, command_history, dataframes, npc=None, db_path="~/npcsh_history.db"):
     location = os.getcwd()
     db_path = os.path.expanduser(db_path)
 
     try:
         try:
-            # Create a safe namespace for pandas execution (same as before)
-            pandas_namespace = {'pd': pd, 'np': np, 'plt': plt, 'display': display}
+            # Create a safe namespace for pandas execution
+            namespace = {
+                'pd': pd,
+                'np': np,
+                'plt': plt,
+                **dataframes  # This includes all our loaded dataframes
+            }
+            # Execute the query
+            result = eval(query, namespace)
 
-            with sqlite3.connect(db_path) as conn:
-                for table_name in get_available_tables(db_path):
-                    # Use globals() directly to store the DataFrames
-                    globals()[table_name] = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
-                    # Also add to pandas_namespace for consistency
-                    pandas_namespace[table_name] = globals()[table_name]
-
-
-            # Capture printed output and displayed DataFrames/plots (same as before)
-            from io import StringIO
-            import sys
-            old_stdout = sys.stdout
-            sys.stdout = mystdout = StringIO()
-
-            try:
-                # Execute pandas code, making globals available
-                exec(query, globals(), pandas_namespace)
-                printed_output = mystdout.getvalue()
-
-            finally:
-                sys.stdout = old_stdout
-
-
-
-            # Show captured printed output (same as before)
-            if printed_output:
-                print(printed_output)
-
-            # Check for DataFrames/Series and display (same as before)
-            for var_name, var_value in pandas_namespace.items():
-                if isinstance(var_value, (pd.DataFrame, pd.Series)) and var_name not in ('pd', 'np', 'plt', 'display'):
-                    display(var_value)
-                    return var_value
-
-            # Show plots (same as before)
-            if plt.get_fignums():
+            # Handle the result
+            if isinstance(result, (pd.DataFrame, pd.Series)):
+                print(result)
+                return result, 'pd'
+            elif isinstance(result, plt.Figure):
                 plt.show()
+                return result, 'pd'
+            elif result is not None:
+                print(result)
 
-            if not printed_output:
-                print("Pandas code executed successfully.")
-
-            return None
+                return result, 'pd'
 
         except Exception as exec_error:
             print(f"Pandas Error: {exec_error}")
-            pass # Proceed to other engines if pandas exec fails
+
 
 
         # 2. Try SQL
+        print(db_path)
         try:
             with sqlite3.connect(db_path) as conn:
                 cursor = conn.cursor()
+                print(query)
+                print(get_available_tables(db_path))
+                
                 cursor.execute(query)
+                #get available tables
+                
                 result = cursor.fetchall()
                 if result:
                     for row in result:
                         print(row)
-                    return result
+                    return result, 'sql'
         except Exception as e:
-            pass  # Ignore SQL errors
+            print(f"SQL Error: {e}")
+            
 
         # 3. Try R
         try:
@@ -727,46 +715,9 @@ def execute_data_operations(query, command_history, npc=None, db_path="~/.npcsh_
             )
             if result.returncode == 0:
                 print(result.stdout)
-                return result.stdout
+                return result.stdout, 'r'
             else:
                 print(f"R Error: {result.stderr}")
-        except Exception as e:
-            pass
-
-        # 4. Try Scala (requires scala to be installed and on PATH)
-        try:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".scala", delete=False) as temp_file:
-                temp_file.write(
-                    f"object Main {{ def main(args: Array[String]): Unit = {{ println({query}) }} }}"
-                )
-                temp_file_path = temp_file.name
-
-            compile_result = subprocess.run(
-                ["scalac", temp_file_path], capture_output=True, text=True
-            )
-            if compile_result.returncode == 0:
-                run_result = subprocess.run(
-                    ["scala", "Main"], capture_output=True, text=True
-                )
-                if run_result.returncode == 0:
-                    print(run_result.stdout)
-                    os.unlink(temp_file_path)
-                    return run_result.stdout
-                else:
-                    print(f"Scala Runtime Error: {run_result.stderr}")
-            else:
-                print(f"Scala Compilation Error: {compile_result.stderr}")
-            os.unlink(temp_file_path)
-        except Exception as e:
-            pass
-
-        # 5. Try PySpark (requires pyspark to be installed)
-        try:
-            from pyspark.sql import SparkSession
-            spark = SparkSession.builder.appName("npcsh_spark").getOrCreate()
-            result = spark.sql(query)
-            result.show()
-            return result # Return the Spark DataFrame
         except Exception as e:
             pass
 
@@ -792,7 +743,7 @@ def execute_data_operations(query, command_history, npc=None, db_path="~/.npcsh_
         print(f"LLM suggested SQL: {llm_response}")
         command =  llm_response.get('response', '')
         if command == '':
-            return "LLM did not provide a valid SQL query."
+            return "LLM did not provide a valid SQL query.", None
         # Execute the LLM-generated SQL
         try:
             with sqlite3.connect(db_path) as conn:
@@ -802,27 +753,31 @@ def execute_data_operations(query, command_history, npc=None, db_path="~/.npcsh_
                 if result:
                     for row in result:
                         print(row)
-                    return result
+                    return result, 'llm'
         except Exception as e:
             print(f"Error executing LLM-generated SQL: {e}")
-            return f"Error executing LLM-generated SQL: {e}"
-
+            return f"Error executing LLM-generated SQL: {e}", None
 
     except Exception as e:
         print(f"Error executing query: {e}")
-        return f"Error executing query: {e}"
+        return f"Error executing query: {e}", None
 
 
 def get_available_tables(db_path):
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name != 'command_history'"
+            )
             tables = cursor.fetchall()
-            return "\n".join([table[0] for table in tables])
+
+            
+            return tables
     except Exception as e:
         print(f"Error getting available tables: {e}")
         return ""
+    
 def execute_llm_command(
     command, command_history, model=None, provider=None, npc=None, messages=None
 ):
@@ -1017,7 +972,7 @@ def check_llm_command(
     print(f"The request is {cmd_stt} .")
 
     output = response
-    command_history.add(command, [], json.dumps(output), location)
+    command_history.add(command, [],output, location)
 
     if response["is_command"] == "yes":
         return execute_llm_command(
@@ -1074,5 +1029,5 @@ def execute_llm_question(
         # print(response["response"])
         output = response
 
-    command_history.add(command, [], json.dumps(output), location)
+    command_history.add(command, [], output, location)
     return response  # return the full conversation

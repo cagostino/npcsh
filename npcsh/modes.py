@@ -184,7 +184,7 @@ from langchain.vectorstores import Chroma
 def enter_data_mode(command_history, npc=None):
     conn = command_history.conn
     cursor = command_history.cursor
-
+    dataframes = {}
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering observation mode{npc_info}. Type '/dq' to exit.")
     n_times = 0
@@ -197,7 +197,7 @@ def enter_data_mode(command_history, npc=None):
             """Enter a plain-text request, a data manipulation command, or a load command:
 data> """
         )
-        print(user_query , 'user_query')
+        #print(user_query , 'user_query')
         if user_query.lower().startswith("load from "):
             try:
                 parts = user_query.split(" as ")
@@ -207,7 +207,7 @@ data> """
                 file_path = parts[0].split("load from ")[1].strip()
                 table_name = parts[1].strip()
                 load_data_into_table(file_path, table_name, cursor, conn)
-
+                dataframes[table_name] = pd.read_sql(f"SELECT * FROM {table_name}", conn)
             except Exception as e:
                 print(f"Error loading data: {e}")
 
@@ -215,15 +215,8 @@ data> """
             break
 
         else:  # Process data operations or LLM requests
-            response = execute_data_operations(user_query, command_history, npc)
-
-            if isinstance(response, pd.DataFrame):
-                print(response) # Print DataFrame directly
-                final_response = {"response": "Data displayed above."} # Simple response
-            elif isinstance(response, str): # Error or other string response
-                print(response)
-                final_response = {"response": response} # Use the string response directly
-            else:
+            response, engine = execute_data_operations(user_query, command_history, dataframes,  npc=npc)
+            if engine is not None and engine=='llm':                 
                 answer_prompt = f"""
         Here is an input from the user:
         {user_query}
@@ -237,8 +230,11 @@ data> """
         """
                 final_response = get_llm_response(answer_prompt, format="json", npc=npc)
                 print(final_response["response"])
+                dataframes['data_output'] = response 
+                dataframes['output'] = response
+    
         n_times += 1
-
+        
         if user_query.lower() == "/dq":
             break
 
@@ -342,6 +338,8 @@ import numpy as np
 import tempfile
 import json
 from PIL import Image  # For image loading
+import fitz  # PyMuPDF
+import io
 
 def load_data_into_table(file_path, table_name, cursor, conn):
     try:
@@ -352,16 +350,53 @@ def load_data_into_table(file_path, table_name, cursor, conn):
         if file_path.endswith(".csv"):
             df = pd.read_csv(file_path)
         elif file_path.endswith(".pdf"):
-            # Handle PDFs (existing logic, but consider adding image extraction)
-            loader = PyPDFLoader(file_path)
-            documents = loader.load()
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000, chunk_overlap=0
-            )
-            texts = text_splitter.split_documents(documents)
-            embeddings = OpenAIEmbeddings()
-            db = Chroma.from_documents(texts, embeddings, collection_name=table_name)
-            df = pd.DataFrame({"text": [t.page_content for t in texts]})
+            # Extract text and images
+            pdf_document = fitz.open(file_path)
+            texts = []
+            images = []
+
+            for page_num in range(len(pdf_document)):
+                page = pdf_document[page_num]
+                
+                # Extract text
+                text = page.get_text()
+                texts.append({"page": page_num + 1, "content": text})
+
+                # Extract images
+                image_list = page.get_images(full=True)
+                for img_index, img in enumerate(image_list):
+                    xref = img[0]
+                    base_image = pdf_document.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    
+                    # Convert image to numpy array
+                    image = Image.open(io.BytesIO(image_bytes))
+                    img_array = np.array(image)
+                    
+                    images.append({
+                        "page": page_num + 1,
+                        "index": img_index + 1,
+                        "array": img_array.tobytes(),
+                        "shape": img_array.shape,
+                        "dtype": str(img_array.dtype)
+                    })
+
+            # Create DataFrame
+            df = pd.DataFrame({
+                "texts": json.dumps(texts),
+                "images": json.dumps(images)
+            }, index=[0])
+
+            # Optionally create embeddings
+            try:
+                text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+                split_texts = text_splitter.split_text("\n\n".join([t["content"] for t in texts]))
+                embeddings = OpenAIEmbeddings()
+                db = Chroma.from_texts(split_texts, embeddings, collection_name=table_name)
+                df["embeddings_collection"] = table_name
+            except Exception as e:
+                print(f"Warning: Could not create embeddings. Error: {e}")
+
 
         elif file_path.endswith((".txt", ".log", ".md")):
             with open(file_path, 'r') as f:
@@ -490,7 +525,7 @@ def enter_spool_mode(command_history, inherit_last=0, npc=None):
             command_history.add(
                 user_input,
                 ["spool", npc.name if npc else ""],
-                json.dumps(assistant_reply),
+                assistant_reply,
                 os.getcwd(),
             )
             print(assistant_reply)

@@ -20,6 +20,7 @@ from .modes import (
     enter_data_mode, 
 
 )
+import json
 from .helpers import (
     log_action,
     capture_screenshot,
@@ -53,7 +54,9 @@ import shlex
 import subprocess
 import os
 from dotenv import load_dotenv
-
+import json
+import pandas as pd
+import numpy as np
 
 def get_file_color(filepath):
     if os.path.isdir(filepath):
@@ -469,7 +472,7 @@ def main():
             # If there's a result, print it
             # This is important for interactive sessions, which will return a message
             # when they end
-            if result:
+            if result is not None:
                 print(result)
 
         except (KeyboardInterrupt, EOFError):
