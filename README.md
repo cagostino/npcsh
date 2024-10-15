@@ -19,42 +19,48 @@ Download it by running
 ollama run phi3
 ```
 
-Support for openai, anthropic, and general huggingface transformers to be added.
+We support inference as well via openai and anthropic. To use them, set an ".env" file up in the folder where you are working and set the API keys there. 
 
+Eventually, we will add the ability to use any huggingface model.
 
-The user can change the model by setting the environment variable `NPCSH_MODEL` to the desired model name and to change the provider by setting the environment variable `NPCSH_PROVIDER` to the desired provider name.
+The user can change the default model by setting the environment variable `NPCSH_MODEL` in their ~/.npcshrc to the desired model name and to change the provider by setting the environment variable `NPCSH_PROVIDER` to the desired provider name.
 
 The provider must be one of ['ollama', 'openai', 'anthropic'] and the model must be one available from those providers.
+
 
 
 ## Linux install
 ```bash
 sudo apt-get install espeak
-
 sudo apt-get install portaudio19-dev python3-pyaudio
-
 sudo apt-get install alsa-base alsa-utils
-
 sudo apt-get install libcairo2-dev
-
 sudo apt-get install libgirepository1.0-dev
-
 sudo apt-get install ffmpeg
+pip install npcsh
+
 ```
 
 
-pip install npcsh
 
-##Mac install
+## Mac install
 ```bash
 brew install portaudio
 brew install ffmpeg
 brew install ollama
 brew services start ollama
 brew install pygobject3
-
 pip install npcsh
 ```
+
+## Usage
+After it has been pip installed, npcsh can be used as a command line tool. Start it by typing:
+```bash
+npcsh
+```
+
+Once in the npcsh, you can use bash commands or write natural language queries or commands. You can also switch between different modes defined below and you can compile a network of NPCs or use the macro tools we have developed.
+
 
 
 ## compilation
@@ -90,16 +96,6 @@ The LLM or specific NPC will take the user's request and try to write a command 
 Use the Command NPC by typing ```/cmd <command>```. Chat with the Command NPC in spool mode by typing ```/spool cmd```.
 Use the Command NPC in the profiles of other NPCs by referencing it  like ```{{cmd}}```.
 
-### Data NPC
-
-Users can create schemas for recording observations and for exploring and analyzing data.
-
-The Data NPC will asily facilitate the recording of data for individuals in essentially any realm (e.g. recipe testing, one's own blood pressure or  weight, books read, movies watched, daily mood, etc.) without needing to use a tangled web of applications to do so. Observations can be referenced by the generic npcsh LLM shell or by specific NPCs.
-Use the Observation NPC by typing ```/data <observation>```.
-Chat with the Observation NPC in spool mode by typing ```/spool obs```.
-Use the Observation NPC in the profiles of other NPCs by referencing it like ```{{obs}}```. Exit by typing ```/dq```.
-
-
 ### Question NPC
 
 The user can submit a 1-shot question to a general LLM or to a specific NPC.
@@ -118,4 +114,7 @@ You can also chat with the Question NPC in spool mode by typing ```/spool questi
 ### Over-the-shoulder 
 
 Over the shoulder allows the user to select an area of the screen and the area will be passed to a vision LLM and then the user can inquire about the image or ask for help with it.
+
+### data 
+load data in, manipulate it, analyze it.
 
