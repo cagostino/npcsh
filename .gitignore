@@ -1,5 +1,7 @@
 *.pyc
-*.csv
+build/
+*.egg-info
+*a.csv
 *.pdf
 *.log
 *.out

@@ -17,8 +17,7 @@ from .modes import (
     enter_whisper_mode,
     enter_notes_mode,
     enter_spool_mode,
-    enter_data_mode, 
-
+    enter_data_mode,
 )
 import json
 from .helpers import (
@@ -57,6 +56,7 @@ from dotenv import load_dotenv
 import json
 import pandas as pd
 import numpy as np
+
 
 def get_file_color(filepath):
     if os.path.isdir(filepath):
@@ -168,7 +168,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
     location = os.getcwd()
     # Extract NPC from command
     db_conn = sqlite3.connect(db_path)
-    print(command)
+    # print(command)
     if current_npc is None:
         valid_npcs = get_valid_npcs(db_path)
 
@@ -249,8 +249,8 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
         elif command_name == "notes":
             output = enter_notes_mode(command_history, npc=npc)
         elif command_name == "data":
-            print('data')
-            output = enter_data_mode( command_history, npc=npc)
+            print("data")
+            output = enter_data_mode(command_history, npc=npc)
             # output = enter_observation_mode(command_history, npc=npc)
         elif command_name == "cmd" or command_name == "command":
             output = execute_llm_command(command, command_history, npc=npc)
@@ -419,7 +419,7 @@ def main():
     os.makedirs("./npc_profiles", exist_ok=True)
     npc_directory = os.path.expanduser("./npc_profiles")
     npc_compiler = NPCCompiler(npc_directory)
-    #print(command_name, 'command_name')
+    # print(command_name, 'command_name')
 
     if not is_npcsh_initialized():
         print("Initializing NPCSH...")
@@ -463,7 +463,6 @@ def main():
                         f"Entered {current_npc.name} mode. Type 'exit' to return to main shell."
                     )
                     continue
-
             # Execute the command and capture the result
             result = execute_command(
                 user_input, command_history, db_path, npc_compiler, current_npc
@@ -472,7 +471,7 @@ def main():
             # If there's a result, print it
             # This is important for interactive sessions, which will return a message
             # when they end
-            if result is not None:
+            if result is not None and not user_input.startswith("/"):
                 print(result)
 
         except (KeyboardInterrupt, EOFError):

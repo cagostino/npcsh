@@ -479,7 +479,7 @@ def get_openai_response(
         system_message = (
             get_system_message(npc) if npc else "You are a helpful assistant."
         )
-        if messages is None or len(messages) ==0:
+        if messages is None or len(messages) == 0:
             messages = [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt},
@@ -500,7 +500,7 @@ def get_openai_response(
                         ],
                     }
                 )
-        print('openai_messages', messages)
+        print("openai_messages", messages)
         completion = client.chat.completions.create(
             model=model, messages=messages, **kwargs
         )
@@ -542,7 +542,7 @@ def get_anthropic_response(
             get_system_message(npc) if npc else "You are a helpful assistant."
         )
         client = anthropic.Anthropic(api_key=api_key)
-        if messages is None:
+        if messages is None or len(messages) == 0:
             messages = []
             messages.append({"role": "system", "content": system_message})
 
@@ -570,6 +570,7 @@ def get_anthropic_response(
                 )
         else:
             messages.append({"role": "user", "content": prompt})
+        # print(messages)
 
         message = client.messages.create(
             model=model,
@@ -578,6 +579,7 @@ def get_anthropic_response(
             messages=messages[1:],
         )
 
+        # print(message)
         llm_response = message.content[0].text  # This is the AI's text response
         items_to_return = {"response": llm_response}
 
@@ -646,8 +648,12 @@ def get_llm_response(
         )
     else:
         return "Error: Invalid provider specified."
+
+
 import matplotlib.pyplot as plt  # Import for showing plots
-from IPython.display import display # For displaying DataFrames in a more interactive way
+from IPython.display import (
+    display,
+)  # For displaying DataFrames in a more interactive way
 import numpy as np
 import pandas as pd
 
@@ -655,7 +661,11 @@ import pandas as pd
 def load_data(file_path, name):
     dataframes[name] = pd.read_csv(file_path)
     print(f"Data loaded as '{name}'")
-def execute_data_operations(query, command_history, dataframes, npc=None, db_path="~/npcsh_history.db"):
+
+
+def execute_data_operations(
+    query, command_history, dataframes, npc=None, db_path="~/npcsh_history.db"
+):
     location = os.getcwd()
     db_path = os.path.expanduser(db_path)
 
@@ -663,10 +673,10 @@ def execute_data_operations(query, command_history, dataframes, npc=None, db_pat
         try:
             # Create a safe namespace for pandas execution
             namespace = {
-                'pd': pd,
-                'np': np,
-                'plt': plt,
-                **dataframes  # This includes all our loaded dataframes
+                "pd": pd,
+                "np": np,
+                "plt": plt,
+                **dataframes,  # This includes all our loaded dataframes
             }
             # Execute the query
             result = eval(query, namespace)
@@ -674,19 +684,17 @@ def execute_data_operations(query, command_history, dataframes, npc=None, db_pat
             # Handle the result
             if isinstance(result, (pd.DataFrame, pd.Series)):
                 print(result)
-                return result, 'pd'
+                return result, "pd"
             elif isinstance(result, plt.Figure):
                 plt.show()
-                return result, 'pd'
+                return result, "pd"
             elif result is not None:
                 print(result)
 
-                return result, 'pd'
+                return result, "pd"
 
         except Exception as exec_error:
             print(f"Pandas Error: {exec_error}")
-
-
 
         # 2. Try SQL
         print(db_path)
@@ -695,18 +703,17 @@ def execute_data_operations(query, command_history, dataframes, npc=None, db_pat
                 cursor = conn.cursor()
                 print(query)
                 print(get_available_tables(db_path))
-                
+
                 cursor.execute(query)
-                #get available tables
-                
+                # get available tables
+
                 result = cursor.fetchall()
                 if result:
                     for row in result:
                         print(row)
-                    return result, 'sql'
+                    return result, "sql"
         except Exception as e:
             print(f"SQL Error: {e}")
-            
 
         # 3. Try R
         try:
@@ -715,7 +722,7 @@ def execute_data_operations(query, command_history, dataframes, npc=None, db_pat
             )
             if result.returncode == 0:
                 print(result.stdout)
-                return result.stdout, 'r'
+                return result.stdout, "r"
             else:
                 print(f"R Error: {result.stderr}")
         except Exception as e:
@@ -738,11 +745,11 @@ def execute_data_operations(query, command_history, dataframes, npc=None, db_pat
         Return only the SQL query, or instructions for loading data followed by the SQL query.
         """
 
-        llm_response = get_llm_response(llm_prompt,  npc=npc)
-        
+        llm_response = get_llm_response(llm_prompt, npc=npc)
+
         print(f"LLM suggested SQL: {llm_response}")
-        command =  llm_response.get('response', '')
-        if command == '':
+        command = llm_response.get("response", "")
+        if command == "":
             return "LLM did not provide a valid SQL query.", None
         # Execute the LLM-generated SQL
         try:
@@ -753,7 +760,7 @@ def execute_data_operations(query, command_history, dataframes, npc=None, db_pat
                 if result:
                     for row in result:
                         print(row)
-                    return result, 'llm'
+                    return result, "llm"
         except Exception as e:
             print(f"Error executing LLM-generated SQL: {e}")
             return f"Error executing LLM-generated SQL: {e}", None
@@ -772,12 +779,12 @@ def get_available_tables(db_path):
             )
             tables = cursor.fetchall()
 
-            
             return tables
     except Exception as e:
         print(f"Error getting available tables: {e}")
         return ""
-    
+
+
 def execute_llm_command(
     command, command_history, model=None, provider=None, npc=None, messages=None
 ):
@@ -811,8 +818,8 @@ def execute_llm_command(
             messages = response.get("messages", None)
         response = response.get("response", None)
 
-        import pdb 
-        pdb.set_trace()
+        # import pdb
+        # pdb.set_trace()
         print(f"LLM suggests the following bash command: {response['bash_command']}")
         print(f"running command")
         if isinstance(response, dict) and "bash_command" in response:
@@ -947,9 +954,9 @@ def check_llm_command(
     # import pdb
 
     # pdb.set_trace()
-    print(response)
+    # print(response)
     if messages is not None:
-        messages = response.get("messages",None)
+        messages = response.get("messages", None)
     response = response.get("response", None)
 
     # Handle potential errors and non-JSON responses
@@ -972,7 +979,7 @@ def check_llm_command(
     print(f"The request is {cmd_stt} .")
 
     output = response
-    command_history.add(command, [],output, location)
+    command_history.add(command, [], output, location)
 
     if response["is_command"] == "yes":
         return execute_llm_command(
@@ -1028,6 +1035,6 @@ def execute_llm_question(
         )
         # print(response["response"])
         output = response
-
+    print(output["response"])
     command_history.add(command, [], output, location)
     return response  # return the full conversation
