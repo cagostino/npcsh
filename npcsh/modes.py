@@ -7,7 +7,7 @@ from .llm_funcs import (
     execute_data_operations,
     get_system_message,
     check_llm_command,
-    get_data_response
+    get_data_response,
 )
 from .helpers import calibrate_silence, record_audio, speak_text, is_silent
 import sqlite3
@@ -166,6 +166,7 @@ def save_note(note, command_history, npc=None):
 
     print("Note saved to database.")
 
+
 import pandas as pd  # Make sure pandas is imported
 import os
 import sys
@@ -180,6 +181,7 @@ from langchain.document_loaders import (
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
+
 
 def enter_data_mode(command_history, npc=None):
     conn = command_history.conn
@@ -197,7 +199,7 @@ def enter_data_mode(command_history, npc=None):
             """Enter a plain-text request, a data manipulation command, or a load command:
 data> """
         )
-        #print(user_query , 'user_query')
+        # print(user_query , 'user_query')
         if user_query.lower().startswith("load from "):
             try:
                 parts = user_query.split(" as ")
@@ -207,7 +209,9 @@ data> """
                 file_path = parts[0].split("load from ")[1].strip()
                 table_name = parts[1].strip()
                 load_data_into_table(file_path, table_name, cursor, conn)
-                dataframes[table_name] = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+                dataframes[table_name] = pd.read_sql(
+                    f"SELECT * FROM {table_name}", conn
+                )
             except Exception as e:
                 print(f"Error loading data: {e}")
 
@@ -215,8 +219,10 @@ data> """
             break
 
         else:  # Process data operations or LLM requests
-            response, engine = execute_data_operations(user_query, command_history, dataframes,  npc=npc)
-            if engine is not None and engine=='llm':                 
+            response, engine = execute_data_operations(
+                user_query, command_history, dataframes, npc=npc
+            )
+            if engine is not None and engine == "llm":
                 answer_prompt = f"""
         Here is an input from the user:
         {user_query}
@@ -230,16 +236,18 @@ data> """
         """
                 final_response = get_llm_response(answer_prompt, format="json", npc=npc)
                 print(final_response["response"])
-                dataframes['data_output'] = response 
-                dataframes['output'] = response
-    
+                dataframes["data_output"] = response
+                dataframes["output"] = response
+
         n_times += 1
-        
+
         if user_query.lower() == "/dq":
             break
 
     conn.close()
     print("Exiting observation mode.")
+
+
 from langchain.document_loaders import (
     CSVLoader,
     PyPDFLoader,
@@ -253,10 +261,12 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 
-import cv2 # For video/image processing
-import librosa # For audio processing
+import cv2  # For video/image processing
+import librosa  # For audio processing
 import numpy as np
 
+
+import base64
 
 
 def process_video(file_path, table_name):
@@ -273,15 +283,28 @@ def process_video(file_path, table_name):
                 break
 
             # Process every nth frame (adjust n as needed for performance)
-            n = 10 # Process every 10th frame
+            n = 10  # Process every 10th frame
             if i % n == 0:
                 # Image Embeddings
-                _, buffer = cv2.imencode(".jpg", frame) # Encode frame as JPG
-                base64_image = base64.b64encode(buffer).decode('utf-8')
-                image_info = {"filename": f"frame_{i}.jpg", "file_path": f"data:image/jpeg;base64,{base64_image}"} # Use data URL for OpenAI
-                image_embedding_response = get_llm_response("Describe this image.", image=image_info, model="gpt-4", provider="openai") # Replace with your image embedding model
-                if isinstance(image_embedding_response, dict) and "error" in image_embedding_response:
-                    print(f"Error generating image embedding: {image_embedding_response['error']}")
+                _, buffer = cv2.imencode(".jpg", frame)  # Encode frame as JPG
+                base64_image = base64.b64encode(buffer).decode("utf-8")
+                image_info = {
+                    "filename": f"frame_{i}.jpg",
+                    "file_path": f"data:image/jpeg;base64,{base64_image}",
+                }  # Use data URL for OpenAI
+                image_embedding_response = get_llm_response(
+                    "Describe this image.",
+                    image=image_info,
+                    model="gpt-4",
+                    provider="openai",
+                )  # Replace with your image embedding model
+                if (
+                    isinstance(image_embedding_response, dict)
+                    and "error" in image_embedding_response
+                ):
+                    print(
+                        f"Error generating image embedding: {image_embedding_response['error']}"
+                    )
                 else:
                     # Assuming your image embedding model returns a textual description
                     embeddings.append(image_embedding_response)
@@ -292,7 +315,7 @@ def process_video(file_path, table_name):
 
     except Exception as e:
         print(f"Error processing video: {e}")
-        return [], [] # Return empty lists in case of error
+        return [], []  # Return empty lists in case of error
 
 
 def process_audio(file_path, table_name):
@@ -301,28 +324,35 @@ def process_audio(file_path, table_name):
     try:
         audio, sr = librosa.load(file_path)
         # Transcribe audio using Whisper
-        model = whisper.load_model("base") # Or a larger model if available
+        model = whisper.load_model("base")  # Or a larger model if available
         result = model.transcribe(file_path)
         transcribed_text = result["text"].strip()
 
         # Split transcribed text into chunks (adjust chunk_size as needed)
         chunk_size = 1000
         for i in range(0, len(transcribed_text), chunk_size):
-            chunk = transcribed_text[i:i + chunk_size]
-            text_embedding_response = get_llm_response(f"Generate an embedding for: {chunk}", model="text-embedding-ada-002", provider="openai") # Use a text embedding model
-            if isinstance(text_embedding_response, dict) and "error" in text_embedding_response:
-                print(f"Error generating text embedding: {text_embedding_response['error']}")
+            chunk = transcribed_text[i : i + chunk_size]
+            text_embedding_response = get_llm_response(
+                f"Generate an embedding for: {chunk}",
+                model="text-embedding-ada-002",
+                provider="openai",
+            )  # Use a text embedding model
+            if (
+                isinstance(text_embedding_response, dict)
+                and "error" in text_embedding_response
+            ):
+                print(
+                    f"Error generating text embedding: {text_embedding_response['error']}"
+                )
             else:
-                embeddings.append(text_embedding_response) # Store the embedding
-                texts.append(chunk) # Store the corresponding text chunk
-
+                embeddings.append(text_embedding_response)  # Store the embedding
+                texts.append(chunk)  # Store the corresponding text chunk
 
         return embeddings, texts
 
     except Exception as e:
         print(f"Error processing audio: {e}")
-        return [], [] # Return empty lists in case of error
-
+        return [], []  # Return empty lists in case of error
 
 
 import pandas as pd
@@ -341,6 +371,7 @@ from PIL import Image  # For image loading
 import fitz  # PyMuPDF
 import io
 
+
 def load_data_into_table(file_path, table_name, cursor, conn):
     try:
         if not os.path.exists(file_path):
@@ -357,7 +388,7 @@ def load_data_into_table(file_path, table_name, cursor, conn):
 
             for page_num in range(len(pdf_document)):
                 page = pdf_document[page_num]
-                
+
                 # Extract text
                 text = page.get_text()
                 texts.append({"page": page_num + 1, "content": text})
@@ -368,38 +399,44 @@ def load_data_into_table(file_path, table_name, cursor, conn):
                     xref = img[0]
                     base_image = pdf_document.extract_image(xref)
                     image_bytes = base_image["image"]
-                    
+
                     # Convert image to numpy array
                     image = Image.open(io.BytesIO(image_bytes))
                     img_array = np.array(image)
-                    
-                    images.append({
-                        "page": page_num + 1,
-                        "index": img_index + 1,
-                        "array": img_array.tobytes(),
-                        "shape": img_array.shape,
-                        "dtype": str(img_array.dtype)
-                    })
+
+                    images.append(
+                        {
+                            "page": page_num + 1,
+                            "index": img_index + 1,
+                            "array": img_array.tobytes(),
+                            "shape": img_array.shape,
+                            "dtype": str(img_array.dtype),
+                        }
+                    )
 
             # Create DataFrame
-            df = pd.DataFrame({
-                "texts": json.dumps(texts),
-                "images": json.dumps(images)
-            }, index=[0])
+            df = pd.DataFrame(
+                {"texts": json.dumps(texts), "images": json.dumps(images)}, index=[0]
+            )
 
             # Optionally create embeddings
             try:
-                text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-                split_texts = text_splitter.split_text("\n\n".join([t["content"] for t in texts]))
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=1000, chunk_overlap=0
+                )
+                split_texts = text_splitter.split_text(
+                    "\n\n".join([t["content"] for t in texts])
+                )
                 embeddings = OpenAIEmbeddings()
-                db = Chroma.from_texts(split_texts, embeddings, collection_name=table_name)
+                db = Chroma.from_texts(
+                    split_texts, embeddings, collection_name=table_name
+                )
                 df["embeddings_collection"] = table_name
             except Exception as e:
                 print(f"Warning: Could not create embeddings. Error: {e}")
 
-
         elif file_path.endswith((".txt", ".log", ".md")):
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 text = f.read()
             df = pd.DataFrame({"text": [text]})
         elif file_path.endswith((".xls", ".xlsx")):
@@ -419,7 +456,9 @@ def load_data_into_table(file_path, table_name, cursor, conn):
                 }
             )
 
-        elif file_path.lower().endswith((".mp4", ".avi", ".mov", ".mkv")):  # Video files
+        elif file_path.lower().endswith(
+            (".mp4", ".avi", ".mov", ".mkv")
+        ):  # Video files
             video_frames, audio_array = process_video(file_path)
             # Store video frames and audio
             df = pd.DataFrame(
@@ -427,7 +466,9 @@ def load_data_into_table(file_path, table_name, cursor, conn):
                     "video_frames": [video_frames.tobytes()],
                     "shape": [video_frames.shape],
                     "dtype": [video_frames.dtype.str],
-                    "audio_array": [audio_array.tobytes()] if audio_array is not None else None,
+                    "audio_array": [audio_array.tobytes()]
+                    if audio_array is not None
+                    else None,
                     "audio_rate": [sr] if audio_array is not None else None,
                 }
             )
@@ -450,15 +491,12 @@ def load_data_into_table(file_path, table_name, cursor, conn):
                 print(f"Could not load file: {e}")
                 return
 
-
-
         # Store DataFrame in the database
         df.to_sql(table_name, conn, if_exists="replace", index=False)
         print(f"Data from '{file_path}' loaded into table '{table_name}'")
 
     except Exception as e:
         raise e  # Re-raise the exception for handling in enter_observation_mode
-
 
 
 def enter_spool_mode(command_history, inherit_last=0, npc=None):
