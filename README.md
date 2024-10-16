@@ -74,47 +74,75 @@ Each NPC can be compiled to accomplish their primary directive and then any issu
 In the base npcsh shell, inputs are processed by an LLM. The LLM first determines what kind of a request the user is making and decides which of the available tools or modes will best enable it to accomplish the request. 
 
 
-### spool mode
-
-Spool mode allows the users to have threaded conversations in the shell, i.e. conversations where context is retained over the course of several turns.
-Users can speak with specific NPCs in spool mode by doing ```/spool <npc_name>``` and can exit spool mode by doing ```/exit```.
-
 
 
 ## Built-in NPCs
 Built-in NPCs are NPCs that should offer broad utility to the user and allow them to create more complicated NPCs. These built-in NPCs facilitate the carrying out of many common data processing tasks as well as the ability to run commands and to execute and test programs.
 
-### Bash NPC
-The bash NPC is an NPC focused on running bash commands and scripts. The bash NPC can be used to run bash commands and the user can converse with the bash NPC by doing ```/spool bash``` to interrogate it about the commands it has run and the output it has produced.
-A user can enter bash mode by typing ```/bash``` and can exit bash mode by typing ```/bq```.
-Use the Bash NPC in the profiles of other NPCs by referencing it like ```{{bash}}```.
 
-### Command NPC
+
+## Other useful tools
+### whisper mode
+type
+```npcsh
+/whisper
+```
+to enter into a voice control mode. It will calibrate for silence so that it will process your input once youve finished speaking and then will tts the response from the  llm.
+
+### spool mode
+
+Spool mode allows the users to have threaded conversations in the shell, i.e. conversations where context is retained over the course of several turns.
+Users can speak with specific NPCs in spool mode by doing 
+```npcsh
+/spool <npc_name>
+```
+ and can exit spool mode by doing
+```npcsh
+/exit
+```
+
+### Commands
 
 The LLM or specific NPC will take the user's request and try to write a command or a script to accomplish the task and then attempt to run it and to tweak it until it works or it's exceeded the number of retries (default=5).
 
 Use the Command NPC by typing ```/cmd <command>```. Chat with the Command NPC in spool mode by typing ```/spool cmd```.
 Use the Command NPC in the profiles of other NPCs by referencing it  like ```{{cmd}}```.
 
+
 ### Question NPC
 
 The user can submit a 1-shot question to a general LLM or to a specific NPC.
 Use it like
-```/question <question> <npc_name>```
+```npcsh> /sample <question> <npc_name>```
 or
-```/question <question>```
-
-You can also chat with the Question NPC in spool mode by typing ```/spool question```.
-
-
-
-## Other useful tools
-
+```npcsh> /sample <question>```
 
 ### Over-the-shoulder 
 
 Over the shoulder allows the user to select an area of the screen and the area will be passed to a vision LLM and then the user can inquire about the image or ask for help with it.
+Use it by typing
+```npcsh
+npcsh> /ots
+```
+It will pop up with your desktop's native screenshotting capabilities, and allow you to select an area. That area will be saved to ~/.npcsh/screenshots/ and then you will be prompted to pass a question about the image. 
+You can also use it on existing files/images by typing 
+```npcsh
+npcsh> /ots filename
+```
+and it will also prompt in the same way. 
 
 ### data 
-load data in, manipulate it, analyze it.
+Data mode makes it easy to investigate data and ingest it into a local database for later use and inspection.  
+begin data mode by typing 
+```npcsh
+npcsh> /data
+```
+then load data from a file like
+```npcsh
+data> load from filename as table_name
+```
+If it's a tabular file like a csv, you can then perform sql and pandas like operations on the table_name.
+
+
+
 
