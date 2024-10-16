@@ -367,6 +367,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
                             f"Command '{command}' executed successfully (no output).",
                             "green",
                         )
+                    print(output)
                 except Exception as e:
                     output = colored(f"Error executing command: {e}", "red")
 
@@ -467,12 +468,6 @@ def main():
             result = execute_command(
                 user_input, command_history, db_path, npc_compiler, current_npc
             )
-
-            # If there's a result, print it
-            # This is important for interactive sessions, which will return a message
-            # when they end
-            if result is not None and not user_input.startswith("/"):
-                print(result)
 
         except (KeyboardInterrupt, EOFError):
             if current_npc:
