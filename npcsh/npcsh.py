@@ -333,16 +333,19 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
                 return open_terminal_editor(command)
             elif command.startswith("open "):
                 try:
-                    expanded_command = os.path.expanduser(command)
-                    subprocess.Popen(
-                        shlex.split(expanded_command),
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        start_new_session=True,
-                    )
+                    path_to_open = os.path.expanduser(
+                        command.split(" ", 1)[1]
+                    )  # Extract the path
+                    absolute_path = os.path.abspath(path_to_open)  # Make it absolute
+                    expanded_command = ["open", absolute_path]  # Use the absolute path
+                    subprocess.run(expanded_command, check=True)
                     output = f"Launched: {command}"
+                except subprocess.CalledProcessError as e:
+                    output = colored(f"Error opening: {e}", "red")  # Show error message
                 except Exception as e:
-                    output = colored(f"Error executing command: {str(e)}", "red")
+                    output = colored(
+                        f"Error executing command: {str(e)}", "red"
+                    )  # Show
             else:
                 try:
                     result = subprocess.run(
@@ -401,6 +404,9 @@ def setup_readline():
     readline.parse_and_bind('"\e[A": history-search-backward')
     readline.parse_and_bind('"\e[B": history-search-forward')
     readline.parse_and_bind('"\C-r": reverse-search-history')
+    # Add these lines to enable multiline input with readline:
+    readline.parse_and_bind("set enable-bracketed-paste on")
+    readline.parse_and_bind("set paste-mark-lines on")
 
     return history_file
 
