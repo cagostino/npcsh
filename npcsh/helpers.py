@@ -166,6 +166,59 @@ BASH_COMMANDS = [
     "pip",
 ]
 
+import markdown
+import re
+from pygments import highlight
+from pygments.lexers import get_lexer_by_name
+from pygments.formatters import TerminalFormatter
+
+
+def render_markdown(text):
+    # Convert Markdown to HTML
+    html = markdown.markdown(text, extensions=["fenced_code", "codehilite"])
+
+    # Simple HTML to ANSI converter
+    lines = html.split("\n")
+    output = []
+    in_code_block = False
+    code_block = []
+    code_language = None
+
+    for line in lines:
+        if line.startswith("<pre><code"):
+            in_code_block = True
+            if 'class="' in line:
+                code_language = line.split('class="')[1].split('"')[0].split("-")[-1]
+            continue
+        elif line.startswith("</code></pre>"):
+            in_code_block = False
+            if code_language:
+                lexer = get_lexer_by_name(code_language, stripall=True)
+            else:
+                lexer = get_lexer_by_name("text", stripall=True)
+            formatter = TerminalFormatter()
+            highlighted_code = highlight("".join(code_block), lexer, formatter)
+            output.append(highlighted_code)
+            code_block = []
+            code_language = None
+            continue
+
+        if in_code_block:
+            code_block.append(line + "\n")
+        else:
+            # Basic formatting
+            line = line.replace("<h1>", "\033[1;4m").replace("</h1>", "\033[0m")
+            line = line.replace("<h2>", "\033[1m").replace("</h2>", "\033[0m")
+            line = line.replace("<strong>", "\033[1m").replace("</strong>", "\033[0m")
+            line = line.replace("<em>", "\033[3m").replace("</em>", "\033[0m")
+            line = line.replace("<code>", "\033[96m").replace("</code>", "\033[0m")
+            # Remove other HTML tags
+            line = re.sub("<[^<]+?>", "", line)
+            output.append(line)
+
+    return "\n".join(output)
+
+
 TERMINAL_EDITORS = ["vim", "emacs", "nano"]
 import yaml
 import os
@@ -525,7 +578,7 @@ def initialize_base_npcs_if_needed(db_path):
         base_npcs = [
             ("sibiji", os.path.join(npc_profiles_dir, "sibiji.npc")),
             ("bash", os.path.join(npc_profiles_dir, "bash.npc")),
-            #("data", os.path.join(npc_profiles_dir, "data.npc")),
+            # ("data", os.path.join(npc_profiles_dir, "data.npc")),
         ]
 
         for npc_name, source_path in base_npcs:

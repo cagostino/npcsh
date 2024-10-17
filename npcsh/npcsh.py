@@ -12,7 +12,12 @@ from termcolor import colored
 from dotenv import load_dotenv
 import subprocess
 from .command_history import CommandHistory
-from .llm_funcs import execute_llm_command, execute_llm_question, check_llm_command
+from .llm_funcs import (
+    render_markdown,
+    execute_llm_command,
+    execute_llm_question,
+    check_llm_command,
+)
 from .modes import (
     enter_whisper_mode,
     enter_notes_mode,
@@ -199,7 +204,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
             try:
                 compiled_script = npc_compiler.compile(npc)
                 output = f"Compiled NPC profile: {compiled_script}"
-                print(output)
+                print(render_markdown(output))
             except Exception as e:
                 output = f"Error compiling NPC profile: {str(e)}"
                 print(output)

@@ -14,7 +14,7 @@ extra_files = package_files("npcsh/npc_profiles")
 
 setup(
     name="npcsh",
-    version="0.1.19",
+    version="0.1.20",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
@@ -27,11 +27,13 @@ setup(
         "pandas",
         "ollama",
         "requests",
+        "markdown",
         "PyYAML",
         "langchain",
         "langchain_community",
         "openai-whisper",
         "pyaudio",
+        "pygments",
         "pyttsx3",
         "chromadb",
         "gtts",

@@ -10,6 +10,22 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import anthropic
 
+import markdown
+import re
+from pygments import highlight
+from pygments.lexers import get_lexer_by_name
+from pygments.formatters import TerminalFormatter
+
+import textwrap
+from rich.console import Console
+from rich.markdown import Markdown
+
+
+def render_markdown(text):
+    console = Console()
+    md = Markdown(text)
+    console.print(md)
+
 
 # Load environment variables from .env file
 def load_env_from_execution_dir():
@@ -185,7 +201,7 @@ def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs
 def get_conversation(
     messages, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs
 ):
-    print(provider, model)
+    # print(provider, model)
     if provider == "ollama":
         return get_ollama_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "openai":
@@ -500,7 +516,7 @@ def get_openai_response(
                         ],
                     }
                 )
-        print("openai_messages", messages)
+        # print("openai_messages", messages)
         completion = client.chat.completions.create(
             model=model, messages=messages, **kwargs
         )
@@ -683,13 +699,13 @@ def execute_data_operations(
 
             # Handle the result
             if isinstance(result, (pd.DataFrame, pd.Series)):
-                print(result)
+                print(render_markdown(result))
                 return result, "pd"
             elif isinstance(result, plt.Figure):
                 plt.show()
                 return result, "pd"
             elif result is not None:
-                print(result)
+                print(render_markdown(result))
 
                 return result, "pd"
 
@@ -697,7 +713,7 @@ def execute_data_operations(
             print(f"Pandas Error: {exec_error}")
 
         # 2. Try SQL
-        print(db_path)
+        # print(db_path)
         try:
             with sqlite3.connect(db_path) as conn:
                 cursor = conn.cursor()
@@ -859,7 +875,7 @@ def execute_llm_command(
                     messages = response.get("messages", None)
                 response = response.get("response", None)
 
-                print(response)
+                print(render_markdown(response))
                 output = response
                 command_history.add(command, subcommands, output, location)
 
@@ -1035,6 +1051,6 @@ def execute_llm_question(
         )
         # print(response["response"])
         output = response
-    print(output["response"])
+    print(render_markdown(output["response"]))
     command_history.add(command, [], output, location)
     return response  # return the full conversation
