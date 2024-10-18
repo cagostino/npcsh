@@ -265,6 +265,31 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
             else:  # Handle the case where capture_screenshot returns None
                 print("Screenshot capture failed.")
                 return None  # Return None to indicate failure
+        elif command_name == "help":  # New help command
+            output = """
+            Available commands:
+
+            /compile [npc_file1.npc npc_file2.npc ...]: Compiles specified NPC profile(s). If no arguments are provided, compiles all NPCs in the npc_profiles directory.
+            /com [npc_file1.npc npc_file2.npc ...]: Alias for /compile.
+            /whisper: Enter whisper mode.
+            /notes: Enter notes mode.
+            /data: Enter data mode.
+            /cmd <command>: Execute a command using the current NPC's LLM.
+            /command <command>: Alias for /cmd.
+            /set <model|provider|db_path> <value>: Sets the specified parameter. Enclose the value in quotes.
+            /sample <question>: Asks the current NPC a question.
+            /spool [inherit_last=<n>]: Enters spool mode. Optionally inherits the last <n> messages.
+            /sp [inherit_last=<n>]: Alias for /spool.
+            /<npc_name>: Enters the specified NPC's mode.
+            /help: Displays this help message.
+            /exit or /quit: Exits the current NPC mode or the npcsh shell.
+
+            Bash commands and other programs can be executed directly.
+            """
+            print(output) # Print the help message
+            return  # Don't add /help to command history
+
+
 
         elif command_name == "whisper":
             output = enter_whisper_mode(command_history, npc=npc)
