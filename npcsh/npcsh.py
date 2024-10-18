@@ -53,7 +53,9 @@ from .helpers import (
 
 from .npc_compiler import NPCCompiler, NPC
 from colorama import Fore, Back, Style
-
+import warnings                                                                                                                                                                      
+warnings.filterwarnings("ignore", category=FutureWarning)     
+ 
 import shlex
 import subprocess
 import os
@@ -202,11 +204,26 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
 
         if command_name == "compile" or command_name == "com":
             try:
-                compiled_script = npc_compiler.compile(npc)
-                output = f"Compiled NPC profile: {compiled_script}"
+                if len(args) > 0:  # Specific NPC file(s) provided
+                    for npc_file in args:
+                        compiled_script = npc_compiler.compile(npc_file)
+                        output += f"Compiled NPC profile: {compiled_script}\n"
+                elif current_npc: # Compile current NPC
+                    compiled_script = npc_compiler.compile(current_npc)
+                    output = f"Compiled NPC profile: {compiled_script}"
+                else: # Compile all NPCs in the directory
+                    for filename in os.listdir(npc_compiler.npc_directory):
+                        if filename.endswith(".npc"):
+                            try:
+                                compiled_script = npc_compiler.compile(filename)
+                                output += f"Compiled NPC profile: {compiled_script}\n"
+                            except Exception as e:
+                                output += f"Error compiling {filename}: {str(e)}\n"
                 print(render_markdown(output))
+
             except Exception as e:
-                output = f"Error compiling NPC profile: {str(e)}"
+                import traceback
+                output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
                 print(output)
         elif command.startswith("ots"):
             # check if there is a filename
@@ -306,7 +323,19 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
     else:
         # Check if it's a bash command
         # print(command)
-        command_parts = shlex.split(command)
+        try:
+            command_parts = shlex.split(command)
+        except ValueError as e:
+            if "No closing quotation" in str(e):
+                # Attempt to close unclosed quotes
+                command += '"'
+                try:
+                    command_parts = shlex.split(command)
+                except ValueError:
+                    return "Error: Unmatched quotation in command"
+            else:
+                return f"Error: {str(e)}"
+
 
         if command_parts[0] in interactive_commands:
             print(f"Starting interactive {command_parts[0]} session...")
@@ -406,7 +435,9 @@ def setup_readline():
     readline.parse_and_bind('"\C-r": reverse-search-history')
     # Add these lines to enable multiline input with readline:
     readline.parse_and_bind("set enable-bracketed-paste on")
-    readline.parse_and_bind("set paste-mark-lines on")
+    readline.parse_and_bind("set mark-modified-lines on")
+    readline.parse_and_bind("\C-e: end-of-line")
+    readline.parse_and_bind("\C-a: beginning-of-line")
 
     return history_file
 
@@ -430,7 +461,7 @@ def main():
 
     os.makedirs("./npc_profiles", exist_ok=True)
     npc_directory = os.path.expanduser("./npc_profiles")
-    npc_compiler = NPCCompiler(npc_directory)
+    npc_compiler = NPCCompiler(npc_directory, db_path) # Pass db_path here
     # print(command_name, 'command_name')
 
     if not is_npcsh_initialized():

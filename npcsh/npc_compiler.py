@@ -50,15 +50,23 @@ class NPC:
 
 
 class NPCCompiler:
-    def __init__(self, npc_directory):
+    def __init__(self, npc_directory, db_path):
         self.npc_directory = npc_directory
         self.jinja_env = Environment(
             loader=FileSystemLoader(self.npc_directory), undefined=SilentUndefined
         )
         self.npc_cache = {}
         self.resolved_npcs = {}
-
+        self.db_path = db_path
     def compile(self, npc_file: str):
+        self.npc_cache.clear()  # Clear the cache at the start of each compilation
+        self.resolved_npcs.clear()
+        if isinstance(npc_file, NPC):
+            npc_file = npc_file.name + ".npc"
+        if not npc_file.endswith(".npc"):
+            raise ValueError("File must have .npc extension")
+
+        
         if not npc_file.endswith(".npc"):
             raise ValueError("File must have .npc extension")
 
@@ -71,6 +79,8 @@ class NPCCompiler:
 
             # Final pass: resolve any remaining references
             parsed_content = self.finalize_npc_profile(npc_file)
+            self.update_compiled_npcs_table(npc_file, parsed_content)  # New function call
+
             return parsed_content
         except Exception as e:
             raise
@@ -152,8 +162,19 @@ class NPCCompiler:
             else:
                 merged[key] = value
         return merged
-
-
+    def update_compiled_npcs_table(self, npc_file, parsed_content):
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                npc_name = parsed_content['name']
+                source_path = os.path.join(self.npc_directory, npc_file) # Use source_path
+                cursor.execute(
+                    "INSERT OR REPLACE INTO compiled_npcs (name, source_path, compiled_content) VALUES (?, ?, ?)", # Correct column name
+                    (npc_name, source_path, yaml.dump(parsed_content)),
+                )
+                conn.commit()
+        except Exception as e:
+            print(f"Error updating compiled_npcs table: {str(e)}")  # Print the full error
 # Usage:
 # compiler = NPCCompiler('/path/to/npc/directory')
 # compiled_script = compiler.compile('your_npc_file.npc')

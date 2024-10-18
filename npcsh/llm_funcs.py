@@ -18,14 +18,21 @@ from pygments.formatters import TerminalFormatter
 
 import textwrap
 from rich.console import Console
-from rich.markdown import Markdown
+from rich.markdown import Markdown, CodeBlock
 
+class LeftAlignedCodeBlock(CodeBlock):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.margin = (0, 0)  # Set left margin to 0
+
+class LeftAlignedMarkdown(Markdown):
+    elements = Markdown.elements.copy()
+    elements['code_block'] = LeftAlignedCodeBlock
 
 def render_markdown(text):
     console = Console()
-    md = Markdown(text)
+    md = LeftAlignedMarkdown(text)
     console.print(md)
-
 
 # Load environment variables from .env file
 def load_env_from_execution_dir():
@@ -800,93 +807,105 @@ def get_available_tables(db_path):
         print(f"Error getting available tables: {e}")
         return ""
 
+from typing import Optional, List, Dict, Any
 
 def execute_llm_command(
-    command, command_history, model=None, provider=None, npc=None, messages=None
-):
+    command: str,
+    command_history: Any,
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
+    npc: Optional[Any] = None,
+    messages: Optional[List[Dict[str, str]]] = None
+) -> str:
     max_attempts = 5
     attempt = 0
     subcommands = []
-    if npc is None:
-        npc_name = "sibiji"
-    else:
-        npc_name = npc.name
+    npc_name = npc.name if npc else "sibiji"
     location = os.getcwd()
     print(f"{npc_name} generating command")
+
     while attempt < max_attempts:
         prompt = f"""
         A user submitted this query: {command}.
         You need to generate a bash command that will accomplish the user's intent.
         Respond ONLY with the command that should be executed.
         in the json key "bash_command".
-        You must reply with valid json and nothing else.
+        You must reply with valid json and nothing else. Do not include markdown formatting
         """
 
         response = get_llm_response(
             prompt,
             model=model,
             provider=provider,
-            messages=messages,
+            messages=[],
             npc=npc,
             format="json",
         )
+        
         if messages is not None:
-            messages = response.get("messages", None)
-        response = response.get("response", None)
+            messages = response.get("messages", [])
+        
+        llm_response = response.get("response", {})
+        #print(f"LLM response type: {type(llm_response)}")
+        #print(f"LLM response: {llm_response}")
 
-        # import pdb
-        # pdb.set_trace()
-        print(f"LLM suggests the following bash command: {response['bash_command']}")
-        print(f"running command")
-        if isinstance(response, dict) and "bash_command" in response:
-            bash_command = response["bash_command"]
-
-        else:
-            print("Error: Invalid response format from LLM")
+        try:
+            if isinstance(llm_response, str):
+                llm_response = json.loads(llm_response)
+            
+            if isinstance(llm_response, dict) and "bash_command" in llm_response:
+                bash_command = llm_response["bash_command"]
+            else:
+                raise ValueError("Invalid response format from LLM")
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"Error parsing LLM response: {e}")
             attempt += 1
             continue
 
+        print(f"LLM suggests the following bash command: {bash_command}")
+        subcommands.append(bash_command)
+
         try:
-            subcommands.append(bash_command)
+            print(f"Running command: {bash_command}")
             result = subprocess.run(
-                bash_command, shell=True, text=True, capture_output=True
+                bash_command, shell=True, text=True, capture_output=True, check=True
             )
-            if result.returncode == 0:
-                # simplify the output
-                prompt = f"""
-                    Here was the output of the result for the {command} inquiry  
-                    which ran this bash command {bash_command}:
+            print(f"Command executed with output: {result.stdout}")
+            
+            prompt = f"""
+                Here was the output of the result for the {command} inquiry  
+                which ran this bash command {bash_command}:
 
-                    {result.stdout}
+                {result.stdout}
 
-                    Provide a simple response to the user that explains to them
-                    what you did and how it accomplishes what they asked for. 
-                    
+                Provide a simple response to the user that explains to them
+                what you did and how it accomplishes what they asked for. 
+                """
+            
+            response = get_llm_response(
+                prompt,
+                model=model,
+                provider=provider,
+                npc=npc,
+                messages=[],
+            )
+            
+            if messages is not None:
+                messages = response.get("messages", [])
+            output = response.get("response", "")
 
-                        """
-                response = get_llm_response(
-                    prompt,
-                    model=model,
-                    provider=provider,
-                    npc=npc,
-                    messages=messages,
-                )
-                if messages is not None:
-                    messages = response.get("messages", None)
-                response = response.get("response", None)
+            print(render_markdown(output))
+            command_history.add(command, subcommands, output, location)
 
-                print(render_markdown(response))
-                output = response
-                command_history.add(command, subcommands, output, location)
+            return output
 
-                return response
-            else:
-                print(f"Command failed with error:")
-                print(result.stderr)
+        except subprocess.CalledProcessError as e:
+            print(f"Command failed with error:")
+            print(e.stderr)
 
             error_prompt = f"""
             The command '{bash_command}' failed with the following error:
-            {result.stderr}
+            {e.stderr}
             Please suggest a fix or an alternative command.
             Respond with a JSON object containing the key "bash_command" with the suggested command.
             """
@@ -898,24 +917,28 @@ def execute_llm_command(
                 format="json",
                 messages=messages,
             )
+            
             if messages is not None:
-                messages = fix_suggestion.get("messages", None)
-            fix_suggestion = fix_suggestion.get("response", None)
-
-            if isinstance(fix_suggestion, dict) and "bash_command" in fix_suggestion:
-                print(f"LLM suggests fix: {fix_suggestion['bash_command']}")
-                command = fix_suggestion["bash_command"]
-            else:
-                print("Error: Invalid response format from LLM for fix suggestion")
-        except Exception as e:
-            print(f"Error executing command: {e}")
+                messages = fix_suggestion.get("messages", [])
+            
+            fix_suggestion_response = fix_suggestion.get("response", {})
+            
+            try:
+                if isinstance(fix_suggestion_response, str):
+                    fix_suggestion_response = json.loads(fix_suggestion_response)
+                
+                if isinstance(fix_suggestion_response, dict) and "bash_command" in fix_suggestion_response:
+                    print(f"LLM suggests fix: {fix_suggestion_response['bash_command']}")
+                    command = fix_suggestion_response["bash_command"]
+                else:
+                    raise ValueError("Invalid response format from LLM for fix suggestion")
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"Error parsing LLM fix suggestion: {e}")
 
         attempt += 1
+
     command_history.add(command, subcommands, "Execution failed", location)
-
-    print("Max attempts reached. Unable to execute the command successfully.")
     return "Max attempts reached. Unable to execute the command successfully."
-
 
 def check_llm_command(
     command,

@@ -167,22 +167,6 @@ def save_note(note, command_history, npc=None):
     print("Note saved to database.")
 
 
-import pandas as pd  # Make sure pandas is imported
-import os
-import sys
-from langchain.document_loaders import (
-    CSVLoader,
-    PyPDFLoader,
-    TextLoader,
-    UnstructuredExcelLoader,
-    DirectoryLoader,
-    UnstructuredFileLoader,
-)
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
-
-
 def enter_data_mode(command_history, npc=None):
     conn = command_history.conn
     cursor = command_history.cursor
@@ -248,18 +232,6 @@ data> """
     print("Exiting observation mode.")
 
 
-from langchain.document_loaders import (
-    CSVLoader,
-    PyPDFLoader,
-    TextLoader,
-    UnstructuredExcelLoader,
-    DirectoryLoader,
-    UnstructuredFileLoader,
-)
-
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
 
 import cv2  # For video/image processing
 import librosa  # For audio processing
@@ -358,10 +330,11 @@ def process_audio(file_path, table_name):
 import pandas as pd
 import os
 import sys
-from langchain.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import CSVLoader, PyPDFLoader, TextLoader, UnstructuredExcelLoader, DirectoryLoader, UnstructuredFileLoader                                
+from langchain_community.embeddings import OpenAIEmbeddings                                                                                                                          
+from langchain_community.vectorstores import Chroma  
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+
 import cv2
 import librosa
 import numpy as np
