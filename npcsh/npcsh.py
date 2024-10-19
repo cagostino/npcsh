@@ -27,6 +27,8 @@ from .modes import (
 import json
 from .helpers import (
     log_action,
+    load_all_files, 
+    rag_search,
     capture_screenshot,
     load_npc_from_file,
     list_directory,
@@ -169,13 +171,19 @@ interactive_commands = {
 }
 
 
-def execute_command(command, command_history, db_path, npc_compiler, current_npc=None):
+def execute_command(command, command_history, db_path, npc_compiler, current_npc=None, text_data=None):
     subcommands = []
     output = ""
     location = os.getcwd()
     # Extract NPC from command
     db_conn = sqlite3.connect(db_path)
     # print(command)
+    if text_data is not None:
+        retrieved_docs = rag_search(command, text_data)
+    else:
+        retrieved_docs = None
+
+    print(retrieved_docs)
     if current_npc is None:
         valid_npcs = get_valid_npcs(db_path)
 
@@ -300,7 +308,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
             output = enter_data_mode(command_history, npc=npc)
             # output = enter_observation_mode(command_history, npc=npc)
         elif command_name == "cmd" or command_name == "command":
-            output = execute_llm_command(command, command_history, npc=npc)
+            output = execute_llm_command(command, command_history, npc=npc, retrieved_docs=retrieved_docs)
         elif command_name == "set":
             parts = command.split()
             if len(parts) == 3 and parts[1] in ["model", "provider", "db_path"]:
@@ -308,7 +316,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
             else:
                 return "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' "
         elif command_name == "sample":
-            output = execute_llm_question(command, command_history, npc=npc)
+            output = execute_llm_question(command, command_history, npc=npc, retrieved_docs=retrieved_docs)
         elif command_name == "spool" or command_name == "sp":
             inherit_last = 0
             for part in args:
@@ -344,7 +352,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
         elif language == "java":
             output = execute_java(code)
         else:
-            output = check_llm_command(command, command_history, npc=npc)
+            output = check_llm_command(command, command_history, npc=npc, retrieved_docs=retrieved_docs)
     else:
         # Check if it's a bash command
         # print(command)
@@ -434,7 +442,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
                     output = colored(f"Error executing command: {e}", "red")
 
         else:
-            output = check_llm_command(command, command_history, npc=npc)
+            output = check_llm_command(command, command_history, npc=npc, retrieved_docs=retrieved_docs)
 
     # Add command to history
     command_history.add(command, subcommands, output, location)
@@ -474,6 +482,7 @@ def save_readline_history():
 def orange(text):
     return f"\033[38;2;255;165;0m{text}{Style.RESET_ALL}"
 
+# npcsh.py
 
 def main():
     setup_npcsh_config()
@@ -485,9 +494,14 @@ def main():
     command_history = CommandHistory(db_path)
 
     os.makedirs("./npc_profiles", exist_ok=True)
-    npc_directory = os.path.expanduser("./npc_profiles")
-    npc_compiler = NPCCompiler(npc_directory, db_path) # Pass db_path here
-    # print(command_name, 'command_name')
+    npc_directory = os.path.abspath("./npc_profiles")
+    npc_compiler = NPCCompiler(npc_directory, db_path)  # Pass db_path here
+
+    # Load all files for RAG searches
+    # Define the directory to load text files from
+    text_data_directory = os.path.abspath('./')
+    # Load all text files from the directory recursively
+    text_data = load_all_files(text_data_directory)
 
     if not is_npcsh_initialized():
         print("Initializing NPCSH...")
@@ -519,22 +533,20 @@ def main():
                 else:
                     print("Goodbye!")
                     break
-            elif user_input.startswith("/") and not current_npc:
-                command_parts = user_input[1:].split()
-                command_name = command_parts[0]
-                valid_npcs = get_valid_npcs(db_path)
-                if command_name in valid_npcs:
-                    npc_path = get_npc_path(command_name, db_path)
-                    db_conn = sqlite3.connect(db_path)
-                    current_npc = load_npc_from_file(npc_path, db_conn)
-                    print(
-                        f"Entered {current_npc.name} mode. Type 'exit' to return to main shell."
-                    )
-                    continue
+
             # Execute the command and capture the result
             result = execute_command(
-                user_input, command_history, db_path, npc_compiler, current_npc
+                user_input,
+                command_history,
+                db_path,
+                npc_compiler,
+                current_npc,
+                text_data=text_data  # Pass text_data to execute_command
             )
+
+            # Optionally, print the result
+            if result is not None and not user.input.startswith("/"):
+                print(result)
 
         except (KeyboardInterrupt, EOFError):
             if current_npc:

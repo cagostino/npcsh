@@ -55,7 +55,7 @@ load_env_from_execution_dir()
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", None)
 openai_api_key = os.getenv("OPENAI_API_KEY", None)
 
-npcsh_model = os.environ.get("NPCSH_MODEL", "phi3")
+npcsh_model = os.environ.get("NPCSH_MODEL", "llama3.2")
 npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
@@ -652,12 +652,12 @@ def get_llm_response(
     # print(model)
     if provider is None and model is None:
         provider = "ollama"
-        model = "phi3"
+        model = "llama3.2"
     elif provider is None and model is not None:
         provider = lookupprovider(model)
     if provider == "ollama":
         if model is None:
-            model = "phi3"
+            model = "llama3.2"
         return get_ollama_response(prompt, model, npc=npc, messages=messages, **kwargs)
     elif provider == "openai":
         if model is None:
@@ -815,15 +815,22 @@ def execute_llm_command(
     model: Optional[str] = None,
     provider: Optional[str] = None,
     npc: Optional[Any] = None,
-    messages: Optional[List[Dict[str, str]]] = None
-) -> str:
+    messages: Optional[List[Dict[str, str]]] = None,
+retrieved_docs=None, n_docs = 5) -> str:
     max_attempts = 5
     attempt = 0
     subcommands = []
     npc_name = npc.name if npc else "sibiji"
     location = os.getcwd()
     print(f"{npc_name} generating command")
-
+    # Create context from retrieved documents
+    context = ""
+    if retrieved_docs:
+        for filename, content in retrieved_docs[:n_docs]:
+            #print(f"Document: {filename}")
+            #print(content)
+            context+=f"Document: {filename}\n{content}\n\n"
+        context = f"Refer to the following documents for context:\n{context}\n\n"
     while attempt < max_attempts:
         prompt = f"""
         A user submitted this query: {command}.
@@ -832,7 +839,13 @@ def execute_llm_command(
         in the json key "bash_command".
         You must reply with valid json and nothing else. Do not include markdown formatting
         """
-
+        if len(context) > 0:
+            prompt += f"""
+            What follows is the context of the text files in the user's directory that are potentially relevant to their request
+            Use these to help inform your decision.
+            {context}
+            """
+        
         response = get_llm_response(
             prompt,
             model=model,
@@ -881,6 +894,16 @@ def execute_llm_command(
                 Provide a simple response to the user that explains to them
                 what you did and how it accomplishes what they asked for. 
                 """
+            if len(context) > 0:
+                prompt += f"""
+                What follows is the context of the text files in the user's directory that are potentially relevant to their request
+                Use these to help inform how you respond. 
+                You must read the context and use it to provide the user with a more helpful answer related to their specific text data.
+
+                CONTEXT:
+
+                {context}
+                """
             
             response = get_llm_response(
                 prompt,
@@ -908,7 +931,19 @@ def execute_llm_command(
             {e.stderr}
             Please suggest a fix or an alternative command.
             Respond with a JSON object containing the key "bash_command" with the suggested command.
+            Do not include any additional markdown formatting.
+            
             """
+
+            if len(context) > 0: 
+                error_prompt+=f"""           
+                    What follows is the context of the text files in the user's directory that are potentially relevant to their request
+                    Use these to help inform your decision.
+                    {context}
+                    """
+
+
+            
             fix_suggestion = get_llm_response(
                 error_prompt,
                 model=model,
@@ -947,11 +982,24 @@ def check_llm_command(
     messages=None,
     provider=npcsh_provider,
     npc=None,
+    retrieved_docs=None,
+    n_docs=5,
 ):
     location = os.getcwd()
 
     if messages is None:
         messages = []
+    # Create context from retrieved documents
+    context = ""
+    if retrieved_docs:
+        for filename, content in retrieved_docs[:n_docs]:
+            #print(f"Document: {filename}")
+            #print(content)
+            context+=f"Document: {filename}\n{content}\n\n"
+        context = f"Refer to the following documents for context:\n{context}\n\n"
+        
+
+
     prompt = f"""
     A user submitted this query: {command}
     Is this query a specific request for a task to be accomplished?
@@ -968,7 +1016,7 @@ def check_llm_command(
 
     Provide an explanation in the json key "explanation" .
 
-    You must reply with valid json and nothing else.
+    You must reply with valid json and nothing else. Do not include any markdown formatting.
     The format and requirements of the output are as follows:
     {{
         "is_command": {{"type": "string", 
@@ -981,6 +1029,12 @@ def check_llm_command(
     Use these to hone your output and only respond with the actual filled-in json.
     Do not return any extra information. Respond only with the json.
     """
+    if len(context) > 0:
+        prompt += f"""
+        What follows is the context of the text files in the user's directory that are potentially relevant to their request
+        Use these to help inform your decision.
+        {context}
+        """
 
     response = get_llm_response(
         prompt,
@@ -1028,6 +1082,8 @@ def check_llm_command(
             provider=provider,
             messages=messages,
             npc=npc,
+            retrieved_docs=retrieved_docs,
+            
         )
     else:
         return execute_llm_question(
@@ -1037,6 +1093,7 @@ def check_llm_command(
             provider=provider,
             # messages=messages,
             npc=npc,
+            retrieved_docs=retrieved_docs,
         )
 
 
@@ -1047,8 +1104,23 @@ def execute_llm_question(
     provider=npcsh_provider,
     npc=None,
     messages=None,
+    retrieved_docs=None,
+    n_docs=5
 ):
     location = os.getcwd()
+    context=""
+    if retrieved_docs:
+        for filename, content in retrieved_docs[:n_docs]:
+            #print(f"Document: {filename}")
+            #print(content)
+            context+=f"Document: {filename}\n{content}\n\n"
+        context = f"Refer to the following documents for context:\n{context}\n\n"
+        command = f"""{command}\n       
+        What follows is the context of the text files in the user's directory that are potentially relevant to their request
+        Use these to help inform your decision.
+
+        CONTEXT:
+    {context}"""
 
     # Use get_conversation if messages are provided
     if messages:

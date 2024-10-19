@@ -370,6 +370,75 @@ def ensure_npcshrc_exists():
             npcshrc.write("export NPCSH_MODEL='phi3'\n")
             npcshrc.write("export NPCSH_DB_PATH='~/npcsh_history.db'\n")
     return npcshrc_path
+import os
+import nltk
+
+
+# Function to check and download NLTK data if necessary
+def ensure_nltk_punkt():
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        print("Downloading NLTK 'punkt' tokenizer...")
+        nltk.download('punkt')
+
+def load_all_files(directory, extensions=None):
+    """
+    Recursively load all files from the given directory and its subdirectories.
+
+    :param directory: The root directory to start searching from.
+    :param extensions: A list of file extensions to include. If None, all files are included.
+    :return: A dictionary with file paths as keys and file contents as values.
+    """
+    text_data = {}
+    if extensions is None:
+        # Default to common text file extensions
+        extensions = ['.txt', '.md', '.py', '.java', '.c', '.cpp', '.html', 
+                      '.css', '.js','.ts', '.tsx', '.npc' ]
+        # '.json', '.yaml', '.yml', '.xml', '.csv', '.log' ?
+
+    # Walk through all subdirectories and files
+    for root, dirs, files in os.walk(directory):
+        for filename in files:
+            # Check if the file extension is in the list of extensions
+            if any(filename.endswith(ext) for ext in extensions):
+                file_path = os.path.join(root, filename)
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
+                        text_data[file_path] = file.read()
+                except Exception as e:
+                    print(f"Could not read file {file_path}: {e}")
+
+    return text_data
+def rag_search(query, text_data):
+    """
+    Retrieve documents that are relevant to the query.
+
+    :param query: The query string.
+    :param text_data: A dictionary with file paths as keys and file contents as values.
+    :return: A list of tuples (filename, content) of relevant documents.
+    """
+    ensure_nltk_punkt()
+    results = []
+
+    # Tokenize the query
+    query_tokens = set(nltk.word_tokenize(query.lower()))
+
+    for filename, content in text_data.items():
+        # Tokenize the content
+        content_tokens = set(nltk.word_tokenize(content.lower()))
+        # Calculate the intersection
+        common_tokens = query_tokens & content_tokens
+        if common_tokens:
+            # Calculate a simple relevance score (number of common tokens)
+            score = len(common_tokens)
+            results.append((score, filename, content))
+
+    # Sort results by relevance score in descending order
+    results.sort(reverse=True)
+
+    # Return the list of (filename, content) tuples
+    return [(filename, content) for score, filename, content in results]
 
 
 def add_npcshrc_to_shell_config():
