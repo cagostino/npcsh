@@ -410,36 +410,54 @@ def load_all_files(directory, extensions=None):
                     print(f"Could not read file {file_path}: {e}")
 
     return text_data
-def rag_search(query, text_data):
+
+
+import numpy as np
+
+
+def rag_search(query, text_data, embedding_model, text_data_embedded=None, similarity_threshold=0.2):
     """
-    Retrieve documents that are relevant to the query.
+    Retrieve lines from documents that are relevant to the query.
 
     :param query: The query string.
     :param text_data: A dictionary with file paths as keys and file contents as values.
-    :return: A list of tuples (filename, content) of relevant documents.
+    :param similarity_threshold: The similarity threshold for considering a line relevant.
+    :return: A list of tuples (filename, snippet) of relevant snippets.
     """
-    ensure_nltk_punkt()
+
     results = []
 
-    # Tokenize the query
-    query_tokens = set(nltk.word_tokenize(query.lower()))
+    # Compute the embedding of the query
+    query_embedding = embedding_model.encode(query, convert_to_tensor=True)
 
     for filename, content in text_data.items():
-        # Tokenize the content
-        content_tokens = set(nltk.word_tokenize(content.lower()))
-        # Calculate the intersection
-        common_tokens = query_tokens & content_tokens
-        if common_tokens:
-            # Calculate a simple relevance score (number of common tokens)
-            score = len(common_tokens)
-            results.append((score, filename, content))
+        # Split content into lines
+        lines = content.split('\n')
+        if not lines:
+            continue
+        # Compute embeddings for each line
+        if text_data_embedded is None:
 
-    # Sort results by relevance score in descending order
-    results.sort(reverse=True)
-
-    # Return the list of (filename, content) tuples
-    return [(filename, content) for score, filename, content in results]
-
+            line_embeddings = embedding_model.encode(lines, convert_to_tensor=True)
+        else:
+            line_embeddings = text_data_embedded[filename]
+        # Compute cosine similarities
+        cosine_scores = util.cos_sim(query_embedding, line_embeddings)[0].cpu().numpy()
+        
+        # Find indices of lines above the similarity threshold
+        print('most similar', np.max(cosine_scores))
+        print('most similar doc', lines[np.argmax(cosine_scores)])
+        relevant_line_indices = np.where(cosine_scores >= similarity_threshold)[0]
+        
+        for idx in relevant_line_indices:
+            idx = int(idx)  # Ensure idx is an integer
+            # Get context lines (±10 lines)
+            start_idx = max(0, idx - 10)
+            end_idx = min(len(lines), idx + 11)  # +11 because end index is exclusive
+            snippet = "\n".join(lines[start_idx:end_idx])
+            results.append((filename, snippet))
+    print('results', results)
+    return results
 
 def add_npcshrc_to_shell_config():
     config_file = get_shell_config_file()
@@ -459,6 +477,7 @@ def setup_npcsh_config():
     ensure_npcshrc_exists()
     add_npcshrc_to_shell_config()
 
+from sentence_transformers import  util
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
     # its a yaml filedef load_npc(npc_file: str, db_conn: sqlite3.Connection) -> NPC:

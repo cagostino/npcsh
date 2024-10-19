@@ -18,6 +18,7 @@ setup(
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
+        "sentence_transformers",
         "nltk",
         "pypdf",
         "PyMuPDF",

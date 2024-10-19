@@ -52,6 +52,8 @@ from .helpers import (
     set_npcsh_initialized,
     get_valid_npcs,
 )
+from sentence_transformers import SentenceTransformer, util
+embedding_model = SentenceTransformer('all-MiniLM-L6-v2')  # You can choose any suitable model
 
 from .npc_compiler import NPCCompiler, NPC
 from colorama import Fore, Back, Style
@@ -171,7 +173,7 @@ interactive_commands = {
 }
 
 
-def execute_command(command, command_history, db_path, npc_compiler, current_npc=None, text_data=None):
+def execute_command(command, command_history, db_path, npc_compiler, embedding_model, current_npc=None, text_data=None, text_data_embedded=None):
     subcommands = []
     output = ""
     location = os.getcwd()
@@ -179,7 +181,7 @@ def execute_command(command, command_history, db_path, npc_compiler, current_npc
     db_conn = sqlite3.connect(db_path)
     # print(command)
     if text_data is not None:
-        retrieved_docs = rag_search(command, text_data)
+        retrieved_docs = rag_search(command, text_data, embedding_model, text_data_embedded = text_data_embedded)
     else:
         retrieved_docs = None
 
@@ -502,7 +504,9 @@ def main():
     text_data_directory = os.path.abspath('./')
     # Load all text files from the directory recursively
     text_data = load_all_files(text_data_directory)
-
+    #embed all the text_data
+    text_data_embedded = {filename: embedding_model.encode(text_data[filename], convert_to_tensor=True) for filename in text_data}
+    
     if not is_npcsh_initialized():
         print("Initializing NPCSH...")
         initialize_base_npcs_if_needed(db_path)
@@ -540,12 +544,14 @@ def main():
                 command_history,
                 db_path,
                 npc_compiler,
+                embedding_model,
                 current_npc,
-                text_data=text_data  # Pass text_data to execute_command
+                text_data=text_data,
+                text_data_embedded=text_data_embedded,  # Pass text_data to execute_command
             )
 
             # Optionally, print the result
-            if result is not None and not user.input.startswith("/"):
+            if result is not None and not user_input.startswith("/") and not isinstance(result, dict):
                 print(result)
 
         except (KeyboardInterrupt, EOFError):
