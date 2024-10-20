@@ -27,6 +27,7 @@ class NPC:
         restrictions: list = None,
         model: str = None,
         provider: str = None,
+        api_url: str = None,
     ):
         self.name = name
         self.primary_directive = primary_directive
@@ -38,6 +39,7 @@ class NPC:
             "SELECT name FROM sqlite_master WHERE type='table';"
         ).fetchall()
         self.provider = provider
+        self.api_url = api_url
 
     def __str__(self):
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
@@ -144,9 +146,6 @@ class NPCCompiler:
         required_keys = [
             "name",
             "primary_directive",
-            "suggested_tools_to_use",
-            "restrictions",
-            "model",
         ]
         for key in required_keys:
             if key not in profile:
