@@ -20,19 +20,23 @@ import textwrap
 from rich.console import Console
 from rich.markdown import Markdown, CodeBlock
 
+
 class LeftAlignedCodeBlock(CodeBlock):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.margin = (0, 0)  # Set left margin to 0
 
+
 class LeftAlignedMarkdown(Markdown):
     elements = Markdown.elements.copy()
-    elements['code_block'] = LeftAlignedCodeBlock
+    elements["code_block"] = LeftAlignedCodeBlock
+
 
 def render_markdown(text):
     console = Console()
     md = LeftAlignedMarkdown(text)
     console.print(md)
+
 
 # Load environment variables from .env file
 def load_env_from_execution_dir():
@@ -104,12 +108,19 @@ def get_system_message(npc):
         3. "no such table" - Verify the table name and check if it exists first.
 
         Always consider data integrity, security, and privacy in your operations. Offer clear explanations and examples for complex data concepts and SQLite queries.
-
     
     --------------
     --------------
     
     """
+    if npc.suggested_tools_to_use:
+        system_message += f"""
+        While you have access to SQLite, the user specifically suggested that you make use of the following tools:
+        
+        {npc.suggested_tools_to_use}
+
+        Please adhere as best as possible to the user's request.
+        """
 
     return system_message
 
@@ -473,7 +484,7 @@ def get_ollama_response(
 
         if format == "json":
             try:
-                items_to_return["response"] = json.loads(llm_response)
+                items_to_return["response"] = json.loads(response.text)["response"]
                 return items_to_return
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
@@ -482,6 +493,86 @@ def get_ollama_response(
             return items_to_return
     except Exception as e:
         return f"Error interacting with LLM: {e}"
+
+
+def get_openai_like_response(
+    prompt,
+    model,
+    api_url,
+    image=None,
+    npc=None,
+    format=None,
+    api_key=None,
+    messages=None,
+    **kwargs,
+):
+    try:
+        system_message = (
+            get_system_message(npc) if npc else "You are a helpful assistant."
+        )
+        if messages is None or len(messages) == 0:
+            messages = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ]
+        if image:  # Add image if provided
+            with open(image["file_path"], "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}"
+                                },
+                            }
+                        ],
+                    }
+                )
+
+        request_data = {
+            "model": model,
+            "messages": messages,
+            **kwargs,  # Include any additional keyword arguments
+        }
+        if format == "json":
+            request_data["format"] = "json"
+
+        headers = {"Content-Type": "application/json"}  # Set Content-Type header
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        response = requests.post(api_url, headers=headers, json=request_data)
+        response.raise_for_status()
+        response_json = response.json()
+        llm_response = (
+            response_json.get("choices", [{}])[0].get("message", {}).get("content")
+        )
+        if llm_response is None:
+            raise ValueError(
+                "Invalid response format from the API. Could not extract 'choices[0].message.content'."
+            )
+
+        items_to_return = {"response": llm_response}
+        if messages is not None:
+            messages.append({"role": "assistant", "content": llm_response})
+            items_to_return["messages"] = messages
+        if format == "json":
+            try:
+                items_to_return["response"] = json.loads(llm_response)
+                return items_to_return
+            except json.JSONDecodeError:
+                print(f"Warning: Expected JSON response, but received: {llm_response}")
+                return {"error": "Invalid JSON response"}
+        else:
+            return items_to_return
+
+    except requests.exceptions.RequestException as e:
+        return f"Error making API request: {e}"
+    except Exception as e:
+        return f"Error interacting with API: {e}"
 
 
 def get_openai_response(
@@ -646,15 +737,25 @@ def get_llm_response(
     model=npcsh_model,
     npc=None,
     messages=None,
+    api_url=None,
     **kwargs,
 ):
     # print(provider)
     # print(model)
-    if provider is None and model is None:
-        provider = "ollama"
-        model = "llama3.2"
-    elif provider is None and model is not None:
-        provider = lookupprovider(model)
+    if npc is not None:
+        if npc.provider is not None:
+            provider = npc.provider
+        if npc.model is not None:
+            model = npc.model
+        if npc.api_url is not None:
+            api_url = npc.api_url
+
+    else:
+        if provider is None and model is None:
+            provider = "ollama"
+            model = "llama3.2"
+        elif provider is None and model is not None:
+            provider = lookupprovider(model)
     if provider == "ollama":
         if model is None:
             model = "llama3.2"
@@ -663,6 +764,13 @@ def get_llm_response(
         if model is None:
             model = "gpt-4o-mini"
         return get_openai_response(prompt, model, npc=npc, messages=messages, **kwargs)
+    elif provider == "openai-like":
+        if api_url is None:
+            raise ValueError("api_url is required for openai-like provider")
+        return get_openai_like_response(
+            prompt, model, api_url, npc=npc, messages=messages, **kwargs
+        )
+
     elif provider == "anthropic":
         if model is None:
             model = "claude-3-haiku-20240307"
@@ -706,13 +814,13 @@ def execute_data_operations(
 
             # Handle the result
             if isinstance(result, (pd.DataFrame, pd.Series)):
-                print(render_markdown(result))
+                render_markdown(result)
                 return result, "pd"
             elif isinstance(result, plt.Figure):
                 plt.show()
                 return result, "pd"
             elif result is not None:
-                print(render_markdown(result))
+                render_markdown(result)
 
                 return result, "pd"
 
@@ -807,7 +915,9 @@ def get_available_tables(db_path):
         print(f"Error getting available tables: {e}")
         return ""
 
+
 from typing import Optional, List, Dict, Any
+
 
 def execute_llm_command(
     command: str,
@@ -816,7 +926,9 @@ def execute_llm_command(
     provider: Optional[str] = None,
     npc: Optional[Any] = None,
     messages: Optional[List[Dict[str, str]]] = None,
-retrieved_docs=None, n_docs = 5) -> str:
+    retrieved_docs=None,
+    n_docs=5,
+) -> str:
     max_attempts = 5
     attempt = 0
     subcommands = []
@@ -827,9 +939,9 @@ retrieved_docs=None, n_docs = 5) -> str:
     context = ""
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
-            #print(f"Document: {filename}")
-            #print(content)
-            context+=f"Document: {filename}\n{content}\n\n"
+            # print(f"Document: {filename}")
+            # print(content)
+            context += f"Document: {filename}\n{content}\n\n"
         context = f"Refer to the following documents for context:\n{context}\n\n"
     while attempt < max_attempts:
         prompt = f"""
@@ -845,7 +957,7 @@ retrieved_docs=None, n_docs = 5) -> str:
             Use these to help inform your decision.
             {context}
             """
-        
+
         response = get_llm_response(
             prompt,
             model=model,
@@ -854,18 +966,18 @@ retrieved_docs=None, n_docs = 5) -> str:
             npc=npc,
             format="json",
         )
-        
+
         if messages is not None:
             messages = response.get("messages", [])
-        
+
         llm_response = response.get("response", {})
-        #print(f"LLM response type: {type(llm_response)}")
-        #print(f"LLM response: {llm_response}")
+        # print(f"LLM response type: {type(llm_response)}")
+        # print(f"LLM response: {llm_response}")
 
         try:
             if isinstance(llm_response, str):
                 llm_response = json.loads(llm_response)
-            
+
             if isinstance(llm_response, dict) and "bash_command" in llm_response:
                 bash_command = llm_response["bash_command"]
             else:
@@ -884,7 +996,7 @@ retrieved_docs=None, n_docs = 5) -> str:
                 bash_command, shell=True, text=True, capture_output=True, check=True
             )
             print(f"Command executed with output: {result.stdout}")
-            
+
             prompt = f"""
                 Here was the output of the result for the {command} inquiry  
                 which ran this bash command {bash_command}:
@@ -904,7 +1016,7 @@ retrieved_docs=None, n_docs = 5) -> str:
 
                 {context}
                 """
-            
+
             response = get_llm_response(
                 prompt,
                 model=model,
@@ -912,12 +1024,12 @@ retrieved_docs=None, n_docs = 5) -> str:
                 npc=npc,
                 messages=[],
             )
-            
+
             if messages is not None:
                 messages = response.get("messages", [])
             output = response.get("response", "")
 
-            print(render_markdown(output))
+            render_markdown(output)
             command_history.add(command, subcommands, output, location)
 
             return output
@@ -935,15 +1047,13 @@ retrieved_docs=None, n_docs = 5) -> str:
             
             """
 
-            if len(context) > 0: 
-                error_prompt+=f"""           
+            if len(context) > 0:
+                error_prompt += f"""           
                     What follows is the context of the text files in the user's directory that are potentially relevant to their request
                     Use these to help inform your decision.
                     {context}
                     """
 
-
-            
             fix_suggestion = get_llm_response(
                 error_prompt,
                 model=model,
@@ -952,21 +1062,28 @@ retrieved_docs=None, n_docs = 5) -> str:
                 format="json",
                 messages=messages,
             )
-            
+
             if messages is not None:
                 messages = fix_suggestion.get("messages", [])
-            
+
             fix_suggestion_response = fix_suggestion.get("response", {})
-            
+
             try:
                 if isinstance(fix_suggestion_response, str):
                     fix_suggestion_response = json.loads(fix_suggestion_response)
-                
-                if isinstance(fix_suggestion_response, dict) and "bash_command" in fix_suggestion_response:
-                    print(f"LLM suggests fix: {fix_suggestion_response['bash_command']}")
+
+                if (
+                    isinstance(fix_suggestion_response, dict)
+                    and "bash_command" in fix_suggestion_response
+                ):
+                    print(
+                        f"LLM suggests fix: {fix_suggestion_response['bash_command']}"
+                    )
                     command = fix_suggestion_response["bash_command"]
                 else:
-                    raise ValueError("Invalid response format from LLM for fix suggestion")
+                    raise ValueError(
+                        "Invalid response format from LLM for fix suggestion"
+                    )
             except (json.JSONDecodeError, ValueError) as e:
                 print(f"Error parsing LLM fix suggestion: {e}")
 
@@ -974,6 +1091,7 @@ retrieved_docs=None, n_docs = 5) -> str:
 
     command_history.add(command, subcommands, "Execution failed", location)
     return "Max attempts reached. Unable to execute the command successfully."
+
 
 def check_llm_command(
     command,
@@ -993,12 +1111,10 @@ def check_llm_command(
     context = ""
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
-            #print(f"Document: {filename}")
-            #print(content)
-            context+=f"Document: {filename}\n{content}\n\n"
+            # print(f"Document: {filename}")
+            # print(content)
+            context += f"Document: {filename}\n{content}\n\n"
         context = f"Refer to the following documents for context:\n{context}\n\n"
-        
-
 
     prompt = f"""
     A user submitted this query: {command}
@@ -1069,7 +1185,7 @@ def check_llm_command(
     else:
         cmd_stt = "a question"
 
-    print(f"The request is {cmd_stt} .")
+    print(f"The request is {cmd_stt}.")
 
     output = response
     command_history.add(command, [], output, location)
@@ -1083,7 +1199,6 @@ def check_llm_command(
             messages=messages,
             npc=npc,
             retrieved_docs=retrieved_docs,
-            
         )
     else:
         return execute_llm_question(
@@ -1105,15 +1220,15 @@ def execute_llm_question(
     npc=None,
     messages=None,
     retrieved_docs=None,
-    n_docs=5
+    n_docs=5,
 ):
     location = os.getcwd()
-    context=""
+    context = ""
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
-            #print(f"Document: {filename}")
-            #print(content)
-            context+=f"Document: {filename}\n{content}\n\n"
+            # print(f"Document: {filename}")
+            # print(content)
+            context += f"Document: {filename}\n{content}\n\n"
         context = f"Refer to the following documents for context:\n{context}\n\n"
         command = f"""{command}\n       
         What follows is the context of the text files in the user's directory that are potentially relevant to their request
@@ -1146,6 +1261,6 @@ def execute_llm_question(
         )
         # print(response["response"])
         output = response
-    print(render_markdown(output["response"]))
+    render_markdown(output["response"])
     command_history.add(command, [], output, location)
     return response  # return the full conversation

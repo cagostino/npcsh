@@ -24,10 +24,11 @@ from .modes import (
     enter_spool_mode,
     enter_data_mode,
 )
+
 import json
 from .helpers import (
     log_action,
-    load_all_files, 
+    load_all_files,
     rag_search,
     capture_screenshot,
     load_npc_from_file,
@@ -53,13 +54,19 @@ from .helpers import (
     get_valid_npcs,
 )
 from sentence_transformers import SentenceTransformer, util
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')  # You can choose any suitable model
 
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 from .npc_compiler import NPCCompiler, NPC
 from colorama import Fore, Back, Style
-import warnings                                                                                                                                                                      
-warnings.filterwarnings("ignore", category=FutureWarning)     
- 
+import warnings
+
+warnings.filterwarnings(
+    "ignore", category=FutureWarning, module="transformers"
+)  # transformers
+# warnings.filterwarnings(
+#    "ignore", message="CUDA initialization: The NVIDIA driver on your system is too old"
+# )
+
 import shlex
 import subprocess
 import os
@@ -67,6 +74,10 @@ from dotenv import load_dotenv
 import json
 import pandas as pd
 import numpy as np
+
+from tqdm import tqdm
+
+tqdm.disable = True  # Disable tqdm globally
 
 
 def get_file_color(filepath):
@@ -173,7 +184,16 @@ interactive_commands = {
 }
 
 
-def execute_command(command, command_history, db_path, npc_compiler, embedding_model, current_npc=None, text_data=None, text_data_embedded=None):
+def execute_command(
+    command,
+    command_history,
+    db_path,
+    npc_compiler,
+    embedding_model,
+    current_npc=None,
+    text_data=None,
+    text_data_embedded=None,
+):
     subcommands = []
     output = ""
     location = os.getcwd()
@@ -181,11 +201,13 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
     db_conn = sqlite3.connect(db_path)
     # print(command)
     if text_data is not None:
-        retrieved_docs = rag_search(command, text_data, embedding_model, text_data_embedded = text_data_embedded)
+        retrieved_docs = rag_search(
+            command, text_data, embedding_model, text_data_embedded=text_data_embedded
+        )
     else:
         retrieved_docs = None
 
-    print(retrieved_docs)
+    # print(retrieved_docs)
     if current_npc is None:
         valid_npcs = get_valid_npcs(db_path)
 
@@ -194,6 +216,7 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
             npc_name = "sibiji"  # Default NPC
         # print(npc_name)
         npc_path = get_npc_path(npc_name, db_path)
+        # print(npc_path)
         npc = load_npc_from_file(npc_path, db_conn)
     else:
         npc = current_npc
@@ -218,10 +241,10 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
                     for npc_file in args:
                         compiled_script = npc_compiler.compile(npc_file)
                         output += f"Compiled NPC profile: {compiled_script}\n"
-                elif current_npc: # Compile current NPC
+                elif current_npc:  # Compile current NPC
                     compiled_script = npc_compiler.compile(current_npc)
                     output = f"Compiled NPC profile: {compiled_script}"
-                else: # Compile all NPCs in the directory
+                else:  # Compile all NPCs in the directory
                     for filename in os.listdir(npc_compiler.npc_directory):
                         if filename.endswith(".npc"):
                             try:
@@ -229,11 +252,14 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
                                 output += f"Compiled NPC profile: {compiled_script}\n"
                             except Exception as e:
                                 output += f"Error compiling {filename}: {str(e)}\n"
-                print(render_markdown(output))
+                render_markdown(output)
 
             except Exception as e:
                 import traceback
-                output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
+
+                output = (
+                    f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
+                )
                 print(output)
         elif command.startswith("ots"):
             # check if there is a filename
@@ -296,21 +322,21 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
 
             Bash commands and other programs can be executed directly.
             """
-            print(output) # Print the help message
+            print(output)  # Print the help message
             return  # Don't add /help to command history
-
-
 
         elif command_name == "whisper":
             output = enter_whisper_mode(command_history, npc=npc)
         elif command_name == "notes":
             output = enter_notes_mode(command_history, npc=npc)
         elif command_name == "data":
-            print("data")
+            # print("data")
             output = enter_data_mode(command_history, npc=npc)
             # output = enter_observation_mode(command_history, npc=npc)
         elif command_name == "cmd" or command_name == "command":
-            output = execute_llm_command(command, command_history, npc=npc, retrieved_docs=retrieved_docs)
+            output = execute_llm_command(
+                command, command_history, npc=npc, retrieved_docs=retrieved_docs
+            )
         elif command_name == "set":
             parts = command.split()
             if len(parts) == 3 and parts[1] in ["model", "provider", "db_path"]:
@@ -318,7 +344,9 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
             else:
                 return "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' "
         elif command_name == "sample":
-            output = execute_llm_question(command, command_history, npc=npc, retrieved_docs=retrieved_docs)
+            output = execute_llm_question(
+                command, command_history, npc=npc, retrieved_docs=retrieved_docs
+            )
         elif command_name == "spool" or command_name == "sp":
             inherit_last = 0
             for part in args:
@@ -354,7 +382,9 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
         elif language == "java":
             output = execute_java(code)
         else:
-            output = check_llm_command(command, command_history, npc=npc, retrieved_docs=retrieved_docs)
+            output = check_llm_command(
+                command, command_history, npc=npc, retrieved_docs=retrieved_docs
+            )
     else:
         # Check if it's a bash command
         # print(command)
@@ -370,7 +400,6 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
                     return "Error: Unmatched quotation in command"
             else:
                 return f"Error: {str(e)}"
-
 
         if command_parts[0] in interactive_commands:
             print(f"Starting interactive {command_parts[0]} session...")
@@ -444,7 +473,9 @@ def execute_command(command, command_history, db_path, npc_compiler, embedding_m
                     output = colored(f"Error executing command: {e}", "red")
 
         else:
-            output = check_llm_command(command, command_history, npc=npc, retrieved_docs=retrieved_docs)
+            output = check_llm_command(
+                command, command_history, npc=npc, retrieved_docs=retrieved_docs
+            )
 
     # Add command to history
     command_history.add(command, subcommands, output, location)
@@ -484,7 +515,9 @@ def save_readline_history():
 def orange(text):
     return f"\033[38;2;255;165;0m{text}{Style.RESET_ALL}"
 
+
 # npcsh.py
+
 
 def main():
     setup_npcsh_config()
@@ -501,12 +534,17 @@ def main():
 
     # Load all files for RAG searches
     # Define the directory to load text files from
-    text_data_directory = os.path.abspath('./')
+    text_data_directory = os.path.abspath("./")
     # Load all text files from the directory recursively
     text_data = load_all_files(text_data_directory)
-    #embed all the text_data
-    text_data_embedded = {filename: embedding_model.encode(text_data[filename], convert_to_tensor=True) for filename in text_data}
-    
+    # embed all the text_data
+    text_data_embedded = {
+        filename: embedding_model.encode(
+            text_data[filename], convert_to_tensor=True, show_progress_bar=False
+        )
+        for filename in text_data
+    }
+
     if not is_npcsh_initialized():
         print("Initializing NPCSH...")
         initialize_base_npcs_if_needed(db_path)
@@ -551,8 +589,12 @@ def main():
             )
 
             # Optionally, print the result
-            if result is not None and not user_input.startswith("/") and not isinstance(result, dict):
-                print(result)
+            if (
+                result is not None
+                and not user_input.startswith("/")
+                and not isinstance(result, dict)
+            ):
+                print("final", result)
 
         except (KeyboardInterrupt, EOFError):
             if current_npc:

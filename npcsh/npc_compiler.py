@@ -21,12 +21,12 @@ class NPC:
     def __init__(
         self,
         name: str,
-        db_conn : sqlite3.Connection,        
-        primary_directive : str = None,
-        suggested_tools_to_use : str = None,
-        restrictions : list = None,
-        model : str = None,
-        provider : str = None,
+        db_conn: sqlite3.Connection,
+        primary_directive: str = None,
+        suggested_tools_to_use: str = None,
+        restrictions: list = None,
+        model: str = None,
+        provider: str = None,
     ):
         self.name = name
         self.primary_directive = primary_directive
@@ -58,6 +58,7 @@ class NPCCompiler:
         self.npc_cache = {}
         self.resolved_npcs = {}
         self.db_path = db_path
+
     def compile(self, npc_file: str):
         self.npc_cache.clear()  # Clear the cache at the start of each compilation
         self.resolved_npcs.clear()
@@ -66,7 +67,6 @@ class NPCCompiler:
         if not npc_file.endswith(".npc"):
             raise ValueError("File must have .npc extension")
 
-        
         if not npc_file.endswith(".npc"):
             raise ValueError("File must have .npc extension")
 
@@ -79,7 +79,9 @@ class NPCCompiler:
 
             # Final pass: resolve any remaining references
             parsed_content = self.finalize_npc_profile(npc_file)
-            self.update_compiled_npcs_table(npc_file, parsed_content)  # New function call
+            self.update_compiled_npcs_table(
+                npc_file, parsed_content
+            )  # New function call
 
             return parsed_content
         except Exception as e:
@@ -162,20 +164,26 @@ class NPCCompiler:
             else:
                 merged[key] = value
         return merged
+
     def update_compiled_npcs_table(self, npc_file, parsed_content):
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                npc_name = parsed_content['name']
-                source_path = os.path.join(self.npc_directory, npc_file) # Use source_path
+                npc_name = parsed_content["name"]
+                source_path = os.path.join(
+                    self.npc_directory, npc_file
+                )  # Use source_path
                 cursor.execute(
-                    "INSERT OR REPLACE INTO compiled_npcs (name, source_path, compiled_content) VALUES (?, ?, ?)", # Correct column name
+                    "INSERT OR REPLACE INTO compiled_npcs (name, source_path, compiled_content) VALUES (?, ?, ?)",  # Correct column name
                     (npc_name, source_path, yaml.dump(parsed_content)),
                 )
                 conn.commit()
         except Exception as e:
-            print(f"Error updating compiled_npcs table: {str(e)}")  # Print the full error
+            print(
+                f"Error updating compiled_npcs table: {str(e)}"
+            )  # Print the full error
+
+
 # Usage:
 # compiler = NPCCompiler('/path/to/npc/directory')
 # compiled_script = compiler.compile('your_npc_file.npc')
-

@@ -232,7 +232,6 @@ data> """
     print("Exiting observation mode.")
 
 
-
 import cv2  # For video/image processing
 import librosa  # For audio processing
 import numpy as np
@@ -330,9 +329,16 @@ def process_audio(file_path, table_name):
 import pandas as pd
 import os
 import sys
-from langchain_community.document_loaders import CSVLoader, PyPDFLoader, TextLoader, UnstructuredExcelLoader, DirectoryLoader, UnstructuredFileLoader                                
-from langchain_community.embeddings import OpenAIEmbeddings                                                                                                                          
-from langchain_community.vectorstores import Chroma  
+from langchain_community.document_loaders import (
+    CSVLoader,
+    PyPDFLoader,
+    TextLoader,
+    UnstructuredExcelLoader,
+    DirectoryLoader,
+    UnstructuredFileLoader,
+)
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 import cv2

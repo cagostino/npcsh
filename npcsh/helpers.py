@@ -303,46 +303,6 @@ def execute_set_command(command, value):
     return f"{command.capitalize()} has been set to: {value}"
 
 
-def execute_set_command(command, value):
-    config_path = os.path.expanduser("~/.npcshrc")
-
-    # Map command to environment variable name
-    var_map = {
-        "model": "NPCSH_MODEL",
-        "provider": "NPCSH_PROVIDER",
-        "db_path": "NPCSH_DB_PATH",
-    }
-
-    if command not in var_map:
-        return f"Unknown setting: {command}"
-
-    env_var = var_map[command]
-
-    # Read the current configuration
-    if os.path.exists(config_path):
-        with open(config_path, "r") as f:
-            lines = f.readlines()
-    else:
-        lines = []
-
-    # Check if the property exists and update it, or add it if it doesn't exist
-    property_exists = False
-    for i, line in enumerate(lines):
-        if line.startswith(f"export {env_var}="):
-            lines[i] = f"export {env_var}='{value}'\n"
-            property_exists = True
-            break
-
-    if not property_exists:
-        lines.append(f"export {env_var}='{value}'\n")
-
-    # Save the updated configuration
-    with open(config_path, "w") as f:
-        f.writelines(lines)
-
-    return f"{command.capitalize()} has been set to: {value}"
-
-
 def get_shell_config_file():
     # Check the current shell
     shell = os.environ.get("SHELL", "")
@@ -367,9 +327,12 @@ def ensure_npcshrc_exists():
             npcshrc.write("# NPCSH Configuration File\n")
             npcshrc.write("export NPCSH_INITIALIZED=0\n")
             npcshrc.write("export NPCSH_PROVIDER='ollama'\n")
-            npcshrc.write("export NPCSH_MODEL='phi3'\n")
+            npcshrc.write("export NPCSH_MODEL='llama3.2'\n")
+            npcshrc.write("export NPCSH_API_URL=''")
             npcshrc.write("export NPCSH_DB_PATH='~/npcsh_history.db'\n")
     return npcshrc_path
+
+
 import os
 import nltk
 
@@ -377,10 +340,11 @@ import nltk
 # Function to check and download NLTK data if necessary
 def ensure_nltk_punkt():
     try:
-        nltk.data.find('tokenizers/punkt')
+        nltk.data.find("tokenizers/punkt")
     except LookupError:
         print("Downloading NLTK 'punkt' tokenizer...")
-        nltk.download('punkt')
+        nltk.download("punkt")
+
 
 def load_all_files(directory, extensions=None):
     """
@@ -393,8 +357,20 @@ def load_all_files(directory, extensions=None):
     text_data = {}
     if extensions is None:
         # Default to common text file extensions
-        extensions = ['.txt', '.md', '.py', '.java', '.c', '.cpp', '.html', 
-                      '.css', '.js','.ts', '.tsx', '.npc' ]
+        extensions = [
+            ".txt",
+            ".md",
+            ".py",
+            ".java",
+            ".c",
+            ".cpp",
+            ".html",
+            ".css",
+            ".js",
+            ".ts",
+            ".tsx",
+            ".npc",
+        ]
         # '.json', '.yaml', '.yml', '.xml', '.csv', '.log' ?
 
     # Walk through all subdirectories and files
@@ -404,7 +380,9 @@ def load_all_files(directory, extensions=None):
             if any(filename.endswith(ext) for ext in extensions):
                 file_path = os.path.join(root, filename)
                 try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
+                    with open(
+                        file_path, "r", encoding="utf-8", errors="ignore"
+                    ) as file:
                         text_data[file_path] = file.read()
                 except Exception as e:
                     print(f"Could not read file {file_path}: {e}")
@@ -415,7 +393,9 @@ def load_all_files(directory, extensions=None):
 import numpy as np
 
 
-def rag_search(query, text_data, embedding_model, text_data_embedded=None, similarity_threshold=0.2):
+def rag_search(
+    query, text_data, embedding_model, text_data_embedded=None, similarity_threshold=0.2
+):
     """
     Retrieve lines from documents that are relevant to the query.
 
@@ -432,23 +412,22 @@ def rag_search(query, text_data, embedding_model, text_data_embedded=None, simil
 
     for filename, content in text_data.items():
         # Split content into lines
-        lines = content.split('\n')
+        lines = content.split("\n")
         if not lines:
             continue
         # Compute embeddings for each line
         if text_data_embedded is None:
-
             line_embeddings = embedding_model.encode(lines, convert_to_tensor=True)
         else:
             line_embeddings = text_data_embedded[filename]
         # Compute cosine similarities
         cosine_scores = util.cos_sim(query_embedding, line_embeddings)[0].cpu().numpy()
-        
+
         # Find indices of lines above the similarity threshold
-        print('most similar', np.max(cosine_scores))
-        print('most similar doc', lines[np.argmax(cosine_scores)])
+        ##print("most similar", np.max(cosine_scores))
+        ##print("most similar doc", lines[np.argmax(cosine_scores)])
         relevant_line_indices = np.where(cosine_scores >= similarity_threshold)[0]
-        
+
         for idx in relevant_line_indices:
             idx = int(idx)  # Ensure idx is an integer
             # Get context lines (±10 lines)
@@ -456,8 +435,9 @@ def rag_search(query, text_data, embedding_model, text_data_embedded=None, simil
             end_idx = min(len(lines), idx + 11)  # +11 because end index is exclusive
             snippet = "\n".join(lines[start_idx:end_idx])
             results.append((filename, snippet))
-    print('results', results)
+    # print("results", results)
     return results
+
 
 def add_npcshrc_to_shell_config():
     config_file = get_shell_config_file()
@@ -477,7 +457,9 @@ def setup_npcsh_config():
     ensure_npcshrc_exists()
     add_npcshrc_to_shell_config()
 
-from sentence_transformers import  util
+
+from sentence_transformers import util
+
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
     # its a yaml filedef load_npc(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
@@ -499,7 +481,8 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         restrictions = npc_data.get("restrictions", [])
         model = npc_data.get("model", os.environ.get("NPCSH_MODEL", "phi3"))
         provider = npc_data.get("provider", os.environ.get("NPCSH_PROVIDER", "ollama"))
-
+        api_url = npc_data.get("api_url", os.environ.get("NPCSH_API_URL", None))
+        api_url = api_url if len(api_url) > 0 else None
         # Initialize and return the NPC object
         return NPC(
             name,
@@ -509,6 +492,7 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
             restrictions=restrictions,
             model=model,
             provider=provider,
+            api_url=api_url,
         )
 
     except FileNotFoundError:
@@ -603,7 +587,7 @@ def initialize_base_npcs_if_needed(db_path):
     # Check if base NPCs are already initialized
     cursor.execute("SELECT COUNT(*) FROM compiled_npcs")
     count = cursor.fetchone()[0]
-    print(count)
+    # print(count)
     if count == 0:
         # Get the path to the npc_profiles directory
         current_file = os.path.abspath(__file__)
