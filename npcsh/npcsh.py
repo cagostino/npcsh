@@ -55,7 +55,6 @@ from .helpers import (
 )
 from sentence_transformers import SentenceTransformer, util
 
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 from .npc_compiler import NPCCompiler, NPC
 from colorama import Fore, Back, Style
 import warnings
@@ -185,7 +184,7 @@ def execute_command(
     command_history,
     db_path,
     npc_compiler,
-    embedding_model,
+    embedding_model=None,
     current_npc=None,
     text_data=None,
     text_data_embedded=None,
@@ -198,6 +197,9 @@ def execute_command(
     # print(command)
     if text_data is not None:
         try:
+            if embedding_model is None:
+                embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+            
     `        retrieved_docs = rag_search(
                 command, text_data, embedding_model, text_data_embedded=text_data_embedded
             )
