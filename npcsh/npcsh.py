@@ -199,14 +199,16 @@ def execute_command(
         try:
             if embedding_model is None:
                 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-
-        `        retrieved_docs = rag_search(
-                    command, text_data, embedding_model, text_data_embedded=text_data_embedded
+                retrieved_docs = rag_search(
+                    command,
+                    text_data,
+                    embedding_model,
+                    text_data_embedded=text_data_embedded,
                 )
         except Exception as e:
             print(f"Error searching text data: {str(e)}")
             retrieved_docs = None
-`    else:
+    else:
         retrieved_docs = None
 
     # print(retrieved_docs)
