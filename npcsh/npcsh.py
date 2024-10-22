@@ -195,21 +195,24 @@ def execute_command(
     # Extract NPC from command
     db_conn = sqlite3.connect(db_path)
     # print(command)
+
+    # Initialize retrieved_docs to None at the start
+    retrieved_docs = None
+
+    # Only try RAG search if text_data exists
     if text_data is not None:
         try:
             if embedding_model is None:
                 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-                retrieved_docs = rag_search(
-                    command,
-                    text_data,
-                    embedding_model,
-                    text_data_embedded=text_data_embedded,
-                )
+            retrieved_docs = rag_search(
+                command,
+                text_data,
+                embedding_model,
+                text_data_embedded=text_data_embedded,
+            )
         except Exception as e:
             print(f"Error searching text data: {str(e)}")
             retrieved_docs = None
-    else:
-        retrieved_docs = None
 
     # print(retrieved_docs)
     if current_npc is None:
@@ -542,12 +545,20 @@ def main():
     # Load all text files from the directory recursively
     text_data = load_all_files(text_data_directory)
     # embed all the text_data
-    text_data_embedded = {
-        filename: embedding_model.encode(
-            text_data[filename], convert_to_tensor=True, show_progress_bar=False
-        )
-        for filename in text_data
-    }
+
+    try:
+        # Load the SentenceTransformer model
+        embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        # Embed all the text data
+        text_data_embedded = {
+            filename: embedding_model.encode(
+                text_data[filename], convert_to_tensor=True, show_progress_bar=False
+            )
+            for filename in text_data
+        }
+    except Exception as e:
+        print(f"Error embedding text data: {str(e)}")
+        text_data_embedded = None
 
     if not is_npcsh_initialized():
         print("Initializing NPCSH...")
