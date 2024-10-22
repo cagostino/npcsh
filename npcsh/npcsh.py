@@ -75,10 +75,6 @@ import json
 import pandas as pd
 import numpy as np
 
-from tqdm import tqdm
-
-tqdm.disable = True  # Disable tqdm globally
-
 
 def get_file_color(filepath):
     if os.path.isdir(filepath):
@@ -201,10 +197,14 @@ def execute_command(
     db_conn = sqlite3.connect(db_path)
     # print(command)
     if text_data is not None:
-        retrieved_docs = rag_search(
-            command, text_data, embedding_model, text_data_embedded=text_data_embedded
-        )
-    else:
+        try:
+    `        retrieved_docs = rag_search(
+                command, text_data, embedding_model, text_data_embedded=text_data_embedded
+            )
+        except Exception as e:
+            print(f"Error searching text data: {str(e)}")
+            retrieved_docs = None
+`    else:
         retrieved_docs = None
 
     # print(retrieved_docs)
