@@ -482,7 +482,6 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         model = npc_data.get("model", os.environ.get("NPCSH_MODEL", "phi3"))
         provider = npc_data.get("provider", os.environ.get("NPCSH_PROVIDER", "ollama"))
         api_url = npc_data.get("api_url", os.environ.get("NPCSH_API_URL", None))
-        api_url = api_url if len(api_url) > 0 else None
         # Initialize and return the NPC object
         return NPC(
             name,
