@@ -188,6 +188,7 @@ def execute_command(
     current_npc=None,
     text_data=None,
     text_data_embedded=None,
+    messages = None
 ):
     subcommands = []
     output = ""
@@ -230,7 +231,12 @@ def execute_command(
     # print(command, 'command', len(command), len(command.strip()))
 
     if len(command.strip()) == 0:
-        return output
+        return {'messages': messages,
+                'output':output}
+    if messages is None:
+        messages = []
+    messages.append({"role": "user", "content": command})  # Add user message
+    #print(messages)
     if command.startswith("/"):
         command = command[1:]
         log_action("Command Executed", command)
@@ -304,10 +310,12 @@ def execute_command(
                     message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
                 else:  # This handles both LLM responses and error messages (both strings)
                     message = output
-                return message  # Return the message
+                return {'messages': messages,
+                               'output': message}  # Return the message
             else:  # Handle the case where capture_screenshot returns None
                 print("Screenshot capture failed.")
-                return None  # Return None to indicate failure
+                return {'messages': messages,
+                               'output': None  }# Return None to indicate failure
         elif command_name == "help":  # New help command
             output = """
             Available commands:
@@ -330,7 +338,9 @@ def execute_command(
             Bash commands and other programs can be executed directly.
             """
             print(output)  # Print the help message
-            return  # Don't add /help to command history
+            return  {'messages': messages,
+                               'output': None}
+                                   # Don't add /help to command history
 
         elif command_name == "whisper":
             output = enter_whisper_mode(command_history, npc=npc)
@@ -349,10 +359,14 @@ def execute_command(
             if len(parts) == 3 and parts[1] in ["model", "provider", "db_path"]:
                 output = execute_set_command(parts[1], parts[2])
             else:
-                return "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' "
+                return {'messages': messages,
+                               'output': "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' "}
         elif command_name == "sample":
             output = execute_llm_question(
-                command, command_history, npc=npc, retrieved_docs=retrieved_docs
+                command, 
+                command_history,
+                npc=npc, 
+                retrieved_docs=retrieved_docs
             )
         elif command_name == "spool" or command_name == "sp":
             inherit_last = 0
@@ -361,11 +375,13 @@ def execute_command(
                     try:
                         inherit_last = int(part.split("=")[1])
                     except ValueError:
-                        return "Error: inherit_last must be an integer"
+                        return {'messages': messages,
+                               'output': "Error: inherit_last must be an integer"}
                     break
 
             output = enter_spool_mode(command_history, inherit_last, npc=npc)
-            return output
+            return {'messages': output['messages'],
+                               'output':output}
 
         else:
             output = f"Unknown command: {command_name}"
@@ -390,8 +406,10 @@ def execute_command(
             output = execute_java(code)
         else:
             output = check_llm_command(
-                command, command_history, npc=npc, retrieved_docs=retrieved_docs
+                command, command_history, npc=npc, retrieved_docs=retrieved_docs, 
+                messages=messages
             )
+            
     else:
         # Check if it's a bash command
         # print(command)
@@ -404,16 +422,19 @@ def execute_command(
                 try:
                     command_parts = shlex.split(command)
                 except ValueError:
-                    return "Error: Unmatched quotation in command"
+                    return {'messages': messages,
+                               'output':"Error: Unmatched quotation in command"}
             else:
-                return f"Error: {str(e)}"
+                return {'messages': messages,
+                               'output':f"Error: {str(e)}"}
 
         if command_parts[0] in interactive_commands:
             print(f"Starting interactive {command_parts[0]} session...")
             return_code = start_interactive_session(
                 interactive_commands[command_parts[0]]
             )
-            return f"Interactive {command_parts[0]} session ended with return code {return_code}"
+            return {'messages': messages,
+                               'output':f"Interactive {command_parts[0]} session ended with return code {return_code}"}
 
         elif command_parts[0] == "cd":
             try:
@@ -422,15 +443,19 @@ def execute_command(
                 else:
                     new_dir = os.path.expanduser("~")
                 os.chdir(new_dir)
-                return f"Changed directory to {os.getcwd()}"
+                return {'messages': messages,
+                               'output':f"Changed directory to {os.getcwd()}"}
             except FileNotFoundError:
-                return f"Directory not found: {new_dir}"
+                return {'messages': messages,
+                               'output':f"Directory not found: {new_dir}"}
             except PermissionError:
-                return f"Permission denied: {new_dir}"
+                return {'messages': messages,
+                               'output':f"Permission denied: {new_dir}"}
 
         elif command_parts[0] in BASH_COMMANDS:
             if command_parts[0] in TERMINAL_EDITORS:
-                return open_terminal_editor(command)
+                return {'messages': messages,
+                               'output':  open_terminal_editor(command)}
             elif command.startswith("open "):
                 try:
                     path_to_open = os.path.expanduser(
@@ -481,7 +506,7 @@ def execute_command(
 
         else:
             output = check_llm_command(
-                command, command_history, npc=npc, retrieved_docs=retrieved_docs
+                command, command_history, npc=npc, retrieved_docs=retrieved_docs, messages = messages
             )
 
     # Add command to history
@@ -490,8 +515,14 @@ def execute_command(
     # Print the output
     # if output:
     #    print(output)
+    if isinstance(output, dict):
+        response = output.get("output", "")
+        new_messages = output.get("messages", None)
+        if new_messages is not None:
+            messages = new_messages
+        output = response
 
-    return output
+    return {'messages': messages, 'output': output}
 
 
 def setup_readline():
@@ -573,6 +604,7 @@ def main():
     print("Welcome to npcsh!")
 
     current_npc = None
+    messages = None
     while True:
         try:
             if current_npc:
@@ -600,16 +632,26 @@ def main():
                 embedding_model,
                 current_npc,
                 text_data=text_data,
-                text_data_embedded=text_data_embedded,  # Pass text_data to execute_command
+                text_data_embedded=text_data_embedded,
+                messages=messages,
             )
 
+            # Update messages with the new conversation history
+            messages = result.get('messages', messages)
+
+            # Optionally, print the assistant's response
+            output = result.get('output')
+            #if output:
+            #    print(output)
+                
             # Optionally, print the result
             if (
-                result is not None
+                result['output'] is not None
                 and not user_input.startswith("/")
                 and not isinstance(result, dict)
             ):
                 print("final", result)
+
 
         except (KeyboardInterrupt, EOFError):
             if current_npc:

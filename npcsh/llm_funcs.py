@@ -168,14 +168,54 @@ def get_openai_conversation(messages, model, npc=None, api_key=None, **kwargs):
         )
 
         response_message = completion.choices[0].message
-
         messages.append({"role": "assistant", "content": response_message.content})
+        #print(messages)
 
         return messages
 
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
-
+def get_openai_like_conversation(messages, model, npc=None, api_url=None, api_key=None, **kwargs):
+    try:
+        if api_url is None:
+            raise ValueError("api_url is required for openai-like provider")
+        
+        system_message = get_system_message(npc) if npc else ""
+        messages_copy = messages.copy()
+        if messages_copy[0]["role"] != "system":
+            messages_copy.insert(0, {"role": "system", "content": system_message})
+        last_user_message = None
+        for msg in reversed(messages_copy):
+            if msg["role"] == "user":
+                last_user_message = msg["content"]
+                break
+        if last_user_message is None:
+            raise ValueError("No user message found in the conversation history.")
+        request_data = {
+            "model": model,
+            "messages": messages_copy,
+            **kwargs,  # Include any additional keyword arguments
+        }
+        headers = {"Content-Type": "application/json"}  # Set Content-Type header
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        response = requests.post(api_url, headers=headers, json=request_data)
+        response.raise_for_status()
+        response_json = response.json()
+        llm_response = (
+            response_json.get("choices", [{}])[0].get("message", {}).get("content")
+        )
+        if llm_response is None:
+            raise ValueError(
+                "Invalid response format from the API. Could not extract 'choices[0].message.content'."
+            )
+        messages_copy.append({"role": "assistant", "content": llm_response})
+        return messages_copy
+    except requests.exceptions.RequestException as e:
+        return f"Error making API request: {e}"
+    except Exception as e:
+        return f"Error interacting with API: {e}"
+    
 
 def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs):
     try:
@@ -957,7 +997,12 @@ def execute_llm_command(
             Use these to help inform your decision.
             {context}
             """
-
+        if len(messages)>0:
+            prompt+=f"""
+            The following messages have been exchanged between the user and the assistant:
+            {messages}
+            """
+            
         response = get_llm_response(
             prompt,
             model=model,
@@ -967,10 +1012,9 @@ def execute_llm_command(
             format="json",
         )
 
-        if messages is not None:
-            messages = response.get("messages", [])
 
         llm_response = response.get("response", {})
+        messages.append({"role": "assistant", "content": llm_response})
         # print(f"LLM response type: {type(llm_response)}")
         # print(f"LLM response: {llm_response}")
 
@@ -1016,6 +1060,11 @@ def execute_llm_command(
 
                 {context}
                 """
+            if len(messages)>0:
+                prompt+=f"""
+                The following messages have been exchanged between the user and the assistant:
+                {messages}
+                """
 
             response = get_llm_response(
                 prompt,
@@ -1025,15 +1074,13 @@ def execute_llm_command(
                 messages=[],
             )
 
-            if messages is not None:
-                messages = response.get("messages", [])
+            messages.append({"role": "assistant", "content": response.get("response", "")})
             output = response.get("response", "")
 
             render_markdown(output)
             command_history.add(command, subcommands, output, location)
 
-            return output
-
+            return {'messages': messages, 'output': output}
         except subprocess.CalledProcessError as e:
             print(f"Command failed with error:")
             print(e.stderr)
@@ -1063,9 +1110,6 @@ def execute_llm_command(
                 messages=messages,
             )
 
-            if messages is not None:
-                messages = fix_suggestion.get("messages", [])
-
             fix_suggestion_response = fix_suggestion.get("response", {})
 
             try:
@@ -1090,8 +1134,7 @@ def execute_llm_command(
         attempt += 1
 
     command_history.add(command, subcommands, "Execution failed", location)
-    return "Max attempts reached. Unable to execute the command successfully."
-
+    return  {'messages': messages, 'output': "Max attempts reached. Unable to execute the command successfully."}
 
 def check_llm_command(
     command,
@@ -1111,8 +1154,6 @@ def check_llm_command(
     context = ""
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
-            # print(f"Document: {filename}")
-            # print(content)
             context += f"Document: {filename}\n{content}\n\n"
         context = f"Refer to the following documents for context:\n{context}\n\n"
 
@@ -1143,6 +1184,8 @@ def check_llm_command(
     }}
     The types of the outputs must strictly adhere to these requirements.
     Use these to hone your output and only respond with the actual filled-in json.
+    
+    You should only try it if you know for certain that the query is an executable one. otherwise, stay safe and assume it is just a question.
     Do not return any extra information. Respond only with the json.
     """
     if len(context) > 0:
@@ -1157,40 +1200,33 @@ def check_llm_command(
         model=model,
         provider=provider,
         npc=npc,
-        messages=messages,
         format="json",
     )
-    # import pdb
-
-    # pdb.set_trace()
-    # print(response)
-    if messages is not None:
-        messages = response.get("messages", None)
-    response = response.get("response", None)
+    response_content = response.get("response", {})
+    messages.extend(response.get("messages", []))
 
     # Handle potential errors and non-JSON responses
-    if not isinstance(response, dict):
-        print(f"Error: Expected a dictionary, but got {type(response)}")
+    if not isinstance(response_content, dict):
+        print(f"Error: Expected a dictionary, but got {type(response_content)}")
         return "Error: Invalid response from LLM"
-    if "error" in response:
-        print(f"LLM Error: {response['error']}")
-        return f"LLM Error: {response['error']}"
+    if "error" in response_content:
+        print(f"LLM Error: {response_content['error']}")
+        return f"LLM Error: {response_content['error']}"
 
-    # Check for the 'is_command' key, handle cases where it's missing
-    if "is_command" not in response:
+    if "is_command" not in response_content:
         print("Error: 'is_command' key missing in LLM response")
         return "Error: 'is_command' key missing in LLM response"
-    if response["is_command"] == "yes":
+    if response_content["is_command"] == "yes":
         cmd_stt = "a command"
     else:
         cmd_stt = "a question"
 
     print(f"The request is {cmd_stt}.")
 
-    output = response
+    output = response_content
     command_history.add(command, [], output, location)
 
-    if response["is_command"] == "yes":
+    if response_content["is_command"] == "yes":
         return execute_llm_command(
             command,
             command_history,
@@ -1201,16 +1237,127 @@ def check_llm_command(
             retrieved_docs=retrieved_docs,
         )
     else:
+        # Return the result from execute_llm_question
         return execute_llm_question(
             command,
             command_history,
             model=model,
             provider=provider,
-            # messages=messages,
+            messages=messages,
             npc=npc,
             retrieved_docs=retrieved_docs,
         )
+def check_llm_command(
+    command,
+    command_history,
+    model=npcsh_model,
+    messages=None,
+    provider=npcsh_provider,
+    npc=None,
+    retrieved_docs=None,
+    n_docs=5,
+):
+    location = os.getcwd()
 
+    if messages is None:
+        messages = []
+    # Create context from retrieved documents
+    context = ""
+    if retrieved_docs:
+        for filename, content in retrieved_docs[:n_docs]:
+            context += f"Document: {filename}\n{content}\n\n"
+        context = f"Refer to the following documents for context:\n{context}\n\n"
+
+    prompt = f"""
+    A user submitted this query: {command}
+    Is this query a specific request for a task to be accomplished?
+      
+    In considering how to answer this, consider whether it is 
+        something that can be answered via a bash command on the users computer? 
+        Assume that the user has access to internet 
+        and basic command line tools like curl, wget, 
+        etc so you are not limited to just the local machine.
+        Additionally, the user may have access to a local database so
+        you can use sqlite3 to query the database.
+
+    If so, respond with a JSON object containing the key "is_command" with the value "yes".
+
+    Provide an explanation in the json key "explanation" .
+
+    You must reply with valid json and nothing else. Do not include any markdown formatting.
+    The format and requirements of the output are as follows:
+    {{
+        "is_command": {{"type": "string", 
+                       "enum": ["yes", "no"],
+                        "description": "whether the query is a command"}},
+        "explanation": {{"type": "string",
+                        "description": "a brief explanation of why the query is or is not a command"}}
+    }}
+    The types of the outputs must strictly adhere to these requirements.
+    Use these to hone your output and only respond with the actual filled-in json.
+    
+    You should only try it if you know for certain that the query is an executable one. otherwise, stay safe and assume it is just a question.
+    Do not return any extra information. Respond only with the json.
+    """
+    if len(context) > 0:
+        prompt += f"""
+        What follows is the context of the text files in the user's directory that are potentially relevant to their request
+        Use these to help inform your decision.
+        {context}
+        """
+
+    response = get_llm_response(
+        prompt,
+        model=model,
+        provider=provider,
+        npc=npc,
+        format="json",
+    )
+    response_content = response.get("response", {})
+    # messages.extend(response.get("messages", []))
+
+    # Handle potential errors and non-JSON responses
+    if not isinstance(response_content, dict):
+        print(f"Error: Expected a dictionary, but got {type(response_content)}")
+        return "Error: Invalid response from LLM"
+    if "error" in response_content:
+        print(f"LLM Error: {response_content['error']}")
+        return f"LLM Error: {response_content['error']}"
+
+    if "is_command" not in response_content:
+        print("Error: 'is_command' key missing in LLM response")
+        return "Error: 'is_command' key missing in LLM response"
+    if response_content["is_command"] == "yes":
+        cmd_stt = "a command"
+    else:
+        cmd_stt = "a question"
+
+    print(f"The request is {cmd_stt}.")
+
+    output = response_content
+    command_history.add(command, [], output, location)
+
+    if response_content["is_command"] == "yes":
+        return execute_llm_command(
+            command,
+            command_history,
+            model=model,
+            provider=provider,
+            messages=messages,
+            npc=npc,
+            retrieved_docs=retrieved_docs,
+        )
+    else:
+        # Return the result from execute_llm_question
+        return execute_llm_question(
+            command,
+            command_history,
+            model=model,
+            provider=provider,
+            messages=messages,
+            npc=npc,
+            retrieved_docs=retrieved_docs,
+        )
 
 def execute_llm_question(
     command,
@@ -1224,10 +1371,10 @@ def execute_llm_question(
 ):
     location = os.getcwd()
     context = ""
+    if messages is None:
+        messages = []
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
-            # print(f"Document: {filename}")
-            # print(content)
             context += f"Document: {filename}\n{content}\n\n"
         context = f"Refer to the following documents for context:\n{context}\n\n"
         command = f"""{command}\n       
@@ -1238,20 +1385,24 @@ def execute_llm_question(
     {context}"""
 
     # Use get_conversation if messages are provided
-    if messages:
+    if len(messages) > 0:
+        messages.append({"role": "user", "content": command})
         response = get_conversation(messages, model=model, provider=provider, npc=npc)
-
-        if isinstance(response, str) and "Error" in response:  # Check for errors
+        if isinstance(response, str) and "Error" in response:
             output = response
-        elif (
-            isinstance(response, list) and len(response) > 0
-        ):  # Check for valid response
-            output = response[-1]["content"]  # Extract assistant's reply
+        elif isinstance(response, list) and len(response) > 0:
+            messages = response  # Update messages with the new conversation
+            output = response[-1]["content"]
         else:
             output = "Error: Invalid response from conversation function"
-        # print(response)
 
-    else:  # Use get_llm_response for single turn queries
+        render_markdown(output)
+        command_history.add(command, [], output, location)
+        #print('CONVERSATION QUESTION OUTPUT:', output)
+        #print('messages question:', messages)
+        return {'messages': messages, 'output': output}
+    else:
+        # For single-turn queries
         response = get_llm_response(
             command,
             model=model,
@@ -1259,8 +1410,9 @@ def execute_llm_question(
             npc=npc,
             messages=messages,
         )
-        # print(response["response"])
-        output = response
-    render_markdown(output["response"])
-    command_history.add(command, [], output, location)
-    return response  # return the full conversation
+        output = response.get('response', '')
+        messages = response.get('messages', messages)
+        render_markdown(output)
+
+        command_history.add(command, [], output, location)
+        return {'messages': messages, 'output': output}
