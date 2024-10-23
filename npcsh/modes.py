@@ -551,9 +551,9 @@ def enter_spool_mode(command_history, inherit_last=0, npc=None):
             print("\nExiting spool mode.")
             break
 
-    return "\n".join(
-        [msg["content"] for msg in spool_context if msg["role"] == "assistant"]
-    )
+    return {'messages': spool_context, 
+            "output":"\n".join( [msg["content"] for msg in spool_context if msg["role"] == "assistant"])
+                               }
 
 
 def initial_table_print(cursor):
