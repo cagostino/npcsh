@@ -345,16 +345,19 @@ def ensure_nltk_punkt():
         print("Downloading NLTK 'punkt' tokenizer...")
         nltk.download("punkt")
 
-
-def load_all_files(directory, extensions=None):
+def load_all_files(directory, extensions=None, depth=1):
     """
-    Recursively load all files from the given directory and its subdirectories.
+    Recursively load all files from the given directory up to a specified depth.
 
     :param directory: The root directory to start searching from.
     :param extensions: A list of file extensions to include. If None, all files are included.
+    :param depth: The maximum depth to recurse into subdirectories.
     :return: A dictionary with file paths as keys and file contents as values.
     """
     text_data = {}
+    if depth < 1:
+        return text_data  # Reached the specified depth, stop recursion.
+
     if extensions is None:
         # Default to common text file extensions
         extensions = [
@@ -370,22 +373,29 @@ def load_all_files(directory, extensions=None):
             ".ts",
             ".tsx",
             ".npc",
+            # Add more extensions if needed
         ]
-        # '.json', '.yaml', '.yml', '.xml', '.csv', '.log' ?
 
-    # Walk through all subdirectories and files
-    for root, dirs, files in os.walk(directory):
-        for filename in files:
-            # Check if the file extension is in the list of extensions
-            if any(filename.endswith(ext) for ext in extensions):
-                file_path = os.path.join(root, filename)
+    try:
+        # List all entries in the directory
+        entries = os.listdir(directory)
+    except Exception as e:
+        print(f"Could not list directory {directory}: {e}")
+        return text_data
+
+    for entry in entries:
+        path = os.path.join(directory, entry)
+        if os.path.isfile(path):
+            if any(path.endswith(ext) for ext in extensions):
                 try:
-                    with open(
-                        file_path, "r", encoding="utf-8", errors="ignore"
-                    ) as file:
-                        text_data[file_path] = file.read()
+                    with open(path, "r", encoding="utf-8", errors="ignore") as file:
+                        text_data[path] = file.read()
                 except Exception as e:
-                    print(f"Could not read file {file_path}: {e}")
+                    print(f"Could not read file {path}: {e}")
+        elif os.path.isdir(path):
+            # Recurse into subdirectories, decreasing depth by 1
+            subdir_data = load_all_files(path, extensions, depth=depth - 1)
+            text_data.update(subdir_data)
 
     return text_data
 
