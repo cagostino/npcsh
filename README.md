@@ -1,4 +1,4 @@
- ![npcsh logo with sibiji the spider](npcsh.jpg)                                                                                                 
+ ![npcsh logo with sibiji the spider](npcsh.png)                                                                                                 
 
 
 # npcsh
