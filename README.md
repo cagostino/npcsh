@@ -1,4 +1,6 @@
- ![npcsh logo with sibiji the spider](npcsh.png)                                                                                                 
+<div align="center">
+ ![npcsh logo with sibiji the spider](npcsh.png)                                              </div>                  
+                                 
 
 
 # npcsh
