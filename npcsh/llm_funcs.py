@@ -492,13 +492,15 @@ ea.append({"role": "user", "content": "then can you help me design something rea
 """
 import base64  # For image encoding
 
+import base64
+import json
+import requests
 
 def get_ollama_response(
     prompt, model, image=None, npc=None, format=None, messages=None, **kwargs
 ):
     try:
         url = "http://localhost:11434/api/generate"
-
         system_message = get_system_message(npc) if npc else ""
         full_prompt = f"{system_message}\n\n{prompt}"
         data = {
@@ -506,34 +508,47 @@ def get_ollama_response(
             "prompt": full_prompt,
             "stream": False,
         }
-        if image:  # Add image to the request if provided
-            with open(image["file_path"], "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
-                data["image"] = base64_image
 
-        if format is not None:
-            data["format"] = format
-
-        response = requests.post(url, json=data)
-        response.raise_for_status()
-        llm_response = json.loads(response.text)["response"]
-        items_to_return = {"response": llm_response}
-        if messages is not None:
-            messages.append({"role": "assistant", "content": llm_response})
-            items_to_return["messages"] = messages
-
-        if format == "json":
+        if image:
             try:
-                items_to_return["response"] = json.loads(response.text)["response"]
-                return items_to_return
-            except json.JSONDecodeError:
-                print(f"Warning: Expected JSON response, but received: {llm_response}")
-                return {"error": "Invalid JSON response"}
-        else:
-            return items_to_return
-    except Exception as e:
-        return f"Error interacting with LLM: {e}"
+                image_path = image["file_path"]
+                with open(image_path, "rb") as image_file:
+                    image_data = image_file.read()
+                    base64_image = base64.b64encode(image_data).decode("utf-8")
+                    data["images"] = [base64_image]
+            except FileNotFoundError:
+                return {"error": f"Image file not found: {image_path}"}
+            except Exception as e:
+                return {"error": f"Error processing image: {e}"}
 
+        try:
+            response = requests.post(url, json=data)
+            response.raise_for_status()
+            response_data = response.json() # Directly parse the JSON response
+            llm_response = response_data["response"]
+            items_to_return = {"response": llm_response}
+            if messages is not None:
+                messages.append({"role": "assistant", "content": llm_response})
+                items_to_return["messages"] = messages
+
+            if format == "json":
+                try:
+                    items_to_return["response"] = response_data["response"]  # Already parsed
+                    return items_to_return
+                except KeyError: # Use KeyError here since response is already parsed
+                    print(f"Warning: 'response' key not found in JSON: {response_data}")
+                    return {"error": "Invalid JSON response"}
+            else:
+                return items_to_return
+        except requests.exceptions.RequestException as e:
+            return {"error": f"Error making request to Ollama API: {e}"}
+        except json.JSONDecodeError as e:
+            return {"error": f"Invalid JSON response from Ollama API: {e}"}
+        except Exception as e:
+            return {"error": f"Unexpected error during API interaction: {e}"} # Catch any other errors
+
+    except Exception as e:
+        return {"error": f"Error outside of main try block: {e}"} # Very unlikely, but good practice
 
 def get_openai_like_response(
     prompt,
@@ -775,6 +790,7 @@ def get_llm_response(
     prompt,
     provider=npcsh_provider,
     model=npcsh_model,
+    image = None,
     npc=None,
     messages=None,
     api_url=None,
@@ -793,22 +809,51 @@ def get_llm_response(
     else:
         if provider is None and model is None:
             provider = "ollama"
-            model = "llama3.2"
+            if image is not None:            
+                model = 'llava'
+            else:
+                model = "llama3.2"    
         elif provider is None and model is not None:
             provider = lookupprovider(model)
     if provider == "ollama":
         if model is None:
-            model = "llama3.2"
-        return get_ollama_response(prompt, model, npc=npc, messages=messages, **kwargs)
+            if image is not None:
+                model = 'llava'
+            else:
+                model = "llama3.2"
+        elif image is not None and model not in ['x/llama3.2-vision', 
+                                                 'llava',
+                                                 'llava-llama3', 
+                                                 'bakllava', 
+                                                 'moondream', 
+                                                 'llava-phi3', 
+                                                 'minicpm-v', 
+                                                 'hhao/openbmb-minicpm-llama3-v-2_5', 
+                                                 'aiden_lu/minicpm-v2.6', 
+                                                 'xuxx/minicpm2.6', 
+                                                 'benzie/llava-phi-3',
+                                                 'mskimomadto/chat-gph-vision', 
+                                                 'xiayu/openbmb-minicpm-llama3-v-2_5',
+                                                 '0ssamaak0/xtuner-llava', 
+                                                 'srizon/pixie', 
+                                                 'jyan1/paligemma-mix-224', 
+                                                 'qnguyen3/nanollava', 
+                                                 'knoopx/llava-phi-2', 
+                                                 'nsheth/llama-3-lumimaid-8b-v0.1-iq-imatrix', 
+                                                 'bigbug/minicpm-v2.5',
+                                                 ]:
+            model = 'llava'
+        print(model)
+        return get_ollama_response(prompt, model, npc=npc, messages=messages, image = image, **kwargs)
     elif provider == "openai":
         if model is None:
             model = "gpt-4o-mini"
-        return get_openai_response(prompt, model, npc=npc, messages=messages, **kwargs)
+        return get_openai_response(prompt, model, npc=npc, messages=messages, image=image, **kwargs)
     elif provider == "openai-like":
         if api_url is None:
             raise ValueError("api_url is required for openai-like provider")
         return get_openai_like_response(
-            prompt, model, api_url, npc=npc, messages=messages, **kwargs
+            prompt, model, api_url, npc=npc, messages=messages, image=image, **kwargs
         )
 
     elif provider == "anthropic":

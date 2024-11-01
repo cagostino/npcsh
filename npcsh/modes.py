@@ -80,11 +80,11 @@ def enter_whisper_mode(command_history, npc=None):
         )  # Use check_llm_command
         # print(type(llm_response))
         if isinstance(llm_response, dict):
-            print(f"{llm_name}: {llm_response['response']}")  # Print assistant's reply
+            print(f"{llm_name}: {llm_response['output']}")  # Print assistant's reply
             whisper_output.append(
-                f"{llm_name}: {llm_response['response']}"
+                f"{llm_name}: {llm_response['output']}"
             )  # Add to output
-            speak_text(llm_response["response"])  # Speak assistant's reply
+            speak_text(llm_response["output"])  # Speak assistant's reply
         elif isinstance(llm_response, list) and len(llm_response) > 0:
             assistant_reply = messages[-1]["content"]
             print(f"{llm_name}: {assistant_reply}")  # Print assistant's reply
