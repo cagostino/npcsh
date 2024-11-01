@@ -6,8 +6,7 @@
 # npcsh
 
 
-Welcome to npcsh, the shell for interacting with NPCs (LLM-powered AI agents) and for coordinating actions and information between the NPCs. 
-
+Welcome to npcsh, the perfect tool for integrating AI into your workflows. npcsh provides users with the ability to interact with LLMs from the comfort of their terminal: no more switching windows to copy and paste inputs or outputs and being dragged down by the cost of context switching.
 npcsh is meant to be a drop-in replacement shell for any kind of bash/zsh/powershell and allows the user to directly operate their machine through the use of the LLM-powered shell.
 
 npcsh introduces a new paradigm of programming for LLMs: npcsh allows users to set up NPC profiles (a la npc_profile.npc) where a user sets the primary directive of the NPC, the tools they want the NPC to use, and other properties of the NPC. NPCs can interact with each other and their primary directives and properties make these relationships explicit through jinja references.
