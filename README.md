@@ -92,6 +92,15 @@ Built-in NPCs are NPCs that should offer broad utility to the user and allow the
 
 
 ## Other useful tools
+
+### Vixynt: your visual assistant
+
+Type 
+```npcsh
+/vixynt <your_prompt_here> 
+```
+to get a response from the diffusion model. Only dall-e-3 confirmed to work at the moment. Other model support to come.
+
 ### whisper mode
 type
 ```npcsh
