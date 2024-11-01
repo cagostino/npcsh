@@ -233,6 +233,7 @@ def analyze_image(
     if os.path.exists(file_path):
         image_info = {"filename": filename, "file_path": file_path}
 
+        
         if user_prompt:
             try:
                 response = get_llm_response(
