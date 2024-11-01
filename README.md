@@ -18,15 +18,20 @@ With npcsh, we can more seamlessly stick together complex workflows and data pro
 - ollama
 - python >3.10
 
-The default model is currently phi3. 
+The default model is currently llama3.2
 Download it by running
 ```
-ollama run phi3
+ollama run llama3.2
 ```
+Also any huggingface model can be used. when setting a model from there, use the full link to the model like `https://huggingface.co/caug37/TinyTim`.
 
-We support inference as well via openai and anthropic. To use them, set an ".env" file up in the folder where you are working and set the API keys there. 
 
-Eventually, we will add the ability to use any huggingface model.
+We support inference as well via openai and anthropic. To use them, set an ".env" file up in the folder where you are working and set the API keys there or set the environment variables in your shell. 
+
+```bash
+export OPENAI_API_KEY="your_openai_key"
+export ANTHROPIC_API_KEY="your_anthropic_key"
+```
 
 The user can change the default model by setting the environment variable `NPCSH_MODEL` in their ~/.npcshrc to the desired model name and to change the provider by setting the environment variable `NPCSH_PROVIDER` to the desired provider name.
 
