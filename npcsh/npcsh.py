@@ -16,6 +16,7 @@ from .llm_funcs import (
     render_markdown,
     execute_llm_command,
     execute_llm_question,
+    generate_image, 
     check_llm_command,
 )
 from .modes import (
@@ -274,6 +275,20 @@ def execute_command(
                     f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
                 )
                 print(output)
+        elif command.startswith("vixynt") or command.startswith("vix") or (command.startswith("v") and command[1] == " "):
+            # check if "filename=..." is in the command
+            filename = None
+            if "filename=" in command:
+                filename = command.split("filename=")[1].split()[0]                    
+                command = command.replace(f"filename={filename}", "").strip()
+            # Get user prompt about the image BY joining the rest of the arguments
+            user_prompt = " ".join(command.split()[1:])
+                
+            output = generate_image(
+                user_prompt,
+                npc=npc, 
+                filename=filename)
+            
         elif command.startswith("ots"):
             # check if there is a filename
             if len(command_parts) > 1:

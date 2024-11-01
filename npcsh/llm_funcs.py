@@ -20,6 +20,7 @@ import textwrap
 from rich.console import Console
 from rich.markdown import Markdown, CodeBlock
 
+from datetime import datetime
 
 class LeftAlignedCodeBlock(CodeBlock):
     def __init__(self, *args, **kwargs):
@@ -64,7 +65,111 @@ npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
+                                             
+                                                                            
+def generate_image_ollama(prompt, model):                                   
+    url = f'https://api.ollama.com/v1/models/{model}/generate'              
+    data = {'prompt': prompt}                                               
+    response = requests.post(url, json=data)                                
+                                                                            
+    if response.status_code == 200:                                         
+        return response.json().get('image_url')  # Assume 'image_url'       
+    else:                                                                   
+        raise Exception(f"Error: {response.status_code}, {response.text}")  
+                                                                            
+def generate_image_openai(prompt, model=None, api_key=None, size=None):        
+    if api_key is None:
+        api_key = os.environ["OPENAI_API_KEY"]
+    client = OpenAI(api_key=api_key)
+    if size is None:
+        size = "1024x1024"
+    if model is None:
+        model = "dall-e-2"
+    elif model not in ["dall-e-3", "dall-e-2"]:
+        
+        #raise ValueError(f"Invalid model: {model}")
+        print( f"Invalid model: {model}")
+        print("Switching to dall-e-3")
+        model = "dall-e-3"
+    image = client.images.generate(
+        model=model,
+        prompt=prompt,
+        n=1,
+        size=size
+    )
+    if image is not None:
+        print(image)
+        return image
+    
+                                                                            
+def generate_image_anthropic(prompt, model, api_key):                       
+    url = 'https://api.anthropic.com/v1/images/generate'                    
+    headers = {'Authorization': f'Bearer {api_key}'}                        
+    data = {'model': model, 'prompt': prompt}                               
+    response = requests.post(url, headers=headers, json=data)               
+                                                                            
+    if response.status_code == 200:                                         
+        return response.json().get('image_url')  # Assume 'image_url'       
+    else:                                                                   
+        raise Exception(f"Error: {response.status_code}, {response.text}")  
+def generate_image_openai_like(prompt, model, api_url, api_key):            
+    url = f'{api_url}/v1/images/generations'                                
+    headers = {'Authorization': f'Bearer {api_key}'}                        
+    data = {                                                                
+        'model': model,                                                     
+        'prompt': prompt,                                                   
+        'n': 1,                                                             
+        'size': '1024x1024'                                                 
+    }                                                                       
+    response = requests.post(url, headers=headers, json=data)               
+                                                                            
+    if response.status_code == 200:                                         
+        return response.json().get('data')[0].get('url')  # Assume the firs 
 
+    else:                                                                   
+        raise Exception(f"Error: {response.status_code}, {response.text}") 
+
+def generate_image(prompt,
+                   model=npcsh_model,
+                   provider=npcsh_provider,
+                   filename=None,
+                   npc=None):
+    #raise NotImplementedError("This function is not yet implemented.")
+
+    if npc is not None:
+        if npc.provider is not None:
+            provider = npc.provider
+        if npc.model is not None:
+            model = npc.model
+        if npc.api_url is not None:
+            api_url = npc.api_url
+    if filename is None:
+        # Generate a filename based on the prompt and the date time
+        filename = f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        
+    if provider == "ollama":
+        
+        image =  generate_image_ollama(prompt, model)
+    elif provider == "openai":
+        image = generate_image_openai(prompt, model, openai_api_key)
+    elif provider == "anthropic":
+        image = generate_image_anthropic(prompt, model, anthropic_api_key)
+    elif provider == "openai-like":
+        image = generate_image_openai_like(prompt, model, npc.api_url, openai_api_key)
+    #save image
+    if image is not None:
+        # image is at a private url
+        response = requests.get(image.data[0].url)
+        with open(filename, "wb") as file:
+            file.write(response.content)
+        from PIL import Image
+        img = Image.open(filename)
+        img.show()    
+        #console = Console()
+        #console.print(Image.from_path(filename))
+
+        return filename    
+    
 
 def get_system_message(npc):
     system_message = f"""
@@ -877,6 +982,7 @@ import pandas as pd
 def load_data(file_path, name):
     dataframes[name] = pd.read_csv(file_path)
     print(f"Data loaded as '{name}'")
+
 
 
 def execute_data_operations(
