@@ -1,4 +1,8 @@
+ ![npcsh logo with sibiji the spider](npcsh.jpg)                                                                                                 
+
+
 # npcsh
+
 
 Welcome to npcsh, the shell for interacting with NPCs (LLM-powered AI agents) and for coordinating actions and information between the NPCs. 
 

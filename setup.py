@@ -27,6 +27,8 @@ setup(
         "openai",
         "jinja2",
         "pandas",
+        "matplotlib", 
+        "IPython",
         "ollama",
         "requests",
         "markdown",
