@@ -23,7 +23,7 @@ Download it by running
 ```
 ollama run llama3.2
 ```
-Also any huggingface model can be used. when setting a model from there, use the full link to the model like `https://huggingface.co/caug37/TinyTim`.
+Also any Hugging Face model can be used. when setting a model from there, use the full link to the model like `https://huggingface.co/caug37/TinyTim`.
 
 
 We support inference as well via openai and anthropic. To use them, set an ".env" file up in the folder where you are working and set the API keys there or set the environment variables in your shell. 
