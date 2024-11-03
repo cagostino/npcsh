@@ -8,9 +8,63 @@ import pytest
 import json
 from npcsh.llm_funcs import (
     get_openai_response,
+    get_ollama_response,
     get_anthropic_response,
     get_openai_like_response,
+    generate_image_ollama,
+    generate_image_openai,
+    generate_image_anthropic,
+    generate_image_openai_like,
+    
 )
+                                                        
+# Sample example for `generate_image_ollama`                                
+def test_generate_image_ollama():                                           
+    prompt = "A scenic landscape"                                           
+    model = "latest-model"                                                  
+    image_url = generate_image_ollama(prompt, model)                        
+    assert isinstance(image_url, str) and image_url.startswith('http')  #   
+                                                                            
+# Sample example for `generate_image_openai`                                
+def test_generate_image_openai():                                           
+    prompt = "A futuristic cityscape"                                       
+
+    image_url = generate_image_openai(prompt)               
+    assert isinstance(image_url, str) and image_url.startswith('http')  #   
+                                                                            
+# Sample example for `generate_image_anthropic`                             
+def test_generate_image_anthropic():                                        
+    prompt = "An underwater scene"                                          
+    model = "anthropic-image-model"                                         
+    api_key = "your_anthropic_api_key"                                      
+    image_url = generate_image_anthropic(prompt, model, api_key)            
+    assert isinstance(image_url, str) and image_url.startswith('http')  #   
+                                                                            
+# Sample example for `generate_image_openai_like`                           
+def test_generate_image_openai_like():                                      
+    prompt = "A beautiful mountain"                                         
+    model = "image-beta-002"                                                
+    api_url = "https://api.example.com"                                     
+    api_key = "your_custom_api_key"                                         
+    image_url = generate_image_openai_like(prompt, model, api_url, api_key) 
+    assert isinstance(image_url, str) and image_url.startswith('http')  #   
+
+def test_ollama_image():
+    
+    image_path = "/home/caug/.npcsh/screenshots/screenshot_1728963234.png"
+    prompt = "What do you see in this image?"
+    image_data = {"file_path": image_path}
+    
+    response = get_ollama_response(
+        prompt=prompt,
+        model="llava-phi3",
+        image=image_data
+    )
+    
+    assert isinstance(response, dict), "Response should be a dictionary"
+    assert "response" in response, "Response should contain 'response' key"
+    assert len(response["response"]) > 0, "Response should not be empty"
+    assert isinstance(response["response"], str), "Response content should be a string"
 
 
 def test_get_openai_like_response():

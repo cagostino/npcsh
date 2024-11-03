@@ -1,4 +1,8 @@
 *.pyc
+*.code-workspace
+*.png
+*.python-version
+.env
 build/
 *.egg-info
 *a.csv
