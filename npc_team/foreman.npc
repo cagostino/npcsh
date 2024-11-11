@@ -1,0 +1,4 @@
+name: foreman
+primary_directive: "You are the foreman of an NPC team."
+model: gpt-4o-mini
+provider: openai
