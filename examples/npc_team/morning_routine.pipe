@@ -1,0 +1,12 @@
+# morning_routine.pipe
+steps:
+  - npc: Maria Chen
+    prompt: "What's the baking priority for today?"
+    pass_to: James Wilson
+  
+  - npc: James Wilson
+    prompt: "Review the priorities and list what supplies you need to prep"
+    
+  - npc: Lisa Torres
+    prompt: "Review yesterday's customer feedback and inform kitchen of any adjustments needed"
+

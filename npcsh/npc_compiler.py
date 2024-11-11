@@ -14,7 +14,7 @@ from .llm_funcs import (
     npcsh_db_path,
     generate_image,
 )
-from .helpers import search_web
+from .helpers import search_web, get_npc_path
 
 
 class SilentUndefined(Undefined):
@@ -56,7 +56,8 @@ class NPC:
         return get_data_response(request, self.db_conn, self.tables)
 
     def get_llm_response(self, request, **kwargs):
-        return get_llm_response(request, self.model, self.provider, **kwargs)
+        print(self.model, self.provider)
+        return get_llm_response(request, self.model, self.provider, npc=self, **kwargs)
 
 
 class NPCCompiler:
@@ -69,6 +70,7 @@ class NPCCompiler:
         self.resolved_npcs = {}
         self.db_path = db_path
         self.tools_directory = tools_directory
+        self.pipe_cache = {}
 
     def generate_tool_script(self, tool):
         script_content = f"""
@@ -219,6 +221,62 @@ class NPCCompiler:
 
         return profile
 
+    def compile_pipe(self, pipe_file: str, initial_input=None):
+        if pipe_file in self.pipe_cache:
+            return self.pipe_cache[pipe_file]
+
+        if not pipe_file.endswith(".pipe"):
+            raise ValueError("Pipeline file must have .pipe extension")
+
+        try:
+            with open(os.path.join(self.npc_directory, pipe_file), "r") as f:
+                pipeline_data = yaml.safe_load(f)
+
+            context = {"input": initial_input}
+            results = []
+            jinja_env = Environment(
+                loader=FileSystemLoader("."), undefined=SilentUndefined
+            )
+
+            for step in pipeline_data["steps"]:
+                npc_name = step["npc"]
+                prompt_template = step["prompt"]
+
+                # Load the NPC
+                npc_path = get_npc_path(npc_name, self.db_path)
+                npc = load_npc_from_file(
+                    npc_path, sqlite3.connect(self.db_path)
+                )  # Create a new connection for each NPC
+
+                # Render the prompt using Jinja2
+                prompt_template = jinja_env.from_string(prompt_template)
+                prompt = prompt_template.render(context)
+
+                response = npc.get_llm_response(prompt)
+                print(response)
+                results.append({"npc": npc_name, "response": response})
+
+                # Update context with the response for the next step
+                context["input"] = response
+                context[npc_name] = response  # Update context with NPC's response
+
+                # Pass information to the next NPC if specified
+                pass_to = step.get("pass_to")
+                if pass_to:
+                    context["pass_to"] = pass_to
+
+            self.pipe_cache[pipe_file] = results  # Cache the results
+            return results
+
+        except FileNotFoundError:
+            raise ValueError(f"NPC file not found: {npc_path}")
+        except yaml.YAMLError as e:
+            raise ValueError(
+                f"Error parsing YAML in pipeline file {pipe_file}: {str(e)}"
+            )
+        except Exception as e:
+            raise ValueError(f"Error compiling pipeline {pipe_file}: {str(e)}")
+
     def merge_profiles(self, parent, child):
         merged = parent.copy()
         for key, value in child.items():
@@ -345,7 +403,7 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         primary_directive = npc_data.get("primary_directive")
         suggested_tools_to_use = npc_data.get("suggested_tools_to_use")
         restrictions = npc_data.get("restrictions", [])
-        model = npc_data.get("model", os.environ.get("NPCSH_MODEL", "phi3"))
+        model = npc_data.get("model", os.environ.get("NPCSH_MODEL", "llama3.2"))
         provider = npc_data.get("provider", os.environ.get("NPCSH_PROVIDER", "ollama"))
         api_url = npc_data.get("api_url", os.environ.get("NPCSH_API_URL", None))
 

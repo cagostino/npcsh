@@ -16,7 +16,7 @@ from .llm_funcs import (
     render_markdown,
     execute_llm_command,
     execute_llm_question,
-    generate_image, 
+    generate_image,
     check_llm_command,
 )
 from .modes import (
@@ -190,7 +190,7 @@ def execute_command(
     current_npc=None,
     text_data=None,
     text_data_embedded=None,
-    messages = None
+    messages=None,
 ):
     subcommands = []
     output = ""
@@ -231,14 +231,13 @@ def execute_command(
     else:
         npc = current_npc
     # print(command, 'command', len(command), len(command.strip()))
-    
+
     if len(command.strip()) == 0:
-        return {'messages': messages,
-                'output':output}
+        return {"messages": messages, "output": output}
     if messages is None:
         messages = []
     messages.append({"role": "user", "content": command})  # Add user message
-    #print(messages)
+    # print(messages)
     if command.startswith("/"):
         command = command[1:]
         log_action("Command Executed", command)
@@ -246,21 +245,25 @@ def execute_command(
         command_parts = command.split()
         command_name = command_parts[0]
         args = command_parts[1:]
-        
+
         if command_name in valid_npcs:
             npc_path = get_npc_path(command_name, db_path)
             current_npc = load_npc_from_file(npc_path, db_conn)
             output = f"Switched to NPC: {current_npc.name}"
             print(output)
-            return {'messages': messages, 'output': output, 'current_npc': current_npc}
-            
-
+            return {"messages": messages, "output": output, "current_npc": current_npc}
         if command_name == "compile" or command_name == "com":
             try:
                 if len(args) > 0:  # Specific NPC file(s) provided
                     for npc_file in args:
-                        compiled_script = npc_compiler.compile(npc_file)
-                        output += f"Compiled NPC profile: {compiled_script}\n"
+                        # differentiate between .npc and .pipe
+                        if npc_file.endswith(".pipe"):
+                            compiled_script = npc_compiler.compile_pipe(npc_file)
+
+                        elif npc_file.endswith(".npc"):
+                            compiled_script = npc_compiler.compile(npc_file)
+
+                            output += f"Compiled NPC profile: {compiled_script}\n"
                 elif current_npc:  # Compile current NPC
                     compiled_script = npc_compiler.compile(current_npc)
                     output = f"Compiled NPC profile: {compiled_script}"
@@ -281,23 +284,41 @@ def execute_command(
                     f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
                 )
                 print(output)
+        elif command_name == "pipe":
+            if len(args) > 0:  # Specific NPC file(s) provided
+                for npc_file in args:
+                    # differentiate between .npc and .pipe
+                    compiled_script = npc_compiler.compile_pipe(npc_file)
+                    # run through the steps in the pipe
+
+        elif command_name == "list":
+            output = list_directory()
+        elif command_name == "read":
+            if len(args) == 0:
+                return {
+                    "messages": messages,
+                    "output": "Error: read command requires a filename argument",
+                }
+            filename = args[0]
+            output = read_file(filename, npc=npc)
         elif command_name == "init":
             output = initialize_npc_project()
-            return {'messages': messages, 'output': output}                
-        elif command.startswith("vixynt") or command.startswith("vix") or (command.startswith("v") and command[1] == " "):
+            return {"messages": messages, "output": output}
+        elif (
+            command.startswith("vixynt")
+            or command.startswith("vix")
+            or (command.startswith("v") and command[1] == " ")
+        ):
             # check if "filename=..." is in the command
             filename = None
             if "filename=" in command:
-                filename = command.split("filename=")[1].split()[0]                    
+                filename = command.split("filename=")[1].split()[0]
                 command = command.replace(f"filename={filename}", "").strip()
             # Get user prompt about the image BY joining the rest of the arguments
             user_prompt = " ".join(command.split()[1:])
-                
-            output = generate_image(
-                user_prompt,
-                npc=npc, 
-                filename=filename)
-            
+
+            output = generate_image(user_prompt, npc=npc, filename=filename)
+
         elif command.startswith("ots"):
             # check if there is a filename
             if len(command_parts) > 1:
@@ -334,12 +355,13 @@ def execute_command(
                     message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
                 else:  # This handles both LLM responses and error messages (both strings)
                     message = output
-                return {'messages': messages,
-                               'output': message}  # Return the message
+                return {"messages": messages, "output": message}  # Return the message
             else:  # Handle the case where capture_screenshot returns None
                 print("Screenshot capture failed.")
-                return {'messages': messages,
-                               'output': None  }# Return None to indicate failure
+                return {
+                    "messages": messages,
+                    "output": None,
+                }  # Return None to indicate failure
         elif command_name == "help":  # New help command
             output = """
             Available commands:
@@ -362,9 +384,8 @@ def execute_command(
             Bash commands and other programs can be executed directly.
             """
             print(output)  # Print the help message
-            return  {'messages': messages,
-                               'output': None}
-                                   # Don't add /help to command history
+            return {"messages": messages, "output": None}
+            # Don't add /help to command history
 
         elif command_name == "whisper":
             try:
@@ -372,7 +393,7 @@ def execute_command(
             except Exception as e:
                 print(f"Error entering whisper mode: {str(e)}")
                 output = "Error entering whisper mode"
-                
+
         elif command_name == "notes":
             output = enter_notes_mode(command_history, npc=npc)
         elif command_name == "data":
@@ -388,14 +409,13 @@ def execute_command(
             if len(parts) == 3 and parts[1] in ["model", "provider", "db_path"]:
                 output = execute_set_command(parts[1], parts[2])
             else:
-                return {'messages': messages,
-                               'output': "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' "}
+                return {
+                    "messages": messages,
+                    "output": "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' ",
+                }
         elif command_name == "sample":
             output = execute_llm_question(
-                command, 
-                command_history,
-                npc=npc, 
-                retrieved_docs=retrieved_docs
+                command, command_history, npc=npc, retrieved_docs=retrieved_docs
             )
         elif command_name == "spool" or command_name == "sp":
             inherit_last = 0
@@ -404,13 +424,14 @@ def execute_command(
                     try:
                         inherit_last = int(part.split("=")[1])
                     except ValueError:
-                        return {'messages': messages,
-                               'output': "Error: inherit_last must be an integer"}
+                        return {
+                            "messages": messages,
+                            "output": "Error: inherit_last must be an integer",
+                        }
                     break
 
             output = enter_spool_mode(command_history, inherit_last, npc=npc)
-            return {'messages': output['messages'],
-                               'output':output}
+            return {"messages": output["messages"], "output": output}
 
         else:
             output = f"Unknown command: {command_name}"
@@ -435,16 +456,19 @@ def execute_command(
             output = execute_java(code)
         else:
             output = check_llm_command(
-                command, command_history, npc=npc, retrieved_docs=retrieved_docs, 
-                messages=messages
+                command,
+                command_history,
+                npc=npc,
+                retrieved_docs=retrieved_docs,
+                messages=messages,
             )
-            
+
     else:
         # Check if it's a bash command
         # print(command)
         try:
             command_parts = shlex.split(command)
-            #print('er')
+            # print('er')
 
         except ValueError as e:
             if "No closing quotation" in str(e):
@@ -453,20 +477,23 @@ def execute_command(
                 try:
                     command_parts = shlex.split(command)
                 except ValueError:
-                    return {'messages': messages,
-                               'output':"Error: Unmatched quotation in command"}
+                    return {
+                        "messages": messages,
+                        "output": "Error: Unmatched quotation in command",
+                    }
             else:
-                return {'messages': messages,
-                               'output':f"Error: {str(e)}"}
+                return {"messages": messages, "output": f"Error: {str(e)}"}
 
         if command_parts[0] in interactive_commands:
-            #print('ir')
+            # print('ir')
             print(f"Starting interactive {command_parts[0]} session...")
             return_code = start_interactive_session(
                 interactive_commands[command_parts[0]]
             )
-            return {'messages': messages,
-                               'output':f"Interactive {command_parts[0]} session ended with return code {return_code}"}
+            return {
+                "messages": messages,
+                "output": f"Interactive {command_parts[0]} session ended with return code {return_code}",
+            }
 
         elif command_parts[0] == "cd":
             try:
@@ -475,19 +502,21 @@ def execute_command(
                 else:
                     new_dir = os.path.expanduser("~")
                 os.chdir(new_dir)
-                return {'messages': messages,
-                               'output':f"Changed directory to {os.getcwd()}"}
+                return {
+                    "messages": messages,
+                    "output": f"Changed directory to {os.getcwd()}",
+                }
             except FileNotFoundError:
-                return {'messages': messages,
-                               'output':f"Directory not found: {new_dir}"}
+                return {
+                    "messages": messages,
+                    "output": f"Directory not found: {new_dir}",
+                }
             except PermissionError:
-                return {'messages': messages,
-                               'output':f"Permission denied: {new_dir}"}
+                return {"messages": messages, "output": f"Permission denied: {new_dir}"}
 
         elif command_parts[0] in BASH_COMMANDS:
             if command_parts[0] in TERMINAL_EDITORS:
-                return {'messages': messages,
-                               'output':  open_terminal_editor(command)}
+                return {"messages": messages, "output": open_terminal_editor(command)}
             elif command.startswith("open "):
                 try:
                     path_to_open = os.path.expanduser(
@@ -537,11 +566,15 @@ def execute_command(
                     output = colored(f"Error executing command: {e}", "red")
 
         else:
-            #print('dsf')
-            #print(npc)
-            
+            # print('dsf')
+            # print(npc)
+
             output = check_llm_command(
-                command, command_history, npc=npc, retrieved_docs=retrieved_docs, messages = messages
+                command,
+                command_history,
+                npc=npc,
+                retrieved_docs=retrieved_docs,
+                messages=messages,
             )
 
     # Add command to history
@@ -557,7 +590,7 @@ def execute_command(
             messages = new_messages
         output = response
 
-    return {'messages': messages, 'output': output}
+    return {"messages": messages, "output": output}
 
 
 def setup_readline():
@@ -672,24 +705,23 @@ def main():
             )
 
             # Update messages with the new conversation history
-            messages = result.get('messages', messages)
+            messages = result.get("messages", messages)
 
-            if 'current_npc' in result:
-                current_npc = result['current_npc']
-            
+            if "current_npc" in result:
+                current_npc = result["current_npc"]
+
             # Optionally, print the assistant's response
-            output = result.get('output')
-            #if output:
+            output = result.get("output")
+            # if output:
             #    print(output)
-                
+
             # Optionally, print the result
             if (
-                result['output'] is not None
+                result["output"] is not None
                 and not user_input.startswith("/")
                 and not isinstance(result, dict)
             ):
                 print("final", result)
-
 
         except (KeyboardInterrupt, EOFError):
             if current_npc:
