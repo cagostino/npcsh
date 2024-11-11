@@ -12,15 +12,19 @@ from .llm_funcs import (
 from .helpers import calibrate_silence, record_audio, speak_text, is_silent
 import sqlite3
 import time
-from gtts import gTTS
-from playsound import playsound
-
-import whisper
-import wave
+try:
+    from gtts import gTTS
+    from playsound import playsound
+    import whisper
+    import wave
+except Exception as e:
+    print(f"Error importing modules: {e}. Whisper mode may not work.")
 import numpy as np
 import tempfile
 import os
 import json
+import datetime
+
 
 
 def enter_whisper_mode(command_history, npc=None):
@@ -113,7 +117,6 @@ def enter_whisper_mode(command_history, npc=None):
     return "\n".join(whisper_output)
 
 
-import datetime
 
 
 def enter_notes_mode(command_history, npc=None):

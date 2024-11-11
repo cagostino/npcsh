@@ -19,6 +19,7 @@ from pygments.formatters import TerminalFormatter
 import textwrap
 from rich.console import Console
 from rich.markdown import Markdown, CodeBlock
+from jinja2 import Environment, FileSystemLoader, Template, Undefined
 
 from datetime import datetime
 
@@ -98,7 +99,7 @@ def generate_image_openai(prompt, model=None, api_key=None, size=None):
         size=size
     )
     if image is not None:
-        print(image)
+        #print(image)
         return image
     
                                                                             
@@ -171,6 +172,7 @@ def generate_image(prompt,
         return filename    
     
 
+
 def get_system_message(npc):
     system_message = f"""
     .
@@ -190,43 +192,21 @@ def get_system_message(npc):
     In some cases, users may request insights into data contained in a local database.
     For these purposes, you may use any data contained within these sql tables 
     {npc.tables}        
+
     which are contained in the database at {npcsh_db_path}.
-    
-    So if you need to obtain data you may use sqlite3 and write queries
-    to obtain the data you need. 
-    
-    When formulating SQLite queries:
-
-        1. Remember that SQLite doesn't support TOP. Use LIMIT instead for selecting a limited number of rows.
-        2. To get the last row, use: "SELECT * FROM table_name ORDER BY rowid DESC LIMIT 1;"
-        3. To check if a table exists, use: "SELECT name FROM sqlite_master WHERE type='table' AND name='table_name';"
-        4. Always use single quotes for string literals in SQLite queries.
-        5. When executing SQLite commands from bash, ensure proper escaping of quotes.
-
-        For bash commands interacting with SQLite:
-        1. Use this format: sqlite3 /path/to/database.db 'SQL query here'
-        2. Example: sqlite3 /home/caug/npcsh_history.db 'SELECT * FROM command_history ORDER BY rowid DESC LIMIT 1;'
-
-        When encountering errors:
-        1. "no such function: TOP" - Remember to use LIMIT instead.
-        2. "syntax error" - Double-check quote usage and escaping in bash commands.
-        3. "no such table" - Verify the table name and check if it exists first.
-
-        Always consider data integrity, security, and privacy in your operations. Offer clear explanations and examples for complex data concepts and SQLite queries.
-    
-    --------------
-    --------------
-    
     """
-    if npc.suggested_tools_to_use:
-        system_message += f"""
-        While you have access to SQLite, the user specifically suggested that you make use of the following tools:
-        
-        {npc.suggested_tools_to_use}
 
-        Please adhere as best as possible to the user's request.
-        """
-
+    if npc.tools:
+        tool_descriptions = "\n".join([
+            f"Tool Name: {tool.tool_name}\n"
+            f"Inputs: {tool.inputs}\n"
+            f"Preprocess: {tool.preprocess}\n"
+            f"Prompt: {tool.prompt}\n"
+            f"Postprocess: {tool.postprocess}"
+            for tool in npc.tools
+        ])
+        system_message += f"\n\nAvailable Tools:\n{tool_descriptions}"
+    
     return system_message
 
 
@@ -1303,212 +1283,191 @@ def check_llm_command(
         messages = []
     # Create context from retrieved documents
     context = ""
+    
+    #print(command)
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
             context += f"Document: {filename}\n{content}\n\n"
         context = f"Refer to the following documents for context:\n{context}\n\n"
 
+    # Update the prompt to include tool consideration
     prompt = f"""
     A user submitted this query: {command}
-    Is this query a specific request for a task to be accomplished?
-      
-    In considering how to answer this, consider whether it is 
-        something that can be answered via a bash command on the users computer? 
-        Assume that the user has access to internet 
-        and basic command line tools like curl, wget, 
-        etc so you are not limited to just the local machine.
-        Additionally, the user may have access to a local database so
-        you can use sqlite3 to query the database.
+    Determine the nature of the user's request:
+    1. Is it a specific request for a task to be accomplished via a bash command?
+    2. Should a tool be invoked to fulfill the request?
+    3. Is it a general question that requires an informative answer?
 
-    If so, respond with a JSON object containing the key "is_command" with the value "yes".
+    Available tools:
+    - weather_tool: Provides weather information.
+    - image_generation_tool: Generates images based on a text prompt.
 
-    Provide an explanation in the json key "explanation" .
+    In considering how to answer this, consider:
+    - Whether it can be answered via a bash command on the user's computer.
+    - Whether a tool should be used.
+    - Assume that the user has access to internet and basic command line tools like curl, wget, etc.
+    - The user may have access to a local database (use sqlite3 to query the database).
 
-    You must reply with valid json and nothing else. Do not include any markdown formatting.
-    The format and requirements of the output are as follows:
+    Respond with a JSON object containing:
+    - "action": one of ["execute_command", "invoke_tool", "answer_question"]
+    - "tool_name": (if action is "invoke_tool") the name of the tool to use.
+    - "explanation": a brief explanation of why you chose this action.
+
+    Return only the JSON object. Do not include any additional text.
+
+    The format of the JSON object is:
     {{
-        "is_command": {{"type": "string", 
-                       "enum": ["yes", "no"],
-                        "description": "whether the query is a command"}},
-        "explanation": {{"type": "string",
-                        "description": "a brief explanation of why the query is or is not a command"}}
+        "action": "execute_command" | "invoke_tool" | "answer_question",
+        "tool_name": "<tool_name_if_applicable>",
+        "explanation": "<your_explanation>"
     }}
-    The types of the outputs must strictly adhere to these requirements.
-    Use these to hone your output and only respond with the actual filled-in json.
-    
-    You should only try it if you know for certain that the query is an executable one. otherwise, stay safe and assume it is just a question.
-    Do not return any extra information. Respond only with the json.
     """
+
     if len(context) > 0:
         prompt += f"""
-        What follows is the context of the text files in the user's directory that are potentially relevant to their request
-        Use these to help inform your decision.
+        Relevant context from user's files:
         {context}
         """
 
-    response = get_llm_response(
-        prompt,
-        model=model,
-        provider=provider,
-        npc=npc,
-        format="json",
-    )
-    response_content = response.get("response", {})
-    messages.extend(response.get("messages", []))
-
-    # Handle potential errors and non-JSON responses
-    if not isinstance(response_content, dict):
-        print(f"Error: Expected a dictionary, but got {type(response_content)}")
-        return "Error: Invalid response from LLM"
-    if "error" in response_content:
-        print(f"LLM Error: {response_content['error']}")
-        return f"LLM Error: {response_content['error']}"
-
-    if "is_command" not in response_content:
-        print("Error: 'is_command' key missing in LLM response")
-        return "Error: 'is_command' key missing in LLM response"
-    if response_content["is_command"] == "yes":
-        cmd_stt = "a command"
-    else:
-        cmd_stt = "a question"
-
-    print(f"The request is {cmd_stt}.")
-
-    output = response_content
-    command_history.add(command, [], output, location)
-
-    if response_content["is_command"] == "yes":
-        return execute_llm_command(
-            command,
-            command_history,
+    try:
+        response = get_llm_response(
+            prompt,
             model=model,
             provider=provider,
-            messages=messages,
             npc=npc,
-            retrieved_docs=retrieved_docs,
+            format="json",
         )
-    else:
-        # Return the result from execute_llm_question
-        return execute_llm_question(
-            command,
-            command_history,
-            model=model,
-            provider=provider,
-            messages=messages,
-            npc=npc,
-            retrieved_docs=retrieved_docs,
-        )
-def check_llm_command(
+        #print("LLM raw response:", response)  # Log the raw response
+        if "error" in response:
+            print(f"LLM Error: {response['error']}")
+            return response["error"] # Return the error message directly
+
+        response_content = response.get("response", {})
+        #print("Parsed response_content:", response_content) # Log the parsed response
+        if isinstance(response_content, str):
+            try:
+                response_content = json.loads(response_content)
+            except json.JSONDecodeError as e:
+                print(f"Invalid JSON received from LLM: {e}. Response was: {response_content}")
+                return f"Error: Invalid JSON from LLM: {response_content}"
+
+
+        messages.extend(response.get("messages", []))
+
+        # Handle potential errors and non-JSON responses
+        if not isinstance(response_content, dict):
+            print(f"Error: Expected a dictionary, but got {type(response_content)}")
+            return "Error: Invalid response from LLM (not a dictionary)"
+
+        action = response_content.get("action")
+        if action == "execute_command":
+            return execute_llm_command(
+                command,
+                command_history,
+                model=model,
+                provider=provider,
+                messages=messages,
+                npc=npc,
+                retrieved_docs=retrieved_docs,
+            )
+        elif action == "invoke_tool":
+            tool_name = response_content.get("tool_name")
+            return handle_tool_call(
+                command,
+                tool_name,
+                command_history,
+                model=model,
+                provider=provider,
+                messages=messages,
+                npc=npc,
+                retrieved_docs=retrieved_docs,
+            )
+        elif action == "answer_question":
+            return execute_llm_question(
+                command,
+                command_history,
+                model=model,
+                provider=provider,
+                messages=messages,
+                npc=npc,
+                retrieved_docs=retrieved_docs,
+            )
+        else:
+            print("Error: Invalid action in LLM response")
+            return "Error: Invalid action in LLM response"
+    except Exception as e:
+        print(f"Error in check_llm_command: {e}")
+        return f"Error: {e}"
+
+
+def handle_tool_call(
     command,
+    tool_name,
     command_history,
     model=npcsh_model,
-    messages=None,
     provider=npcsh_provider,
+    messages=None,
     npc=None,
     retrieved_docs=None,
     n_docs=5,
 ):
-    location = os.getcwd()
+    print(f"handle_tool_call invoked with tool_name: {tool_name}")
+    if not npc or not npc.tools_dict:
+        print('not available')
+        available_tools = npc.tools_dict if npc else None
+        print(f"No tools available for NPC '{npc.name}' or tools_dict is empty. Available tools: {available_tools}")
+        return f"No tools are available for NPC '{npc.name or 'default'}'."
 
-    if messages is None:
-        messages = []
-    # Create context from retrieved documents
-    context = ""
-    if retrieved_docs:
-        for filename, content in retrieved_docs[:n_docs]:
-            context += f"Document: {filename}\n{content}\n\n"
-        context = f"Refer to the following documents for context:\n{context}\n\n"
+    if tool_name not in npc.tools_dict:
+        print('not available')
+        print(f"Tool '{tool_name}' not found in NPC's tools_dict.")
+        print("available tools", npc.tools_dict)        
+        return f"Tool '{tool_name}' not found."
+
+    tool = npc.tools_dict[tool_name]
+    print(f"Tool found: {tool.tool_name}")
+    jinja_env = Environment(loader=FileSystemLoader('.'), undefined=Undefined)
 
     prompt = f"""
-    A user submitted this query: {command}
-    Is this query a specific request for a task to be accomplished?
-      
-    In considering how to answer this, consider whether it is 
-        something that can be answered via a bash command on the users computer? 
-        Assume that the user has access to internet 
-        and basic command line tools like curl, wget, 
-        etc so you are not limited to just the local machine.
-        Additionally, the user may have access to a local database so
-        you can use sqlite3 to query the database.
-
-    If so, respond with a JSON object containing the key "is_command" with the value "yes".
-
-    Provide an explanation in the json key "explanation" .
-
-    You must reply with valid json and nothing else. Do not include any markdown formatting.
-    The format and requirements of the output are as follows:
-    {{
-        "is_command": {{"type": "string", 
-                       "enum": ["yes", "no"],
-                        "description": "whether the query is a command"}},
-        "explanation": {{"type": "string",
-                        "description": "a brief explanation of why the query is or is not a command"}}
-    }}
-    The types of the outputs must strictly adhere to these requirements.
-    Use these to hone your output and only respond with the actual filled-in json.
-    
-    You should only try it if you know for certain that the query is an executable one. otherwise, stay safe and assume it is just a question.
-    Do not return any extra information. Respond only with the json.
+    The user wants to use the tool '{tool_name}' with the following request:
+    '{command}'
+    Please extract the required inputs for the tool as a JSON object.
+    Return only the JSON object without any markdown formatting.
     """
-    if len(context) > 0:
-        prompt += f"""
-        What follows is the context of the text files in the user's directory that are potentially relevant to their request
-        Use these to help inform your decision.
-        {context}
-        """
+    #print(f"Tool prompt: {prompt}")
+    response = get_llm_response(prompt, format='json', model=model, provider=provider, npc=npc)
+    try:
+        # Clean the response of markdown formatting
+        response_text = response.get("response", "{}")
+        if isinstance(response_text, str):
+            response_text = response_text.replace("```json", "").replace("```", "").strip()
+        
+        # Parse the cleaned response
+        if isinstance(response_text, dict):
+            input_values = response_text
+        else:
+            input_values = json.loads(response_text)
+        #print(f"Extracted inputs: {input_values}")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding input values: {e}. Raw response: {response}")
+        return f"Error extracting inputs for tool '{tool_name}'"
+    # Input validation (example):
+    required_inputs = tool.inputs
+    if not all(inp in input_values for inp in required_inputs):
+        missing_inputs = set(required_inputs) - set(input_values.keys())
+        print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
+        return f"Missing inputs for tool '{tool_name}': {missing_inputs}"
 
-    response = get_llm_response(
-        prompt,
-        model=model,
-        provider=provider,
-        npc=npc,
-        format="json",
-    )
-    response_content = response.get("response", {})
-    # messages.extend(response.get("messages", []))
-
-    # Handle potential errors and non-JSON responses
-    if not isinstance(response_content, dict):
-        print(f"Error: Expected a dictionary, but got {type(response_content)}")
-        return "Error: Invalid response from LLM"
-    if "error" in response_content:
-        print(f"LLM Error: {response_content['error']}")
-        return f"LLM Error: {response_content['error']}"
-
-    if "is_command" not in response_content:
-        print("Error: 'is_command' key missing in LLM response")
-        return "Error: 'is_command' key missing in LLM response"
-    if response_content["is_command"] == "yes":
-        cmd_stt = "a command"
-    else:
-        cmd_stt = "a question"
-
-    print(f"The request is {cmd_stt}.")
-
-    output = response_content
-    command_history.add(command, [], output, location)
-
-    if response_content["is_command"] == "yes":
-        return execute_llm_command(
-            command,
-            command_history,
-            model=model,
-            provider=provider,
-            messages=messages,
-            npc=npc,
-            retrieved_docs=retrieved_docs,
-        )
-    else:
-        # Return the result from execute_llm_question
-        return execute_llm_question(
-            command,
-            command_history,
-            model=model,
-            provider=provider,
-            messages=messages,
-            npc=npc,
-            retrieved_docs=retrieved_docs,
-        )
+    try:
+        tool_output = tool.execute(input_values, npc.tools_dict, jinja_env)
+        #print(f"Tool output: {tool_output}")
+        render_markdown(tool_output)
+        if messages is not None: # Check if messages is not None
+            messages.append({"role": "assistant", "content": tool_output})
+        return {'messages': messages, 'output': tool_output}
+    except Exception as e:
+        print(f"Error executing tool {tool_name}: {e}")
+        return f"Error executing tool {tool_name}: {e}"
 
 def execute_llm_question(
     command,

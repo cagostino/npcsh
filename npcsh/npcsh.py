@@ -32,7 +32,7 @@ from .helpers import (
     load_all_files,
     rag_search,
     capture_screenshot,
-    load_npc_from_file,
+    initialize_npc_project,
     list_directory,
     analyze_image,
     read_file,
@@ -56,7 +56,8 @@ from .helpers import (
 )
 from sentence_transformers import SentenceTransformer, util
 
-from .npc_compiler import NPCCompiler, NPC
+from .npc_compiler import NPCCompiler, NPC, load_npc_from_file
+
 from colorama import Fore, Back, Style
 import warnings
 
@@ -230,7 +231,7 @@ def execute_command(
     else:
         npc = current_npc
     # print(command, 'command', len(command), len(command.strip()))
-
+    
     if len(command.strip()) == 0:
         return {'messages': messages,
                 'output':output}
@@ -245,9 +246,14 @@ def execute_command(
         command_parts = command.split()
         command_name = command_parts[0]
         args = command_parts[1:]
-        if current_npc is None and command_name in valid_npcs:
+        
+        if command_name in valid_npcs:
             npc_path = get_npc_path(command_name, db_path)
-            npc = load_npc_from_file(npc_path, db_conn)
+            current_npc = load_npc_from_file(npc_path, db_conn)
+            output = f"Switched to NPC: {current_npc.name}"
+            print(output)
+            return {'messages': messages, 'output': output, 'current_npc': current_npc}
+            
 
         if command_name == "compile" or command_name == "com":
             try:
@@ -275,6 +281,9 @@ def execute_command(
                     f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
                 )
                 print(output)
+        elif command_name == "init":
+            output = initialize_npc_project()
+            return {'messages': messages, 'output': output}                
         elif command.startswith("vixynt") or command.startswith("vix") or (command.startswith("v") and command[1] == " "):
             # check if "filename=..." is in the command
             filename = None
@@ -358,7 +367,12 @@ def execute_command(
                                    # Don't add /help to command history
 
         elif command_name == "whisper":
-            output = enter_whisper_mode(command_history, npc=npc)
+            try:
+                output = enter_whisper_mode(command_history, npc=npc)
+            except Exception as e:
+                print(f"Error entering whisper mode: {str(e)}")
+                output = "Error entering whisper mode"
+                
         elif command_name == "notes":
             output = enter_notes_mode(command_history, npc=npc)
         elif command_name == "data":
@@ -430,6 +444,8 @@ def execute_command(
         # print(command)
         try:
             command_parts = shlex.split(command)
+            #print('er')
+
         except ValueError as e:
             if "No closing quotation" in str(e):
                 # Attempt to close unclosed quotes
@@ -444,6 +460,7 @@ def execute_command(
                                'output':f"Error: {str(e)}"}
 
         if command_parts[0] in interactive_commands:
+            #print('ir')
             print(f"Starting interactive {command_parts[0]} session...")
             return_code = start_interactive_session(
                 interactive_commands[command_parts[0]]
@@ -520,6 +537,9 @@ def execute_command(
                     output = colored(f"Error executing command: {e}", "red")
 
         else:
+            #print('dsf')
+            #print(npc)
+            
             output = check_llm_command(
                 command, command_history, npc=npc, retrieved_docs=retrieved_docs, messages = messages
             )
@@ -582,7 +602,7 @@ def main():
     command_history = CommandHistory(db_path)
 
     os.makedirs("./npc_profiles", exist_ok=True)
-    npc_directory = os.path.abspath("./npc_profiles")
+    npc_directory = os.path.abspath("./npc_team")
     npc_compiler = NPCCompiler(npc_directory, db_path)  # Pass db_path here
 
     # Load all files for RAG searches
@@ -654,6 +674,9 @@ def main():
             # Update messages with the new conversation history
             messages = result.get('messages', messages)
 
+            if 'current_npc' in result:
+                current_npc = result['current_npc']
+            
             # Optionally, print the assistant's response
             output = result.get('output')
             #if output:
