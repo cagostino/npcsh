@@ -18,6 +18,7 @@ import time
 import numpy as np
 import wave
 import tempfile
+
 try:
     from sentence_transformers import util
 except Exception as e:
@@ -28,7 +29,6 @@ try:
     from gtts import gTTS
     import pyaudio
 except Exception as e:
-
     print(f"Error importing whisper: {e}")
 
 
@@ -233,13 +233,38 @@ def capture_screenshot(npc=None):
     return {"filename": filename, "file_path": file_path, "model_kwargs": model_kwargs}
 
 
+def analyze_image_base(user_prompt, file_path, filename, npc=None):
+    if os.path.exists(file_path):
+        image_info = {"filename": filename, "file_path": file_path}
+
+        if user_prompt:
+            # try:
+            response = get_llm_response(user_prompt, images=[image_info], npc=npc)
+
+            # Add to command history *inside* the try block
+
+            print(response["response"])  # Print response after adding to history
+            return response
+
+            # except Exception as e:
+            # error_message = f"Error during LLM processing: {e}"
+            # print(error_message)
+            # return error_message
+
+        else:  # This part needs to be inside the outer 'if os.path.exists...' block
+            print("Skipping LLM processing.")
+            return image_info  # Return image info if no prompt is given
+    else:  # This else also needs to be part of the outer 'if os.path.exists...' block
+        print("Screenshot capture failed or was cancelled.")
+        return None
+
+
 def analyze_image(
     command_history, user_prompt, file_path, filename, npc=None, **model_kwargs
 ):
     if os.path.exists(file_path):
         image_info = {"filename": filename, "file_path": file_path}
 
-        
         if user_prompt:
             try:
                 response = get_llm_response(
@@ -340,9 +365,6 @@ def ensure_npcshrc_exists():
     return npcshrc_path
 
 
-
-
-
 # Function to check and download NLTK data if necessary
 def ensure_nltk_punkt():
     try:
@@ -350,6 +372,7 @@ def ensure_nltk_punkt():
     except LookupError:
         print("Downloading NLTK 'punkt' tokenizer...")
         nltk.download("punkt")
+
 
 def load_all_files(directory, extensions=None, depth=1):
     """
@@ -406,13 +429,12 @@ def load_all_files(directory, extensions=None, depth=1):
     return text_data
 
 
-
-
 import requests
 from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 import urllib.parse
 from duckduckgo_search import DDGS
+
 
 def search_web(query: str, num_results: int = 5) -> List[Dict[str, str]]:
     """
@@ -421,11 +443,12 @@ def search_web(query: str, num_results: int = 5) -> List[Dict[str, str]]:
     """
     # Encode the query for URL
     encoded_query = urllib.parse.quote(query)
-    
+
     # HTML search which gives better results than their API
     results = DDGS().text(query, max_results=num_results)
-    
+
     return results
+
 
 def rag_search(
     query, text_data, embedding_model, text_data_embedded=None, similarity_threshold=0.2
@@ -442,7 +465,9 @@ def rag_search(
     results = []
 
     # Compute the embedding of the query
-    query_embedding = embedding_model.encode(query, convert_to_tensor=True, show_progress_bar=False)
+    query_embedding = embedding_model.encode(
+        query, convert_to_tensor=True, show_progress_bar=False
+    )
 
     for filename, content in text_data.items():
         # Split content into lines
@@ -490,6 +515,8 @@ def add_npcshrc_to_shell_config():
 def setup_npcsh_config():
     ensure_npcshrc_exists()
     add_npcshrc_to_shell_config()
+
+
 def initialize_npc_project():
     import os
 
@@ -504,10 +531,10 @@ def initialize_npc_project():
     foreman_npc_path = os.path.join(npc_team_dir, "foreman.npc")
     if not os.path.exists(foreman_npc_path):
         # Create initial content for 'foreman.npc'
-        foreman_npc_content = '''name: foreman
+        foreman_npc_content = """name: foreman
 primary_directive: "You are the foreman of an NPC team."
-'''
-        with open(foreman_npc_path, 'w') as f:
+"""
+        with open(foreman_npc_path, "w") as f:
             f.write(foreman_npc_content)
     else:
         print(f"{foreman_npc_path} already exists.")
@@ -520,13 +547,13 @@ primary_directive: "You are the foreman of an NPC team."
     example_tool_path = os.path.join(tools_dir, "example.tool")
     if not os.path.exists(example_tool_path):
         # Create initial content for 'example.tool'
-        example_tool_content = '''tool_name: example
+        example_tool_content = """tool_name: example
 inputs: []
 preprocess: ""
 prompt: ""
 postprocess: ""
-'''
-        with open(example_tool_path, 'w') as f:
+"""
+        with open(example_tool_path, "w") as f:
             f.write(example_tool_content)
     else:
         print(f"{example_tool_path} already exists.")

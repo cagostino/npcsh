@@ -1,7 +1,5 @@
-
 import subprocess
 import sqlite3
-
 
 
 import os
@@ -9,8 +7,15 @@ import yaml
 from jinja2 import Environment, FileSystemLoader, TemplateError, Template, Undefined
 
 import pandas as pd
-from .llm_funcs import get_llm_response, process_data_output, get_data_response, npcsh_db_path,  generate_image
+from .llm_funcs import (
+    get_llm_response,
+    process_data_output,
+    get_data_response,
+    npcsh_db_path,
+    generate_image,
+)
 from .helpers import search_web
+
 
 class SilentUndefined(Undefined):
     def _fail_with_undefined_error(self, *args, **kwargs):
@@ -42,7 +47,7 @@ class NPC:
         self.provider = provider
         self.api_url = api_url
         self.tools = tools or []
-        self.tools_dict = {tool.tool_name: tool for tool in self.tools}        
+        self.tools_dict = {tool.tool_name: tool for tool in self.tools}
 
     def __str__(self):
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
@@ -55,8 +60,7 @@ class NPC:
 
 
 class NPCCompiler:
-    def __init__(self, npc_directory, db_path,  tools_directory = None
-):
+    def __init__(self, npc_directory, db_path, tools_directory=None):
         self.npc_directory = npc_directory
         self.jinja_env = Environment(
             loader=FileSystemLoader(self.npc_directory), undefined=SilentUndefined
@@ -65,6 +69,7 @@ class NPCCompiler:
         self.resolved_npcs = {}
         self.db_path = db_path
         self.tools_directory = tools_directory
+
     def generate_tool_script(self, tool):
         script_content = f"""
     # Auto-generated script for tool: {tool.tool_name}
@@ -94,7 +99,7 @@ class NPCCompiler:
 
         # Write the script to a file
         script_filename = f"{tool.tool_name}_script.py"
-        with open(script_filename, 'w') as script_file:
+        with open(script_filename, "w") as script_file:
             script_file.write(script_content)
 
     def compile(self, npc_file: str):
@@ -118,13 +123,17 @@ class NPCCompiler:
             # Final pass: resolve any remaining references
             parsed_content = self.finalize_npc_profile(npc_file)
 
-            if self.tools_directory is not None and os.path.exists(self.tools_directory):
+            if self.tools_directory is not None and os.path.exists(
+                self.tools_directory
+            ):
                 tools = self.load_tools(self.tools_directory)
-                parsed_content['tools'] = [tool.to_dict() for tool in tools]  # Add tools to profile
-                if parsed_content.get('tools'):
-                    for tool_dict in parsed_content['tools']:
+                parsed_content["tools"] = [
+                    tool.to_dict() for tool in tools
+                ]  # Add tools to profile
+                if parsed_content.get("tools"):
+                    for tool_dict in parsed_content["tools"]:
                         tool = Tool(tool_dict)
-                        if tool.engine == 'plain_english':
+                        if tool.engine == "plain_english":
                             self.generate_tool_script(tool)
 
             self.update_compiled_npcs_table(npc_file, parsed_content)
@@ -132,12 +141,11 @@ class NPCCompiler:
         except Exception as e:
             raise
 
-
     def load_tools(self, tools_directory):
         tools = []
         for filename in os.listdir(tools_directory):
-            if filename.endswith('.tool'):
-                with open(os.path.join(tools_directory, filename), 'r') as f:
+            if filename.endswith(".tool"):
+                with open(os.path.join(tools_directory, filename), "r") as f:
                     tool_content = f.read()
                     try:
                         tool_data = yaml.safe_load(tool_content)
@@ -146,6 +154,7 @@ class NPCCompiler:
                     except yaml.YAMLError as e:
                         print(f"Error parsing tool {filename}: {e}")
         return tools
+
     def parse_all_npcs(self):
         for filename in os.listdir(self.npc_directory):
             if filename.endswith(".npc"):
@@ -238,21 +247,26 @@ class NPCCompiler:
             print(
                 f"Error updating compiled_npcs table: {str(e)}"
             )  # Print the full error
+
+
 class Tool:
     def __init__(self, tool_data):
-        self.tool_name = tool_data.get('tool_name')
-        self.inputs = tool_data.get('inputs', [])
+        self.tool_name = tool_data.get("tool_name")
+        self.inputs = tool_data.get("inputs", [])
 
         # Parse steps with engines
-        self.preprocess = self.parse_steps(tool_data.get('preprocess', []))
-        self.prompt = self.parse_step(tool_data.get('prompt', {}))
-        self.postprocess = self.parse_steps(tool_data.get('postprocess', []))
+        self.preprocess = self.parse_steps(tool_data.get("preprocess", []))
+        self.prompt = self.parse_step(tool_data.get("prompt", {}))
+        self.postprocess = self.parse_steps(tool_data.get("postprocess", []))
 
     def parse_step(self, step):
         if isinstance(step, dict):
-            return {'engine': step.get('engine', 'plain_english'), 'code': step.get('code', '')}
+            return {
+                "engine": step.get("engine", "plain_english"),
+                "code": step.get("code", ""),
+            }
         elif isinstance(step, str):  # For backward compatibility
-            return {'engine': 'plain_english', 'code': step}
+            return {"engine": "plain_english", "code": step}
         else:
             raise ValueError("Invalid step format")
 
@@ -261,12 +275,13 @@ class Tool:
         for step in steps:
             parsed_steps.append(self.parse_step(step))
         return parsed_steps
+
     def execute(self, input_values, tools_dict, jinja_env, npc=None):
         context = {
-            'inputs': input_values,
-            'tools': tools_dict,
-            'llm_response': None,
-            'output': None,
+            "inputs": input_values,
+            "tools": tools_dict,
+            "llm_response": None,
+            "output": None,
         }
 
         # Process Preprocess Steps
@@ -281,29 +296,32 @@ class Tool:
             context = self.execute_step(step, context, jinja_env, npc=npc)
 
         # Return the final output
-        return context.get('output') or context.get('llm_response')
+        return context.get("output") or context.get("llm_response")
+
     def execute_step(self, step, context, jinja_env, npc=None):
-        engine = step['engine']
-        code = step['code']
-        if engine == 'plain_english':
+        engine = step["engine"]
+        code = step["code"]
+        if engine == "plain_english":
             # Render the prompt or postprocess template
             template = jinja_env.from_string(code)
             rendered_text = template.render(context)
-            if context.get('llm_response') is None and code.strip():
+            llm_response = get_llm_response(rendered_text)
+            print(llm_response)
+            if context.get("llm_response") is None and code.strip():
                 # This is the prompt step, but since the code is empty, we skip calling the LLM
                 # If the prompt step is empty, we move directly to the postprocess
-                context['llm_response'] = rendered_text
+                context["llm_response"] = llm_response
             else:
                 # This is a postprocess step; set output
-                context['output'] = rendered_text
-        elif engine == 'python':
+                context["output"] = llm_response
+        elif engine == "python":
             # Execute Python code
             exec_env = context.copy()
             # Ensure necessary imports and functions are available
             exec_globals = {
-                '__builtins__': __builtins__,
-                'generate_image': generate_image,
-                'npc': npc,  # Pass the NPC object
+                "__builtins__": __builtins__,
+                "generate_image": generate_image,
+                "npc": npc,  # Pass the NPC object
                 # Include other necessary global variables or functions
             }
             exec(code, exec_globals, exec_env)
@@ -333,8 +351,8 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
 
         # Load tools if present
         tools = []
-        if 'tools' in npc_data:
-            for tool_data in npc_data['tools']:
+        if "tools" in npc_data:
+            for tool_data in npc_data["tools"]:
                 tool = Tool(tool_data)
                 tools.append(tool)
         else:
@@ -342,8 +360,8 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
             tools_directory = os.path.abspath("./npc_team/tools")
             if os.path.exists(tools_directory):
                 for filename in os.listdir(tools_directory):
-                    if filename.endswith('.tool'):
-                        with open(os.path.join(tools_directory, filename), 'r') as f:
+                    if filename.endswith(".tool"):
+                        with open(os.path.join(tools_directory, filename), "r") as f:
                             tool_content = f.read()
                             try:
                                 tool_data = yaml.safe_load(tool_content)
@@ -362,7 +380,7 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
             model=model,
             provider=provider,
             api_url=api_url,
-            tools=tools,   # Pass the tools
+            tools=tools,  # Pass the tools
         )
 
     except FileNotFoundError:
@@ -373,4 +391,3 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         raise ValueError(f"Missing required key in NPC file {npc_file}: {str(e)}")
     except Exception as e:
         raise ValueError(f"Error loading NPC from file {npc_file}: {str(e)}")
-    

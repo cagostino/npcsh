@@ -23,6 +23,7 @@ from jinja2 import Environment, FileSystemLoader, Template, Undefined
 
 from datetime import datetime
 
+
 class LeftAlignedCodeBlock(CodeBlock):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -66,19 +67,20 @@ npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
-                                             
-                                                                            
-def generate_image_ollama(prompt, model):                                   
-    url = f'https://api.ollama.com/v1/models/{model}/generate'              
-    data = {'prompt': prompt}                                               
-    response = requests.post(url, json=data)                                
-                                                                            
-    if response.status_code == 200:                                         
-        return response.json().get('image_url')  # Assume 'image_url'       
-    else:                                                                   
-        raise Exception(f"Error: {response.status_code}, {response.text}")  
-                                                                            
-def generate_image_openai(prompt, model=None, api_key=None, size=None):        
+
+
+def generate_image_ollama(prompt, model):
+    url = f"https://api.ollama.com/v1/models/{model}/generate"
+    data = {"prompt": prompt}
+    response = requests.post(url, json=data)
+
+    if response.status_code == 200:
+        return response.json().get("image_url")  # Assume 'image_url'
+    else:
+        raise Exception(f"Error: {response.status_code}, {response.text}")
+
+
+def generate_image_openai(prompt, model=None, api_key=None, size=None):
     if api_key is None:
         api_key = os.environ["OPENAI_API_KEY"]
     client = OpenAI(api_key=api_key)
@@ -87,55 +89,45 @@ def generate_image_openai(prompt, model=None, api_key=None, size=None):
     if model is None:
         model = "dall-e-2"
     elif model not in ["dall-e-3", "dall-e-2"]:
-        
-        #raise ValueError(f"Invalid model: {model}")
-        print( f"Invalid model: {model}")
+        # raise ValueError(f"Invalid model: {model}")
+        print(f"Invalid model: {model}")
         print("Switching to dall-e-3")
         model = "dall-e-3"
-    image = client.images.generate(
-        model=model,
-        prompt=prompt,
-        n=1,
-        size=size
-    )
+    image = client.images.generate(model=model, prompt=prompt, n=1, size=size)
     if image is not None:
-        #print(image)
+        # print(image)
         return image
-    
-                                                                            
-def generate_image_anthropic(prompt, model, api_key):                       
-    url = 'https://api.anthropic.com/v1/images/generate'                    
-    headers = {'Authorization': f'Bearer {api_key}'}                        
-    data = {'model': model, 'prompt': prompt}                               
-    response = requests.post(url, headers=headers, json=data)               
-                                                                            
-    if response.status_code == 200:                                         
-        return response.json().get('image_url')  # Assume 'image_url'       
-    else:                                                                   
-        raise Exception(f"Error: {response.status_code}, {response.text}")  
-def generate_image_openai_like(prompt, model, api_url, api_key):            
-    url = f'{api_url}/v1/images/generations'                                
-    headers = {'Authorization': f'Bearer {api_key}'}                        
-    data = {                                                                
-        'model': model,                                                     
-        'prompt': prompt,                                                   
-        'n': 1,                                                             
-        'size': '1024x1024'                                                 
-    }                                                                       
-    response = requests.post(url, headers=headers, json=data)               
-                                                                            
-    if response.status_code == 200:                                         
-        return response.json().get('data')[0].get('url')  # Assume the firs 
 
-    else:                                                                   
-        raise Exception(f"Error: {response.status_code}, {response.text}") 
 
-def generate_image(prompt,
-                   model=npcsh_model,
-                   provider=npcsh_provider,
-                   filename=None,
-                   npc=None):
-    #raise NotImplementedError("This function is not yet implemented.")
+def generate_image_anthropic(prompt, model, api_key):
+    url = "https://api.anthropic.com/v1/images/generate"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    data = {"model": model, "prompt": prompt}
+    response = requests.post(url, headers=headers, json=data)
+
+    if response.status_code == 200:
+        return response.json().get("image_url")  # Assume 'image_url'
+    else:
+        raise Exception(f"Error: {response.status_code}, {response.text}")
+
+
+def generate_image_openai_like(prompt, model, api_url, api_key):
+    url = f"{api_url}/v1/images/generations"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    data = {"model": model, "prompt": prompt, "n": 1, "size": "1024x1024"}
+    response = requests.post(url, headers=headers, json=data)
+
+    if response.status_code == 200:
+        return response.json().get("data")[0].get("url")  # Assume the firs
+
+    else:
+        raise Exception(f"Error: {response.status_code}, {response.text}")
+
+
+def generate_image(
+    prompt, model=npcsh_model, provider=npcsh_provider, filename=None, npc=None
+):
+    # raise NotImplementedError("This function is not yet implemented.")
 
     if npc is not None:
         if npc.provider is not None:
@@ -147,30 +139,29 @@ def generate_image(prompt,
     if filename is None:
         # Generate a filename based on the prompt and the date time
         filename = f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        
+
     if provider == "ollama":
-        
-        image =  generate_image_ollama(prompt, model)
+        image = generate_image_ollama(prompt, model)
     elif provider == "openai":
         image = generate_image_openai(prompt, model, openai_api_key)
     elif provider == "anthropic":
         image = generate_image_anthropic(prompt, model, anthropic_api_key)
     elif provider == "openai-like":
         image = generate_image_openai_like(prompt, model, npc.api_url, openai_api_key)
-    #save image
+    # save image
     if image is not None:
         # image is at a private url
         response = requests.get(image.data[0].url)
         with open(filename, "wb") as file:
             file.write(response.content)
         from PIL import Image
-        img = Image.open(filename)
-        img.show()    
-        #console = Console()
-        #console.print(Image.from_path(filename))
 
-        return filename    
-    
+        img = Image.open(filename)
+        img.show()
+        # console = Console()
+        # console.print(Image.from_path(filename))
+
+        return filename
 
 
 def get_system_message(npc):
@@ -197,16 +188,18 @@ def get_system_message(npc):
     """
 
     if npc.tools:
-        tool_descriptions = "\n".join([
-            f"Tool Name: {tool.tool_name}\n"
-            f"Inputs: {tool.inputs}\n"
-            f"Preprocess: {tool.preprocess}\n"
-            f"Prompt: {tool.prompt}\n"
-            f"Postprocess: {tool.postprocess}"
-            for tool in npc.tools
-        ])
+        tool_descriptions = "\n".join(
+            [
+                f"Tool Name: {tool.tool_name}\n"
+                f"Inputs: {tool.inputs}\n"
+                f"Preprocess: {tool.preprocess}\n"
+                f"Prompt: {tool.prompt}\n"
+                f"Postprocess: {tool.postprocess}"
+                for tool in npc.tools
+            ]
+        )
         system_message += f"\n\nAvailable Tools:\n{tool_descriptions}"
-    
+
     return system_message
 
 
@@ -254,17 +247,21 @@ def get_openai_conversation(messages, model, npc=None, api_key=None, **kwargs):
 
         response_message = completion.choices[0].message
         messages.append({"role": "assistant", "content": response_message.content})
-        #print(messages)
+        # print(messages)
 
         return messages
 
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
-def get_openai_like_conversation(messages, model, npc=None, api_url=None, api_key=None, **kwargs):
+
+
+def get_openai_like_conversation(
+    messages, model, npc=None, api_url=None, api_key=None, **kwargs
+):
     try:
         if api_url is None:
             raise ValueError("api_url is required for openai-like provider")
-        
+
         system_message = get_system_message(npc) if npc else ""
         messages_copy = messages.copy()
         if messages_copy[0]["role"] != "system":
@@ -300,7 +297,7 @@ def get_openai_like_conversation(messages, model, npc=None, api_url=None, api_ke
         return f"Error making API request: {e}"
     except Exception as e:
         return f"Error interacting with API: {e}"
-    
+
 
 def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs):
     try:
@@ -581,149 +578,70 @@ import base64
 import json
 import requests
 
+
 def get_ollama_response(
-    prompt, model, image=None, npc=None, format=None, messages=None, **kwargs
+    prompt, model, images=None, npc=None, format=None, messages=None, **kwargs
 ):
+    print(prompt)
     try:
-        url = "http://localhost:11434/api/generate"
-        system_message = get_system_message(npc) if npc else ""
-        full_prompt = f"{system_message}\n\n{prompt}"
-        data = {
-            "model": model,
-            "prompt": full_prompt,
-            "stream": False,
-        }
+        if images:
+            # Create a list of image paths
+            image_paths = [image["file_path"] for image in images]
+            print("fork")
+            # Create the message payload
+            message = {"role": "user", "content": prompt, "images": image_paths}
 
-        if image:
-            try:
-                image_path = image["file_path"]
-                with open(image_path, "rb") as image_file:
-                    image_data = image_file.read()
-                    base64_image = base64.b64encode(image_data).decode("utf-8")
-                    data["images"] = [base64_image]
-            except FileNotFoundError:
-                return {"error": f"Image file not found: {image_path}"}
-            except Exception as e:
-                return {"error": f"Error processing image: {e}"}
+            # print(model)
+            # print(messages)
 
-        try:
-            response = requests.post(url, json=data)
-            response.raise_for_status()
-            response_data = response.json() # Directly parse the JSON response
-            llm_response = response_data["response"]
-            items_to_return = {"response": llm_response}
+            # Call the ollama API
+            res = ollama.chat(model=model, messages=[message])
+            # print(res)
+            # Extract the response content
+            response_content = res["message"]["content"]
+
+            # Create the items to return
+            items_to_return = {"response": response_content}
+
+            # If messages is not None, append the response to the messages list
             if messages is not None:
-                messages.append({"role": "assistant", "content": llm_response})
+                messages.append({"role": "assistant", "content": response_content})
                 items_to_return["messages"] = messages
 
-            if format == "json":
-                try:
-                    items_to_return["response"] = response_data["response"]  # Already parsed
-                    return items_to_return
-                except KeyError: # Use KeyError here since response is already parsed
-                    print(f"Warning: 'response' key not found in JSON: {response_data}")
-                    return {"error": "Invalid JSON response"}
-            else:
-                return items_to_return
-        except requests.exceptions.RequestException as e:
-            return {"error": f"Error making request to Ollama API: {e}"}
-        except json.JSONDecodeError as e:
-            return {"error": f"Invalid JSON response from Ollama API: {e}"}
-        except Exception as e:
-            return {"error": f"Unexpected error during API interaction: {e}"} # Catch any other errors
-
-    except Exception as e:
-        return {"error": f"Error outside of main try block: {e}"} # Very unlikely, but good practice
-
-def get_openai_like_response(
-    prompt,
-    model,
-    api_url,
-    image=None,
-    npc=None,
-    format=None,
-    api_key=None,
-    messages=None,
-    **kwargs,
-):
-    try:
-        system_message = (
-            get_system_message(npc) if npc else "You are a helpful assistant."
-        )
-        if messages is None or len(messages) == 0:
-            messages = [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt},
-            ]
-        if image:  # Add image if provided
-            with open(image["file_path"], "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{base64_image}"
-                                },
-                            }
-                        ],
-                    }
-                )
-
-        request_data = {
-            "model": model,
-            "messages": messages,
-            **kwargs,  # Include any additional keyword arguments
-        }
-        if format == "json":
-            request_data["format"] = "json"
-
-        headers = {"Content-Type": "application/json"}  # Set Content-Type header
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        response = requests.post(api_url, headers=headers, json=request_data)
-        response.raise_for_status()
-        response_json = response.json()
-        llm_response = (
-            response_json.get("choices", [{}])[0].get("message", {}).get("content")
-        )
-        if llm_response is None:
-            raise ValueError(
-                "Invalid response format from the API. Could not extract 'choices[0].message.content'."
-            )
-
-        items_to_return = {"response": llm_response}
-        if messages is not None:
-            messages.append({"role": "assistant", "content": llm_response})
-            items_to_return["messages"] = messages
-        if format == "json":
-            try:
-                items_to_return["response"] = json.loads(llm_response)
-                return items_to_return
-            except json.JSONDecodeError:
-                print(f"Warning: Expected JSON response, but received: {llm_response}")
-                return {"error": "Invalid JSON response"}
-        else:
             return items_to_return
 
-    except requests.exceptions.RequestException as e:
-        return f"Error making API request: {e}"
+        else:
+            # If no images are provided, create a text-only message payload
+            message = {"role": "user", "content": prompt}
+
+            # Call the ollama API
+            res = ollama.chat(model=model, messages=[message])
+
+            # Extract the response content
+            response_content = res["message"]["content"]
+
+            # Create the items to return
+            items_to_return = {"response": response_content}
+
+            # If messages is not None, append the response to the messages list
+            if messages is not None:
+                messages.append({"role": "assistant", "content": response_content})
+                items_to_return["messages"] = messages
+
+            return items_to_return
+
     except Exception as e:
-        return f"Error interacting with API: {e}"
+        return {"error": f"Error outside of main try block: {e}"}
 
 
 def get_openai_response(
     prompt,
     model,
-    image=None,
+    images=None,
     npc=None,
     format=None,
     api_key=None,
     messages=None,
-    **kwargs,
 ):
     try:
         if api_key is None:
@@ -738,9 +656,8 @@ def get_openai_response(
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt},
             ]
-        if image:  # Add image if provided
-            with open(image["file_path"], "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+        if images:
+            for image in images:
                 messages.append(
                     {
                         "role": "user",
@@ -748,16 +665,14 @@ def get_openai_response(
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": f"data:image/png;base64,{base64_image}"
+                                    "url": f"data:{image['media_type']};base64,{image['data']}"
                                 },
                             }
                         ],
                     }
                 )
-        # print("openai_messages", messages)
-        completion = client.chat.completions.create(
-            model=model, messages=messages, **kwargs
-        )
+
+        completion = client.chat.completions.create(model=model, messages=messages)
 
         llm_response = completion.choices[0].message.content
 
@@ -782,7 +697,7 @@ def get_openai_response(
 def get_anthropic_response(
     prompt,
     model,
-    image=None,
+    images=None,  # Changed to accept multiple images
     npc=None,
     format=None,
     api_key=None,
@@ -792,66 +707,60 @@ def get_anthropic_response(
     try:
         if api_key is None:
             api_key = os.getenv("ANTHROPIC_API_KEY", None)
-        system_message = (
-            get_system_message(npc) if npc else "You are a helpful assistant."
-        )
-        client = anthropic.Anthropic(api_key=api_key)
-        if messages is None or len(messages) == 0:
-            messages = []
-            messages.append({"role": "system", "content": system_message})
 
-        if image:
-            with open(image["file_path"], "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode("utf-8")
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/png",  # Or the appropriate media type
-                                    "data": base64_image,
-                                },
-                            },
-                            {
-                                "type": "text",
-                                "text": prompt,  # Include the prompt here with the image
-                            },
-                        ],
-                    }
-                )
-        else:
-            messages.append({"role": "user", "content": prompt})
-        # print(messages)
+        client = anthropic.Anthropic()
 
+        # Prepare the message content
+        message_content = []
+
+        # Add images if provided
+        if images:
+            for img in images:
+                # load image and base 64 encode
+                with open(img["file_path"], "rb") as image_file:
+                    img["data"] = base64.b64encode(image_file.read()).decode("utf-8")
+                    img["media_type"] = "image/png"
+                    message_content.append(
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img["media_type"],
+                                "data": img["data"],
+                            },
+                        }
+                    )
+
+        # Add the text prompt
+        message_content.append({"type": "text", "text": prompt})
+
+        # Create the message
         message = client.messages.create(
             model=model,
             max_tokens=1024,
-            system=system_message,
-            messages=messages[1:],
+            messages=[{"role": "user", "content": message_content}],
         )
+        print(message)
 
-        # print(message)
-        llm_response = message.content[0].text  # This is the AI's text response
+        llm_response = message.content[0].text
         items_to_return = {"response": llm_response}
 
+        # Update messages if they were provided
         if messages is not None:
+            messages.append({"role": "user", "content": message_content})
             messages.append({"role": "assistant", "content": llm_response})
             items_to_return["messages"] = messages
 
+        # Handle JSON format if requested
         if format == "json":
             try:
                 items_to_return["response"] = json.loads(llm_response)
                 return items_to_return
-
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
-                # If parsing fails, return the raw response wrapped in a dictionary
                 return {"response": llm_response, "error": "Invalid JSON response"}
-        else:
-            return items_to_return
+
+        return items_to_return
 
     except Exception as e:
         return f"Error interacting with Anthropic: {e}"
@@ -875,7 +784,7 @@ def get_llm_response(
     prompt,
     provider=npcsh_provider,
     model=npcsh_model,
-    image = None,
+    images=None,
     npc=None,
     messages=None,
     api_url=None,
@@ -894,58 +803,64 @@ def get_llm_response(
     else:
         if provider is None and model is None:
             provider = "ollama"
-            if image is not None:            
-                model = 'llava'
-            else:
-                model = "llama3.2"    
-        elif provider is None and model is not None:
-            provider = lookupprovider(model)
-    if provider == "ollama":
-        if model is None:
-            if image is not None:
-                model = 'llava'
+            if images is not None:
+                model = "llava:7b"
             else:
                 model = "llama3.2"
-        elif image is not None and model not in ['x/llama3.2-vision', 
-                                                 'llava',
-                                                 'llava-llama3', 
-                                                 'bakllava', 
-                                                 'moondream', 
-                                                 'llava-phi3', 
-                                                 'minicpm-v', 
-                                                 'hhao/openbmb-minicpm-llama3-v-2_5', 
-                                                 'aiden_lu/minicpm-v2.6', 
-                                                 'xuxx/minicpm2.6', 
-                                                 'benzie/llava-phi-3',
-                                                 'mskimomadto/chat-gph-vision', 
-                                                 'xiayu/openbmb-minicpm-llama3-v-2_5',
-                                                 '0ssamaak0/xtuner-llava', 
-                                                 'srizon/pixie', 
-                                                 'jyan1/paligemma-mix-224', 
-                                                 'qnguyen3/nanollava', 
-                                                 'knoopx/llava-phi-2', 
-                                                 'nsheth/llama-3-lumimaid-8b-v0.1-iq-imatrix', 
-                                                 'bigbug/minicpm-v2.5',
-                                                 ]:
-            model = 'llava'
+        elif provider is None and model is not None:
+            provider = lookupprovider(model)
+    print("model", model, "provider", provider)
+    if provider == "ollama":
+        if model is None:
+            if images is not None:
+                model = "llama:7b"
+            else:
+                model = "llama3.2"
+        elif images is not None and model not in [
+            "x/llama3.2-vision",
+            "llama3.2-vision",
+            "llava-llama3",
+            "bakllava",
+            "moondream",
+            "llava-phi3",
+            "minicpm-v",
+            "hhao/openbmb-minicpm-llama3-v-2_5",
+            "aiden_lu/minicpm-v2.6",
+            "xuxx/minicpm2.6",
+            "benzie/llava-phi-3",
+            "mskimomadto/chat-gph-vision",
+            "xiayu/openbmb-minicpm-llama3-v-2_5",
+            "0ssamaak0/xtuner-llava",
+            "srizon/pixie",
+            "jyan1/paligemma-mix-224",
+            "qnguyen3/nanollava",
+            "knoopx/llava-phi-2",
+            "nsheth/llama-3-lumimaid-8b-v0.1-iq-imatrix",
+            "bigbug/minicpm-v2.5",
+        ]:
+            model = "llava:7b"
         print(model)
-        return get_ollama_response(prompt, model, npc=npc, messages=messages, image = image, **kwargs)
+        return get_ollama_response(
+            prompt, model, npc=npc, messages=messages, images=images, **kwargs
+        )
     elif provider == "openai":
         if model is None:
             model = "gpt-4o-mini"
-        return get_openai_response(prompt, model, npc=npc, messages=messages, image=image, **kwargs)
+        return get_openai_response(
+            prompt, model, npc=npc, messages=messages, images=images, **kwargs
+        )
     elif provider == "openai-like":
         if api_url is None:
             raise ValueError("api_url is required for openai-like provider")
         return get_openai_like_response(
-            prompt, model, api_url, npc=npc, messages=messages, image=image, **kwargs
+            prompt, model, api_url, npc=npc, messages=messages, images=images, **kwargs
         )
 
     elif provider == "anthropic":
         if model is None:
             model = "claude-3-haiku-20240307"
         return get_anthropic_response(
-            prompt, model, npc=npc, messages=messages, **kwargs
+            prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
     else:
         return "Error: Invalid provider specified."
@@ -962,7 +877,6 @@ import pandas as pd
 def load_data(file_path, name):
     dataframes[name] = pd.read_csv(file_path)
     print(f"Data loaded as '{name}'")
-
 
 
 def execute_data_operations(
@@ -1128,12 +1042,12 @@ def execute_llm_command(
             Use these to help inform your decision.
             {context}
             """
-        if len(messages)>0:
-            prompt+=f"""
+        if len(messages) > 0:
+            prompt += f"""
             The following messages have been exchanged between the user and the assistant:
             {messages}
             """
-            
+
         response = get_llm_response(
             prompt,
             model=model,
@@ -1142,7 +1056,6 @@ def execute_llm_command(
             npc=npc,
             format="json",
         )
-
 
         llm_response = response.get("response", {})
         messages.append({"role": "assistant", "content": llm_response})
@@ -1191,8 +1104,8 @@ def execute_llm_command(
 
                 {context}
                 """
-            if len(messages)>0:
-                prompt+=f"""
+            if len(messages) > 0:
+                prompt += f"""
                 The following messages have been exchanged between the user and the assistant:
                 {messages}
                 """
@@ -1205,13 +1118,15 @@ def execute_llm_command(
                 messages=[],
             )
 
-            messages.append({"role": "assistant", "content": response.get("response", "")})
+            messages.append(
+                {"role": "assistant", "content": response.get("response", "")}
+            )
             output = response.get("response", "")
 
             render_markdown(output)
             command_history.add(command, subcommands, output, location)
 
-            return {'messages': messages, 'output': output}
+            return {"messages": messages, "output": output}
         except subprocess.CalledProcessError as e:
             print(f"Command failed with error:")
             print(e.stderr)
@@ -1265,7 +1180,11 @@ def execute_llm_command(
         attempt += 1
 
     command_history.add(command, subcommands, "Execution failed", location)
-    return  {'messages': messages, 'output': "Max attempts reached. Unable to execute the command successfully."}
+    return {
+        "messages": messages,
+        "output": "Max attempts reached. Unable to execute the command successfully.",
+    }
+
 
 def check_llm_command(
     command,
@@ -1283,8 +1202,8 @@ def check_llm_command(
         messages = []
     # Create context from retrieved documents
     context = ""
-    
-    #print(command)
+
+    # print(command)
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
             context += f"Document: {filename}\n{content}\n\n"
@@ -1299,8 +1218,9 @@ def check_llm_command(
     3. Is it a general question that requires an informative answer?
 
     Available tools:
-    - weather_tool: Provides weather information.
     - image_generation_tool: Generates images based on a text prompt.
+    - generic_search_tool: Searches the web for information based on a query.
+    - screen_capture_analysis_tool: Captures the whole screen and sends the image for analysis.
 
     In considering how to answer this, consider:
     - Whether it can be answered via a bash command on the user's computer.
@@ -1337,20 +1257,22 @@ def check_llm_command(
             npc=npc,
             format="json",
         )
-        #print("LLM raw response:", response)  # Log the raw response
+        print(response)
+        # print("LLM raw response:", response)  # Log the raw response
         if "error" in response:
             print(f"LLM Error: {response['error']}")
-            return response["error"] # Return the error message directly
+            return response["error"]  # Return the error message directly
 
         response_content = response.get("response", {})
-        #print("Parsed response_content:", response_content) # Log the parsed response
+        # print("Parsed response_content:", response_content) # Log the parsed response
         if isinstance(response_content, str):
             try:
                 response_content = json.loads(response_content)
             except json.JSONDecodeError as e:
-                print(f"Invalid JSON received from LLM: {e}. Response was: {response_content}")
+                print(
+                    f"Invalid JSON received from LLM: {e}. Response was: {response_content}"
+                )
                 return f"Error: Invalid JSON from LLM: {response_content}"
-
 
         messages.extend(response.get("messages", []))
 
@@ -1413,20 +1335,22 @@ def handle_tool_call(
 ):
     print(f"handle_tool_call invoked with tool_name: {tool_name}")
     if not npc or not npc.tools_dict:
-        print('not available')
+        print("not available")
         available_tools = npc.tools_dict if npc else None
-        print(f"No tools available for NPC '{npc.name}' or tools_dict is empty. Available tools: {available_tools}")
+        print(
+            f"No tools available for NPC '{npc.name}' or tools_dict is empty. Available tools: {available_tools}"
+        )
         return f"No tools are available for NPC '{npc.name or 'default'}'."
 
     if tool_name not in npc.tools_dict:
-        print('not available')
+        print("not available")
         print(f"Tool '{tool_name}' not found in NPC's tools_dict.")
-        print("available tools", npc.tools_dict)        
+        print("available tools", npc.tools_dict)
         return f"Tool '{tool_name}' not found."
 
     tool = npc.tools_dict[tool_name]
     print(f"Tool found: {tool.tool_name}")
-    jinja_env = Environment(loader=FileSystemLoader('.'), undefined=Undefined)
+    jinja_env = Environment(loader=FileSystemLoader("."), undefined=Undefined)
 
     prompt = f"""
     The user wants to use the tool '{tool_name}' with the following request:
@@ -1434,20 +1358,24 @@ def handle_tool_call(
     Please extract the required inputs for the tool as a JSON object.
     Return only the JSON object without any markdown formatting.
     """
-    #print(f"Tool prompt: {prompt}")
-    response = get_llm_response(prompt, format='json', model=model, provider=provider, npc=npc)
+    # print(f"Tool prompt: {prompt}")
+    response = get_llm_response(
+        prompt, format="json", model=model, provider=provider, npc=npc
+    )
     try:
         # Clean the response of markdown formatting
         response_text = response.get("response", "{}")
         if isinstance(response_text, str):
-            response_text = response_text.replace("```json", "").replace("```", "").strip()
-        
+            response_text = (
+                response_text.replace("```json", "").replace("```", "").strip()
+            )
+
         # Parse the cleaned response
         if isinstance(response_text, dict):
             input_values = response_text
         else:
             input_values = json.loads(response_text)
-        #print(f"Extracted inputs: {input_values}")
+        # print(f"Extracted inputs: {input_values}")
     except json.JSONDecodeError as e:
         print(f"Error decoding input values: {e}. Raw response: {response}")
         return f"Error extracting inputs for tool '{tool_name}'"
@@ -1460,14 +1388,15 @@ def handle_tool_call(
 
     try:
         tool_output = tool.execute(input_values, npc.tools_dict, jinja_env)
-        #print(f"Tool output: {tool_output}")
-        render_markdown(tool_output)
-        if messages is not None: # Check if messages is not None
-            messages.append({"role": "assistant", "content": tool_output})
-        return {'messages': messages, 'output': tool_output}
+        # print(f"Tool output: {tool_output}")
+        render_markdown(str(tool_output))
+        if messages is not None:  # Check if messages is not None
+            messages.append({"role": "assistant", "content": str(tool_output)})
+        return {"messages": messages, "output": tool_output}
     except Exception as e:
         print(f"Error executing tool {tool_name}: {e}")
         return f"Error executing tool {tool_name}: {e}"
+
 
 def execute_llm_question(
     command,
@@ -1508,9 +1437,9 @@ def execute_llm_question(
 
         render_markdown(output)
         command_history.add(command, [], output, location)
-        #print('CONVERSATION QUESTION OUTPUT:', output)
-        #print('messages question:', messages)
-        return {'messages': messages, 'output': output}
+        # print('CONVERSATION QUESTION OUTPUT:', output)
+        # print('messages question:', messages)
+        return {"messages": messages, "output": output}
     else:
         # For single-turn queries
         response = get_llm_response(
@@ -1520,9 +1449,9 @@ def execute_llm_question(
             npc=npc,
             messages=messages,
         )
-        output = response.get('response', '')
-        messages = response.get('messages', messages)
+        output = response.get("response", "")
+        messages = response.get("messages", messages)
         render_markdown(output)
 
         command_history.add(command, [], output, location)
-        return {'messages': messages, 'output': output}
+        return {"messages": messages, "output": output}
