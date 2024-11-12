@@ -225,29 +225,22 @@ def get_openai_conversation(messages, model, npc=None, api_key=None, **kwargs):
             get_system_message(npc) if npc else "You are a helpful assistant."
         )
 
-        # If no messages are provided, start a new conversation
-        if messages is None or len(messages) == 0:
-            messages = [{"role": "system", "content": system_message}]
+        if messages is None:
+            messages = []
 
-        # Extract the last user message
-        last_user_message = None
-        for msg in reversed(messages):
-            if msg["role"] == "user":
-                last_user_message = msg["content"]
-                break
+        # Ensure the system message is at the beginning
+        if not any(msg["role"] == "system" for msg in messages):
+            messages.insert(0, {"role": "system", "content": system_message})
 
-        if last_user_message is None:
-            raise ValueError("No user message found in the conversation history.")
+        # messages should already include the user's latest message
 
-        # messages.append({"role": "user", "content": last_user_message})
-
+        # Make the API call with the messages including the latest user input
         completion = client.chat.completions.create(
             model=model, messages=messages, **kwargs
         )
 
         response_message = completion.choices[0].message
         messages.append({"role": "assistant", "content": response_message.content})
-        # print(messages)
 
         return messages
 
@@ -305,12 +298,6 @@ def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs
             api_key = os.getenv("ANTHROPIC_API_KEY", None)
         system_message = get_system_message(npc) if npc else ""
         client = anthropic.Anthropic(api_key=api_key)
-
-        # If no messages are provided, start a new conversation
-        if messages is None or len(messages) == 0:
-            messages = [{"role": "system", "content": system_message}]
-
-        # Extract the last user message
         last_user_message = None
         for msg in reversed(messages):
             if msg["role"] == "user":
@@ -320,13 +307,15 @@ def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs
         if last_user_message is None:
             raise ValueError("No user message found in the conversation history.")
 
+        # if a sys message is in messages, remove it
+        if messages[0]["role"] == "system":
+            messages.pop(0)
+
         message = client.messages.create(
             model=model,
             max_tokens=1024,
             system=system_message,  # Include system message in each turn for Anthropic
-            messages=[
-                {"role": "user", "content": last_user_message}
-            ],  # Send only the last user message
+            messages=messages,  # Send only the last user message
             **kwargs,
         )
 
@@ -341,6 +330,24 @@ def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs
 def get_conversation(
     messages, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs
 ):
+    if npc is not None:
+        if npc.provider is not None:
+            provider = npc.provider
+        if npc.model is not None:
+            model = npc.model
+        if npc.api_url is not None:
+            api_url = npc.api_url
+
+    else:
+        if provider is None and model is None:
+            provider = "ollama"
+            if images is not None:
+                model = "llava:7b"
+            else:
+                model = "llama3.2"
+        elif provider is None and model is not None:
+            provider = lookupprovider(model)
+
     # print(provider, model)
     if provider == "ollama":
         return get_ollama_conversation(messages, model, npc=npc, **kwargs)
@@ -582,12 +589,12 @@ import requests
 def get_ollama_response(
     prompt, model, images=None, npc=None, format=None, messages=None, **kwargs
 ):
-    print(prompt)
+    # print(prompt)
     try:
         if images:
             # Create a list of image paths
             image_paths = [image["file_path"] for image in images]
-            print("fork")
+            # print("fork")
             # Create the message payload
             message = {"role": "user", "content": prompt, "images": image_paths}
 
@@ -678,17 +685,19 @@ def get_openai_response(
 
         items_to_return = {"response": llm_response}
 
-        if messages is not None:
-            messages.append({"role": "assistant", "content": llm_response})
-            items_to_return["messages"] = messages
+        items_to_return["messages"] = messages
         if format == "json":
             try:
                 items_to_return["response"] = json.loads(llm_response)
+
                 return items_to_return
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
                 return {"error": "Invalid JSON response"}
         else:
+            items_to_return["messages"].append(
+                {"role": "assistant", "content": llm_response}
+            )
             return items_to_return
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
@@ -740,16 +749,19 @@ def get_anthropic_response(
             max_tokens=1024,
             messages=[{"role": "user", "content": message_content}],
         )
-        print(message)
+        # print(message)
 
         llm_response = message.content[0].text
         items_to_return = {"response": llm_response}
 
         # Update messages if they were provided
-        if messages is not None:
+        if messages is None:
+            messages = []
+            messages.append(
+                {"role": "system", "content": "You are a helpful assistant."}
+            )
             messages.append({"role": "user", "content": message_content})
-            messages.append({"role": "assistant", "content": llm_response})
-            items_to_return["messages"] = messages
+        items_to_return["messages"] = messages
 
         # Handle JSON format if requested
         if format == "json":
@@ -759,7 +771,9 @@ def get_anthropic_response(
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
                 return {"response": llm_response, "error": "Invalid JSON response"}
-
+        else:
+            # only append to messages if the response is not json
+            messages.append({"role": "assistant", "content": llm_response})
         return items_to_return
 
     except Exception as e:
@@ -809,7 +823,8 @@ def get_llm_response(
                 model = "llama3.2"
         elif provider is None and model is not None:
             provider = lookupprovider(model)
-    print("model", model, "provider", provider)
+    # print("werwer ", npc, model, provider)
+
     if provider == "ollama":
         if model is None:
             if images is not None:
@@ -839,13 +854,14 @@ def get_llm_response(
             "bigbug/minicpm-v2.5",
         ]:
             model = "llava:7b"
-        print(model)
+        # print(model)
         return get_ollama_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
     elif provider == "openai":
         if model is None:
             model = "gpt-4o-mini"
+        # print("gpt4o")
         return get_openai_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
@@ -857,6 +873,7 @@ def get_llm_response(
         )
 
     elif provider == "anthropic":
+        # print("anth")
         if model is None:
             model = "claude-3-haiku-20240307"
         return get_anthropic_response(
@@ -1058,7 +1075,7 @@ def execute_llm_command(
         )
 
         llm_response = response.get("response", {})
-        messages.append({"role": "assistant", "content": llm_response})
+        # messages.append({"role": "assistant", "content": llm_response})
         # print(f"LLM response type: {type(llm_response)}")
         # print(f"LLM response: {llm_response}")
 
@@ -1104,23 +1121,15 @@ def execute_llm_command(
 
                 {context}
                 """
-            if len(messages) > 0:
-                prompt += f"""
-                The following messages have been exchanged between the user and the assistant:
-                {messages}
-                """
 
             response = get_llm_response(
                 prompt,
                 model=model,
                 provider=provider,
                 npc=npc,
-                messages=[],
+                messages=messages,
             )
 
-            messages.append(
-                {"role": "assistant", "content": response.get("response", "")}
-            )
             output = response.get("response", "")
 
             render_markdown(output)
@@ -1200,10 +1209,11 @@ def check_llm_command(
 
     if messages is None:
         messages = []
+
+    # print(model, provider, npc)
     # Create context from retrieved documents
     context = ""
 
-    # print(command)
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
             context += f"Document: {filename}\n{content}\n\n"
@@ -1226,7 +1236,6 @@ def check_llm_command(
     - Whether it can be answered via a bash command on the user's computer.
     - Whether a tool should be used.
     - Assume that the user has access to internet and basic command line tools like curl, wget, etc.
-    - The user may have access to a local database (use sqlite3 to query the database).
 
     Respond with a JSON object containing:
     - "action": one of ["execute_command", "invoke_tool", "answer_question"]
@@ -1243,58 +1252,65 @@ def check_llm_command(
     }}
     """
 
-    if len(context) > 0:
+    if context:
         prompt += f"""
         Relevant context from user's files:
         {context}
         """
 
     try:
-        response = get_llm_response(
+        # For action determination, we don't need to pass the conversation messages to avoid confusion
+        # print(npc, model, provider)
+        action_response = get_llm_response(
             prompt,
             model=model,
             provider=provider,
             npc=npc,
             format="json",
+            messages=[],
         )
-        print(response)
-        # print("LLM raw response:", response)  # Log the raw response
-        if "error" in response:
-            print(f"LLM Error: {response['error']}")
-            return response["error"]  # Return the error message directly
 
-        response_content = response.get("response", {})
-        # print("Parsed response_content:", response_content) # Log the parsed response
+        if "error" in action_response:
+            print(f"LLM Error: {action_response['error']}")
+            return action_response["error"]
+
+        response_content = action_response.get("response", {})
+
         if isinstance(response_content, str):
             try:
-                response_content = json.loads(response_content)
+                response_content_parsed = json.loads(response_content)
             except json.JSONDecodeError as e:
                 print(
                     f"Invalid JSON received from LLM: {e}. Response was: {response_content}"
                 )
                 return f"Error: Invalid JSON from LLM: {response_content}"
+        else:
+            response_content_parsed = response_content
 
-        messages.extend(response.get("messages", []))
+        # Proceed according to the action specified
+        action = response_content_parsed.get("action")
 
-        # Handle potential errors and non-JSON responses
-        if not isinstance(response_content, dict):
-            print(f"Error: Expected a dictionary, but got {type(response_content)}")
-            return "Error: Invalid response from LLM (not a dictionary)"
+        # Include the user's command in the conversation messages
 
-        action = response_content.get("action")
         if action == "execute_command":
-            return execute_llm_command(
+            # Pass messages to execute_llm_command
+            result = execute_llm_command(
                 command,
                 command_history,
                 model=model,
                 provider=provider,
-                messages=messages,
+                messages=[],
                 npc=npc,
                 retrieved_docs=retrieved_docs,
             )
+
+            output = result.get("output", "")
+            messages = result.get("messages", messages)
+            return {"messages": messages, "output": output}
+
         elif action == "invoke_tool":
-            tool_name = response_content.get("tool_name")
-            return handle_tool_call(
+            tool_name = response_content_parsed.get("tool_name")
+            result = handle_tool_call(
                 command,
                 tool_name,
                 command_history,
@@ -1304,8 +1320,12 @@ def check_llm_command(
                 npc=npc,
                 retrieved_docs=retrieved_docs,
             )
+            messages = result.get("messages", messages)
+            output = result.get("output", "")
+            return {"messages": messages, "output": output}
+
         elif action == "answer_question":
-            return execute_llm_question(
+            result = execute_llm_question(
                 command,
                 command_history,
                 model=model,
@@ -1314,9 +1334,13 @@ def check_llm_command(
                 npc=npc,
                 retrieved_docs=retrieved_docs,
             )
+            messages = result.get("messages", messages)
+            output = result.get("output", "")
+            return {"messages": messages, "output": output}
         else:
             print("Error: Invalid action in LLM response")
             return "Error: Invalid action in LLM response"
+
     except Exception as e:
         print(f"Error in check_llm_command: {e}")
         return f"Error: {e}"
@@ -1409,49 +1433,41 @@ def execute_llm_question(
     n_docs=5,
 ):
     location = os.getcwd()
-    context = ""
     if messages is None:
         messages = []
+
+    # Build context from retrieved documents
     if retrieved_docs:
+        context = ""
         for filename, content in retrieved_docs[:n_docs]:
             context += f"Document: {filename}\n{content}\n\n"
-        context = f"Refer to the following documents for context:\n{context}\n\n"
-        command = f"""{command}\n       
-        What follows is the context of the text files in the user's directory that are potentially relevant to their request
-        Use these to help inform your decision.
+        context_message = f"""
+        What follows is the context of the text files in the user's directory that are potentially relevant to their request:
+        {context}
+        """
+        # Add context as a system message
+        # messages.append({"role": "system", "content": context_message})
 
-        CONTEXT:
-    {context}"""
+    # Append the user's message to messages
+    # messages.append({"role": "user", "content": command})
 
-    # Use get_conversation if messages are provided
-    if len(messages) > 0:
-        messages.append({"role": "user", "content": command})
-        response = get_conversation(messages, model=model, provider=provider, npc=npc)
-        if isinstance(response, str) and "Error" in response:
-            output = response
-        elif isinstance(response, list) and len(response) > 0:
-            messages = response  # Update messages with the new conversation
-            output = response[-1]["content"]
-        else:
-            output = "Error: Invalid response from conversation function"
+    # Print messages before calling get_conversation for debugging
+    # print("Messages before get_conversation:", messages)
 
-        render_markdown(output)
-        command_history.add(command, [], output, location)
-        # print('CONVERSATION QUESTION OUTPUT:', output)
-        # print('messages question:', messages)
-        return {"messages": messages, "output": output}
+    # Use the existing messages list
+    response = get_conversation(messages, model=model, provider=provider, npc=npc)
+
+    # Print response from get_conversation for debugging
+    # print("Response from get_conversation:", response)
+
+    if isinstance(response, str) and "Error" in response:
+        output = response
+    elif isinstance(response, list) and len(response) > 0:
+        messages = response  # Update messages with the new conversation
+        output = response[-1]["content"]
     else:
-        # For single-turn queries
-        response = get_llm_response(
-            command,
-            model=model,
-            provider=provider,
-            npc=npc,
-            messages=messages,
-        )
-        output = response.get("response", "")
-        messages = response.get("messages", messages)
-        render_markdown(output)
+        output = "Error: Invalid response from conversation function"
 
-        command_history.add(command, [], output, location)
-        return {"messages": messages, "output": output}
+    render_markdown(output)
+    command_history.add(command, [], output, location)
+    return {"messages": messages, "output": output}

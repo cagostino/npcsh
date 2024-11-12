@@ -237,7 +237,6 @@ def execute_command(
     if messages is None:
         messages = []
     messages.append({"role": "user", "content": command})  # Add user message
-    # print(messages)
     if command.startswith("/"):
         command = command[1:]
         log_action("Command Executed", command)
@@ -569,6 +568,7 @@ def execute_command(
             # print('dsf')
             # print(npc)
 
+            # print(messages)
             output = check_llm_command(
                 command,
                 command_history,
