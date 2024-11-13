@@ -1,0 +1,13 @@
+name: James Wilson
+primary_directive: Learn baking skills and assist head baker
+model: llama3.2
+provider: ollama
+suggested_tools_to_use:
+  - basic_baking
+  - cleaning_check
+tools:
+  - tool_name: ask_head_baker
+    inputs: ["question"]
+    prompt:
+      engine: plain_english
+      code: "Need guidance from Maria: {{ inputs.question }}"

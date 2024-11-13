@@ -1,0 +1,10 @@
+name: Lisa Torres
+primary_directive: Manage customer service and relay feedback to kitchen
+model: phi3
+provider: ollama
+tools:
+  - tool_name: customer_feedback
+    inputs: ["feedback"]
+    prompt:
+      engine: plain_english
+      code: "Process customer feedback: {{ inputs.feedback }}"

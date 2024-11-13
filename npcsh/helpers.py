@@ -9,20 +9,31 @@ logging.basicConfig(
 import os
 import sqlite3
 import subprocess
-from .npc_compiler import NPC
 import platform
-import pyaudio
-
+import yaml
+import nltk
+import numpy as np
 import sqlite3
 import time
-from gtts import gTTS
 import numpy as np
-from playsound import playsound
-from .llm_funcs import get_llm_response
-
-import whisper
 import wave
 import tempfile
+
+try:
+    from sentence_transformers import util
+except Exception as e:
+    print(f"Error importing sentence_transformers: {e}")
+try:
+    import whisper
+    from playsound import playsound
+    from gtts import gTTS
+    import pyaudio
+except Exception as e:
+    print(f"Error importing whisper: {e}")
+
+
+from .llm_funcs import get_llm_response
+
 
 BASH_COMMANDS = [
     "open",
@@ -168,11 +179,6 @@ BASH_COMMANDS = [
 
 
 TERMINAL_EDITORS = ["vim", "emacs", "nano"]
-import yaml
-import os
-import subprocess
-import platform
-import time
 
 
 def capture_screenshot(npc=None):
@@ -227,13 +233,38 @@ def capture_screenshot(npc=None):
     return {"filename": filename, "file_path": file_path, "model_kwargs": model_kwargs}
 
 
+def analyze_image_base(user_prompt, file_path, filename, npc=None):
+    if os.path.exists(file_path):
+        image_info = {"filename": filename, "file_path": file_path}
+
+        if user_prompt:
+            # try:
+            response = get_llm_response(user_prompt, images=[image_info], npc=npc)
+
+            # Add to command history *inside* the try block
+
+            print(response["response"])  # Print response after adding to history
+            return response
+
+            # except Exception as e:
+            # error_message = f"Error during LLM processing: {e}"
+            # print(error_message)
+            # return error_message
+
+        else:  # This part needs to be inside the outer 'if os.path.exists...' block
+            print("Skipping LLM processing.")
+            return image_info  # Return image info if no prompt is given
+    else:  # This else also needs to be part of the outer 'if os.path.exists...' block
+        print("Screenshot capture failed or was cancelled.")
+        return None
+
+
 def analyze_image(
     command_history, user_prompt, file_path, filename, npc=None, **model_kwargs
 ):
     if os.path.exists(file_path):
         image_info = {"filename": filename, "file_path": file_path}
 
-        
         if user_prompt:
             try:
                 response = get_llm_response(
@@ -334,10 +365,6 @@ def ensure_npcshrc_exists():
     return npcshrc_path
 
 
-import os
-import nltk
-
-
 # Function to check and download NLTK data if necessary
 def ensure_nltk_punkt():
     try:
@@ -345,6 +372,7 @@ def ensure_nltk_punkt():
     except LookupError:
         print("Downloading NLTK 'punkt' tokenizer...")
         nltk.download("punkt")
+
 
 def load_all_files(directory, extensions=None, depth=1):
     """
@@ -401,7 +429,25 @@ def load_all_files(directory, extensions=None, depth=1):
     return text_data
 
 
-import numpy as np
+import requests
+from typing import Dict, List, Optional
+from bs4 import BeautifulSoup
+import urllib.parse
+from duckduckgo_search import DDGS
+
+
+def search_web(query: str, num_results: int = 5) -> List[Dict[str, str]]:
+    """
+    Search the web using DuckDuckGo
+    Returns: List of dicts with 'title', 'link', and 'snippet' keys
+    """
+    # Encode the query for URL
+    encoded_query = urllib.parse.quote(query)
+
+    # HTML search which gives better results than their API
+    results = DDGS().text(query, max_results=num_results)
+
+    return results
 
 
 def rag_search(
@@ -419,7 +465,9 @@ def rag_search(
     results = []
 
     # Compute the embedding of the query
-    query_embedding = embedding_model.encode(query, convert_to_tensor=True)
+    query_embedding = embedding_model.encode(
+        query, convert_to_tensor=True, show_progress_bar=False
+    )
 
     for filename, content in text_data.items():
         # Split content into lines
@@ -469,50 +517,48 @@ def setup_npcsh_config():
     add_npcshrc_to_shell_config()
 
 
-from sentence_transformers import util
+def initialize_npc_project():
+    import os
 
+    # Get the current directory
+    current_directory = os.getcwd()
 
-def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
-    # its a yaml filedef load_npc(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
-    """
-    Load an NPC from a YAML file and initialize the NPC object.
+    # Create 'npc_team' folder in current directory
+    npc_team_dir = os.path.join(current_directory, "npc_team")
+    os.makedirs(npc_team_dir, exist_ok=True)
 
-    :param npc_file: Full path to the NPC file
-    :param db_conn: SQLite database connection
-    :return: Initialized NPC object
-    """
-    try:
-        with open(npc_file, "r") as f:
-            npc_data = yaml.safe_load(f)
+    # Create 'foreman.npc' file in 'npc_team' directory
+    foreman_npc_path = os.path.join(npc_team_dir, "foreman.npc")
+    if not os.path.exists(foreman_npc_path):
+        # Create initial content for 'foreman.npc'
+        foreman_npc_content = """name: foreman
+primary_directive: "You are the foreman of an NPC team."
+"""
+        with open(foreman_npc_path, "w") as f:
+            f.write(foreman_npc_content)
+    else:
+        print(f"{foreman_npc_path} already exists.")
 
-        # Extract fields from YAML
-        name = npc_data["name"]
-        primary_directive = npc_data.get("primary_directive")
-        suggested_tools_to_use = npc_data.get("suggested_tools_to_use")
-        restrictions = npc_data.get("restrictions", [])
-        model = npc_data.get("model", os.environ.get("NPCSH_MODEL", "phi3"))
-        provider = npc_data.get("provider", os.environ.get("NPCSH_PROVIDER", "ollama"))
-        api_url = npc_data.get("api_url", os.environ.get("NPCSH_API_URL", None))
-        # Initialize and return the NPC object
-        return NPC(
-            name,
-            db_conn,
-            primary_directive=primary_directive,
-            suggested_tools_to_use=suggested_tools_to_use,
-            restrictions=restrictions,
-            model=model,
-            provider=provider,
-            api_url=api_url,
-        )
+    # Create 'tools' folder within 'npc_team' directory
+    tools_dir = os.path.join(npc_team_dir, "tools")
+    os.makedirs(tools_dir, exist_ok=True)
 
-    except FileNotFoundError:
-        raise ValueError(f"NPC file not found: {npc_file}")
-    except yaml.YAMLError as e:
-        raise ValueError(f"Error parsing YAML in NPC file {npc_file}: {str(e)}")
-    except KeyError as e:
-        raise ValueError(f"Missing required key in NPC file {npc_file}: {str(e)}")
-    except Exception as e:
-        raise ValueError(f"Error loading NPC from file {npc_file}: {str(e)}")
+    # Create 'example.tool' file in 'tools' folder
+    example_tool_path = os.path.join(tools_dir, "example.tool")
+    if not os.path.exists(example_tool_path):
+        # Create initial content for 'example.tool'
+        example_tool_content = """tool_name: example
+inputs: []
+preprocess: ""
+prompt: ""
+postprocess: ""
+"""
+        with open(example_tool_path, "w") as f:
+            f.write(example_tool_content)
+    else:
+        print(f"{example_tool_path} already exists.")
+
+    return f"NPC project initialized in {npc_team_dir}"
 
 
 def is_npcsh_initialized():
@@ -554,15 +600,6 @@ def get_npc_from_command(command):
             npc = part.split("=")[1]
             break
     return npc
-
-
-def is_valid_npc(npc, db_path):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM compiled_npcs WHERE name = ?", (npc,))
-    result = cursor.fetchone()
-    conn.close()
-    return result is not None
 
 
 def get_npc_path(npc, db_path):
@@ -607,8 +644,6 @@ def initialize_base_npcs_if_needed(db_path):
         # Insert base NPCs
         base_npcs = [
             ("sibiji", os.path.join(npc_profiles_dir, "sibiji.npc")),
-            ("bash", os.path.join(npc_profiles_dir, "bash.npc")),
-            # ("data", os.path.join(npc_profiles_dir, "data.npc")),
         ]
 
         for npc_name, source_path in base_npcs:
