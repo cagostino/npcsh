@@ -181,6 +181,92 @@ interactive_commands = {
 }
 
 
+def validate_bash_command(command_parts):
+    """Validate if the command sequence is a valid bash command with proper arguments/flags"""
+    if not command_parts:
+        return False
+
+    COMMAND_PATTERNS = {
+        "cat": {
+            "flags": ["-n", "-b", "-E", "-T", "-s", "--number", "-A", "--show-all"],
+            "requires_arg": True,
+        },
+        "find": {
+            "flags": [
+                "-name",
+                "-type",
+                "-size",
+                "-mtime",
+                "-exec",
+                "-print",
+                "-delete",
+                "-maxdepth",
+                "-mindepth",
+                "-perm",
+                "-user",
+                "-group",
+            ],
+            "requires_arg": True,
+        },
+        "who": {
+            "flags": [
+                "-a",
+                "-b",
+                "-d",
+                "-H",
+                "-l",
+                "-p",
+                "-q",
+                "-r",
+                "-s",
+                "-t",
+                "-u",
+                "--all",
+                "--count",
+                "--heading",
+            ],
+            "requires_arg": False,
+        },
+        "open": {
+            "flags": ["-a", "-e", "-t", "-f", "-F", "-W", "-n", "-g", "-h"],
+            "requires_arg": True,
+        },
+        "which": {"flags": ["-a", "-s", "-v"], "requires_arg": False},
+    }
+
+    base_command = command_parts[0]
+
+    if base_command not in COMMAND_PATTERNS:
+        return True  # Allow other commands to pass through
+
+    pattern = COMMAND_PATTERNS[base_command]
+    args = []
+    flags = []
+
+    for i in range(1, len(command_parts)):
+        part = command_parts[i]
+        if part.startswith("-"):
+            flags.append(part)
+            if part not in pattern["flags"]:
+                return False  # Invalid flag
+        else:
+            args.append(part)
+
+    # Check if 'who' has any arguments (it shouldn't)
+    if base_command == "who" and args:
+        return False
+
+    # Handle 'which' with '-a' flag
+    if base_command == "which" and "-a" in flags:
+        return True  # Allow 'which -a' with or without arguments.
+
+    # Check if any required arguments are missing
+    if pattern.get("requires_arg", False) and not args:
+        return False
+
+    return True
+
+
 def execute_command(
     command,
     command_history,
@@ -516,6 +602,24 @@ def execute_command(
         elif command_parts[0] in BASH_COMMANDS:
             if command_parts[0] in TERMINAL_EDITORS:
                 return {"messages": messages, "output": open_terminal_editor(command)}
+            elif command_parts[0] in ["cat", "find", "who", "open", "which"]:
+                if not validate_bash_command(command_parts):
+                    output = "Error: Invalid command syntax or arguments"  # Assign error message directly
+                    output = check_llm_command(
+                        command,
+                        command_history,
+                        npc=npc,
+                        retrieved_docs=retrieved_docs,
+                        messages=messages,
+                    )
+                else:  # ONLY execute if valid
+                    try:
+                        result = subprocess.run(
+                            command_parts, capture_output=True, text=True
+                        )
+                        output = result.stdout + result.stderr
+                    except Exception as e:
+                        output = f"Error executing command: {e}"
             elif command.startswith("open "):
                 try:
                     path_to_open = os.path.expanduser(
