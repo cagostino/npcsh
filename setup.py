@@ -10,7 +10,7 @@ def package_files(directory):
     return paths
 
 
-extra_files = package_files("npcsh/npc_profiles")
+extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
@@ -66,6 +66,6 @@ setup(
         "License :: OSI Approved :: MIT License",
     ],
     include_package_data=True,
-    data_files=[("npcsh/npc_profiles", extra_files)],
+    data_files=[("npcsh/npc_team", extra_files)],
     python_requires=">=3.10",
 )

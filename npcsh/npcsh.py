@@ -738,10 +738,28 @@ def main():
 
     command_history = CommandHistory(db_path)
 
-    os.makedirs("./npc_profiles", exist_ok=True)
-    npc_directory = os.path.abspath("./npc_team")
-    npc_compiler = NPCCompiler(npc_directory, db_path)  # Pass db_path here
+    # Initialize base NPCs and tools
+    initialize_base_npcs_if_needed(db_path)
 
+    # Set npc_directory to the user's ~/.npcsh/npc_team directory
+    user_npc_directory = os.path.expanduser("~/.npcsh/npc_team")
+
+    # Check for project-specific npc_team directory
+    project_npc_directory = os.path.abspath("./npc_team")
+    npc_compiler = NPCCompiler(user_npc_directory, db_path)
+
+    # Compile all NPCs in the user's npc_team directory
+    for filename in os.listdir(user_npc_directory):
+        if filename.endswith(".npc"):
+            npc_compiler.compile(filename)
+
+    # If project npc_team directory exists, compile NPCs from there as well
+    if os.path.exists(project_npc_directory):
+        for filename in os.listdir(project_npc_directory):
+            if filename.endswith(".npc"):
+                npc_file_path = os.path.join(project_npc_directory, filename)
+                npc_compiler.compile(npc_file_path)
+                
     # Load all files for RAG searches
     # Define the directory to load text files from
     text_data_directory = os.path.abspath("./")

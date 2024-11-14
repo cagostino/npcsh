@@ -590,7 +590,29 @@ def get_valid_npcs(db_path):
     npcs = [row[0] for row in cursor.fetchall()]
     db_conn.close()
     return npcs
-
+def load_tools_from_directory(directory):
+    tools = []
+    if os.path.exists(directory):
+        for filename in os.listdir(directory):
+            if filename.endswith(".tool"):
+                full_path = os.path.join(directory, filename)
+                with open(full_path, "r") as f:
+                    tool_content = f.read()
+                    try:
+                        if not tool_content.strip():
+                            print(f"Tool file {filename} is empty. Skipping.")
+                            continue
+                        tool_data = yaml.safe_load(tool_content)
+                        if tool_data is None:
+                            print(f"Tool file {filename} is invalid or empty. Skipping.")
+                            continue
+                        tool = Tool(tool_data)
+                        tools.append(tool)
+                    except yaml.YAMLError as e:
+                        print(f"Error parsing tool {filename}: {e}")
+    else:
+        print(f"Tools directory not found: {directory}")
+    return tools
 
 def get_npc_from_command(command):
     parts = command.split()
@@ -600,70 +622,87 @@ def get_npc_from_command(command):
             npc = part.split("=")[1]
             break
     return npc
+def get_npc_path(npc_name, db_path):
+    # First, check in project npc_team directory
+    project_npc_team_dir = os.path.abspath("./npc_team")
+    npc_path = os.path.join(project_npc_team_dir, f"{npc_name}.npc")
+    if os.path.exists(npc_path):
+        return npc_path
 
+    # Then, check in global npc_team directory
+    user_npc_team_dir = os.path.expanduser("~/.npcsh/npc_team")
+    npc_path = os.path.join(user_npc_team_dir, f"{npc_name}.npc")
+    if os.path.exists(npc_path):
+        return npc_path
+    else:
+        print(f"NPC file not found: {npc_name}")
+        return None
+        
+# helpers.py
 
-def get_npc_path(npc, db_path):
-    initialize_base_npcs_if_needed(db_path)
+import os
+import shutil
+import filecmp
+import sqlite3
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("SELECT source_path FROM compiled_npcs WHERE name = ?", (npc,))
-
-    result = cursor.fetchone()
-    conn.close()
-    return result[0] if result else None
 
 
 def initialize_base_npcs_if_needed(db_path):
-    if is_npcsh_initialized() == True:
+    if is_npcsh_initialized():
         return
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     # Create the compiled_npcs table if it doesn't exist
     cursor.execute(
-        """
-    CREATE TABLE IF NOT EXISTS compiled_npcs (
-        name TEXT PRIMARY KEY,
-        source_path TEXT NOT NULL,
-        compiled_path TEXT
+        '''
+        CREATE TABLE IF NOT EXISTS compiled_npcs (
+            name TEXT PRIMARY KEY,
+            source_path TEXT NOT NULL,
+            compiled_content TEXT
+        )
+        '''
     )
-    """
-    )
 
-    # Check if base NPCs are already initialized
-    cursor.execute("SELECT COUNT(*) FROM compiled_npcs")
-    count = cursor.fetchone()[0]
-    # print(count)
-    if count == 0:
-        # Get the path to the npc_profiles directory
-        current_file = os.path.abspath(__file__)
-        folder_root = os.path.dirname(current_file)  # Go up two levels
-        npc_profiles_dir = os.path.join(folder_root, "npc_profiles")
+    # Get the path to the npc_team directory in the package
+    package_dir = os.path.dirname(__file__)
+    package_npc_team_dir = os.path.join(package_dir, "npc_team")
 
-        # Insert base NPCs
-        base_npcs = [
-            ("sibiji", os.path.join(npc_profiles_dir, "sibiji.npc")),
-        ]
+    # User's global npc_team directory
+    user_npc_team_dir = os.path.expanduser("~/.npcsh/npc_team")
+    user_tools_dir = os.path.join(user_npc_team_dir, "tools")
+    os.makedirs(user_npc_team_dir, exist_ok=True)
+    os.makedirs(user_tools_dir, exist_ok=True)
 
-        for npc_name, source_path in base_npcs:
-            cursor.execute(
-                """
-            INSERT OR IGNORE INTO compiled_npcs (name, source_path, compiled_path)
-            VALUES (?, ?, NULL)
-            """,
-                (npc_name, source_path),
-            )
+    # Copy NPCs from package to user directory
+    for filename in os.listdir(package_npc_team_dir):
+        if filename.endswith(".npc"):
+            source_path = os.path.join(package_npc_team_dir, filename)
+            destination_path = os.path.join(user_npc_team_dir, filename)
+            if not os.path.exists(destination_path) or file_has_changed(source_path, destination_path):
+                shutil.copy2(source_path, destination_path)
+                print(f"Copied {filename} to {destination_path}")
 
-        conn.commit()
-        print("Base NPCs initialized.")
-    else:
-        print("Base NPCs already initialized.")
+    # Copy tools from package to user directory
+    package_tools_dir = os.path.join(package_npc_team_dir, "tools")
+    if os.path.exists(package_tools_dir):
+        for filename in os.listdir(package_tools_dir):
+            if filename.endswith(".tool"):
+                source_tool_path = os.path.join(package_tools_dir, filename)
+                destination_tool_path = os.path.join(user_tools_dir, filename)
+                if (not os.path.exists(destination_tool_path)) or file_has_changed(source_tool_path, destination_tool_path):
+                    shutil.copy2(source_tool_path, destination_tool_path)
+                    print(f"Copied tool {filename} to {destination_tool_path}")
 
+    conn.commit()
     conn.close()
     set_npcsh_initialized()
     add_npcshrc_to_shell_config()
 
+def file_has_changed(source_path, destination_path):
+    # Compare file modification times or contents to decide whether to update the file
+    return not filecmp.cmp(source_path, destination_path, shallow=False)
 
 def is_valid_npc(npc, db_path):
     conn = sqlite3.connect(db_path)
