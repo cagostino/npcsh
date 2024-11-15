@@ -661,23 +661,23 @@ def get_openai_response(
         if messages is None or len(messages) == 0:
             messages = [
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt},
+                {"role": "user", "content": [
+                    {"type":"text", 
+                     "text":prompt}
+                    ]
+                 },
             ]
         if images:
             for image in images:
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{image['media_type']};base64,{image['data']}"
-                                },
-                            }
-                        ],
-                    }
-                )
+                with open(image['file_path'], "rb") as image_file:
+                    image_data = base64.b64encode(compress_image(image_file.read())).decode("utf-8")
+                    messages[-1]['content'].append(
+                        {"type":"image_url", 
+                         "image_url":
+                             {
+                                 "url": f"data:image/jpeg;base64,{image_data}",
+                             }}
+                    )
 
         completion = client.chat.completions.create(model=model, messages=messages)
 
@@ -701,6 +701,30 @@ def get_openai_response(
             return items_to_return
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
+from PIL import Image
+import io
+def compress_image(image_bytes, max_size=(800, 800)):
+    from PIL import Image
+    import io
+    
+    img = Image.open(io.BytesIO(image_bytes))
+    
+    # Convert RGBA to RGB if necessary
+    if img.mode == 'RGBA':
+        # Create white background
+        background = Image.new('RGB', img.size, (255, 255, 255))
+        # Paste the image using alpha channel as mask
+        background.paste(img, mask=img.split()[3])
+        img = background
+    
+    # Resize if needed
+    img.thumbnail(max_size)
+    
+    # Save as JPEG
+    buffer = io.BytesIO()
+    img.save(buffer, format='JPEG', quality=85)
+    return buffer.getvalue()
+
 
 
 def get_anthropic_response(
@@ -727,8 +751,8 @@ def get_anthropic_response(
             for img in images:
                 # load image and base 64 encode
                 with open(img["file_path"], "rb") as image_file:
-                    img["data"] = base64.b64encode(image_file.read()).decode("utf-8")
-                    img["media_type"] = "image/png"
+                    img["data"] = base64.b64encode(compress_image(image_file.read())).decode("utf-8")
+                    img["media_type"] = "image/jpeg"
                     message_content.append(
                         {
                             "type": "image",
@@ -1342,6 +1366,8 @@ def check_llm_command(
             return "Error: Invalid action in LLM response"
 
     except Exception as e:
+        print(result)
+        print(type(result))
         print(f"Error in check_llm_command: {e}")
         return f"Error: {e}"
 
@@ -1410,16 +1436,16 @@ def handle_tool_call(
         print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
         return f"Missing inputs for tool '{tool_name}': {missing_inputs}"
 
-    try:
-        tool_output = tool.execute(input_values, npc.tools_dict, jinja_env)
-        # print(f"Tool output: {tool_output}")
-        render_markdown(str(tool_output))
-        if messages is not None:  # Check if messages is not None
-            messages.append({"role": "assistant", "content": str(tool_output)})
-        return {"messages": messages, "output": tool_output}
-    except Exception as e:
-        print(f"Error executing tool {tool_name}: {e}")
-        return f"Error executing tool {tool_name}: {e}"
+    #try:
+    tool_output = tool.execute(input_values, npc.tools_dict, jinja_env)
+    # print(f"Tool output: {tool_output}")
+    render_markdown(str(tool_output))
+    if messages is not None:  # Check if messages is not None
+        messages.append({"role": "assistant", "content": str(tool_output)})
+    return {"messages": messages, "output": tool_output}
+    #except Exception as e:
+    #    print(f"Error executing tool {tool_name}: {e}")
+    #    return f"Error executing tool {tool_name}: {e}"
 
 
 def execute_llm_question(

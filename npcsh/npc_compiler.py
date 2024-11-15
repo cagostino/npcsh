@@ -396,6 +396,9 @@ class Tool:
                 llm_response = get_llm_response(rendered_text, npc=npc)
                 if context.get("llm_response") is None:
                     # This is the prompt step
+                    #import pdb
+                    #pdb.set_trace()
+                    #print(llm_response, type(llm_response))
                     context["llm_response"] = llm_response.get("response", "")
                 else:
                     # This is a postprocess step; set output

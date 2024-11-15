@@ -243,7 +243,7 @@ def analyze_image_base(user_prompt, file_path, filename, npc=None):
 
             # Add to command history *inside* the try block
 
-            print(response["response"])  # Print response after adding to history
+            #print(response["response"])  # Print response after adding to history
             return response
 
             # except Exception as e:
@@ -268,7 +268,7 @@ def analyze_image(
         if user_prompt:
             try:
                 response = get_llm_response(
-                    user_prompt, image=image_info, npc=npc, **model_kwargs
+                    user_prompt, images=[image_info], npc=npc, **model_kwargs
                 )
 
                 # Add to command history *inside* the try block
@@ -278,7 +278,8 @@ def analyze_image(
                     response,
                     os.getcwd(),
                 )
-
+                #import pdb 
+                #pdb.set_trace()
                 print(response["response"])  # Print response after adding to history
                 return response
 

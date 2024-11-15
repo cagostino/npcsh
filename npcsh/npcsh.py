@@ -420,7 +420,7 @@ def execute_command(
                     file_path,
                     filename,
                     npc=npc,
-                )
+                ) 
 
             else:
                 output = capture_screenshot(npc=npc)
@@ -595,7 +595,7 @@ def execute_command(
                 return {
                     "messages": messages,
                     "output": f"Directory not found: {new_dir}",
-                }
+                } 
             except PermissionError:
                 return {"messages": messages, "output": f"Permission denied: {new_dir}"}
 
