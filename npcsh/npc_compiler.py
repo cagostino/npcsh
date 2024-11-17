@@ -16,7 +16,7 @@ from .llm_funcs import (
     render_markdown
 )
 import matplotlib.pyplot as plt
-plt.ion()
+#plt.ion()
  
 import json
 from .helpers import search_web, get_npc_path
