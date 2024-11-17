@@ -24,7 +24,7 @@ preprocess:
       file_path = os.path.abspath('./'+filename)
       # Analyze the image
 
-      llm_output = analyze_image_base(inputs['prompt']+ '\n\n attached is a screenshot of my screen currently.', file_path, filename)
+      llm_output = analyze_image_base(inputs['prompt']+ '\n\n attached is a screenshot of my screen currently.', file_path, filename, npc=npc)
 prompt:
   engine: "plain_english"
   code: ""

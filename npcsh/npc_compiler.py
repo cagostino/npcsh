@@ -1,7 +1,7 @@
 import subprocess
 import sqlite3
 
-
+import numpy as np
 import os
 import yaml
 from jinja2 import Environment, FileSystemLoader, TemplateError, Template, Undefined
@@ -13,7 +13,12 @@ from .llm_funcs import (
     get_data_response,
     npcsh_db_path,
     generate_image,
+    render_markdown
 )
+import matplotlib.pyplot as plt
+plt.ion()
+ 
+import json
 from .helpers import search_web, get_npc_path
 
 
@@ -48,6 +53,11 @@ class NPC:
         self.api_url = api_url
         self.tools = tools or []
         self.tools_dict = {tool.tool_name: tool for tool in self.tools}
+        self.shared_context = {
+            'dataframes': {},
+            'current_data': None,
+            'computation_results': {}
+        }
 
     def __str__(self):
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
@@ -364,14 +374,15 @@ class Tool:
 
 
 
-    def execute(self, input_values, tools_dict, jinja_env, npc=None):
-        context = {
+    def execute(self, input_values, tools_dict, jinja_env, command, npc=None):
+        context = npc.shared_context
+        context.update({
             "inputs": input_values,
             "tools": tools_dict,
             "llm_response": None,
-            "output": None,
-        }
-
+            "output": None, 
+            "command": command
+        })
         # Process Preprocess Steps
         for step in self.preprocess:
             context = self.execute_step(step, context, jinja_env, npc=npc)
@@ -384,40 +395,63 @@ class Tool:
             context = self.execute_step(step, context, jinja_env, npc=npc)
 
         # Return the final output
-        return context.get("output") or context.get("llm_response")
+        if context.get('output') is not None:
+            return context.get('output')
+        elif context.get('llm_response') is not None:
+            return context.get('llm_response')
+            
+
     def execute_step(self, step, context, jinja_env, npc=None):
-        engine = step["engine"]
-        code = step["code"]
+        engine = step.get("engine", "plain_english")
+        code = step.get("code", "")
+
         if engine == "plain_english":
-            # Render the prompt or postprocess template
-            template = jinja_env.from_string(code)
-            rendered_text = template.render(context)
-            if rendered_text.strip():
+            
+            # Create template with debugging
+            from jinja2 import Environment, DebugUndefined
+            debug_env = Environment(undefined=DebugUndefined)
+            template = debug_env.from_string(code)
+            
+
+            rendered_text = template.render(**context)  # Unpack context as kwargs
+            #print(len(rendered_text.strip()))
+            if len(rendered_text.strip()) > 0:
                 llm_response = get_llm_response(rendered_text, npc=npc)
+                #print(llm_response)
                 if context.get("llm_response") is None:
                     # This is the prompt step
-                    #import pdb
-                    #pdb.set_trace()
-                    #print(llm_response, type(llm_response))
                     context["llm_response"] = llm_response.get("response", "")
                 else:
                     # This is a postprocess step; set output
-                    context["output"] = llm_response.get("response", "")
+                    context["output"] = llm_response.get("response", "")                
+
+        
         elif engine == "python":
             # Execute Python code
-            exec_env = context.copy()
-            # Ensure necessary imports and functions are available
             exec_globals = {
                 "__builtins__": __builtins__,
+                "npc": npc,  # Pass npc to the execution environment
+                "context": context,
+                # Include necessary imports
+                "pd": pd,
+                "plt":plt, 
+                "np":np,
+                "os": os,
+                "get_llm_response": get_llm_response,
                 "generate_image": generate_image,
+                "render_markdown": render_markdown,
                 "search_web": search_web,
-                "npc": npc,  # Pass the NPC object
-                # Include other necessary global variables or functions
+                "json": json,
+                
             }
+            exec_env = context.copy()
             exec(code, exec_globals, exec_env)
             context.update(exec_env)
+            #import pdb 
+            #pdb.set_trace()
         else:
             raise ValueError(f"Unsupported engine '{engine}'")
+
         return context
 
     def to_dict(self):

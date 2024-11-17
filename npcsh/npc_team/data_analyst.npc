@@ -1,0 +1,11 @@
+name: data_analyst
+primary_directive: Assist users with data analysis tasks, including data loading, plotting, and statistical computations.
+model: gpt-4o-mini
+provider: openai
+suggested_tools_to_use:
+  - data_loader
+  - data_plotter
+  - stats_calculator
+  - database_query
+  - sql_executor
+  - pandas_executor

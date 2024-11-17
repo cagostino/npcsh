@@ -8,6 +8,7 @@ from .llm_funcs import (
     get_system_message,
     check_llm_command,
     get_data_response,
+    render_markdown
 )
 from .helpers import calibrate_silence, record_audio, speak_text, is_silent
 import sqlite3
@@ -170,69 +171,212 @@ def save_note(note, command_history, npc=None):
     print("Note saved to database.")
 
 
-def enter_data_mode(command_history, npc=None):
-    conn = command_history.conn
-    cursor = command_history.cursor
-    dataframes = {}
-    npc_info = f" (NPC: {npc.name})" if npc else ""
-    print(f"Entering observation mode{npc_info}. Type '/dq' to exit.")
-    n_times = 0
+def enter_data_analysis_mode(command_history, npc=None):
+    npc_name = npc.name if npc else "data_analyst"
+    print(f"Entering data analysis mode (NPC: {npc_name}). Type '/daq' to exit.")
+
+    dataframes = {}  # Dict to store dataframes by name
+    context = {'dataframes': dataframes}  # Context to store variables
+    messages = []  # For conversation history if needed
+
     while True:
-        # Show available tables
-        if n_times == 0:
-            initial_table_print(cursor)
+        user_input = input(f"{npc_name}> ").strip()
 
-        user_query = input(
-            """Enter a plain-text request, a data manipulation command, or a load command:
-data> """
-        )
-        # print(user_query , 'user_query')
-        if user_query.lower().startswith("load from "):
+        if user_input.lower() == "/daq":
+            break
+
+        # Add user input to messages for context if interacting with LLM
+        messages.append({"role": "user", "content": user_input})
+
+        # Process commands
+        if user_input.lower().startswith("load "):
+            # Command format: load <file_path> as <df_name>
             try:
-                parts = user_query.split(" as ")
-                if len(parts) != 2:
-                    raise ValueError("Invalid load command format.")
-
-                file_path = parts[0].split("load from ")[1].strip()
-                table_name = parts[1].strip()
-                load_data_into_table(file_path, table_name, cursor, conn)
-                dataframes[table_name] = pd.read_sql(
-                    f"SELECT * FROM {table_name}", conn
-                )
+                parts = user_input.split()
+                file_path = parts[1]
+                if 'as' in parts:
+                    as_index = parts.index('as')
+                    df_name = parts[as_index + 1]
+                else:
+                    df_name = 'df'  # Default dataframe name
+                # Load data into dataframe
+                df = pd.read_csv(file_path)
+                dataframes[df_name] = df
+                print(f"Data loaded into dataframe '{df_name}'")
+                # Record in command_history
+                command_history.add(user_input, ["load"], f"Loaded data into {df_name}", os.getcwd())
             except Exception as e:
                 print(f"Error loading data: {e}")
 
-        elif user_query.lower() == "/dq":
+        elif user_input.lower().startswith("sql "):
+            # Command format: sql <SQL query>
+            try:
+                query = user_input[4:]  # Remove 'sql ' prefix
+                df = pd.read_sql_query(query, npc.db_conn)
+                print(df)
+                # Optionally store result in a dataframe
+                dataframes['sql_result'] = df
+                print("Result stored in dataframe 'sql_result'")
+                command_history.add(user_input, ["sql"], "Executed SQL query", os.getcwd())
+            except Exception as e:
+                print(f"Error executing SQL query: {e}")
+
+        elif user_input.lower().startswith("plot "):
+            # Command format: plot <pandas plotting code>
+            try:
+                code = user_input[5:]  # Remove 'plot ' prefix
+                # Prepare execution environment
+                exec_globals = {'pd': pd, 'plt': plt, **dataframes}
+                exec(code, exec_globals)
+                plt.show()
+                command_history.add(user_input, ["plot"], "Generated plot", os.getcwd())
+            except Exception as e:
+                print(f"Error generating plot: {e}")
+
+        elif user_input.lower().startswith("exec "):
+            # Command format: exec <Python code>
+            try:
+                code = user_input[5:]  # Remove 'exec ' prefix
+                # Prepare execution environment
+                exec_globals = {'pd': pd, 'plt': plt, **dataframes}
+                exec(code, exec_globals)
+                # Update dataframes with any new or modified dataframes
+                dataframes.update({k: v for k, v in exec_globals.items() if isinstance(v, pd.DataFrame)})
+                command_history.add(user_input, ["exec"], "Executed code", os.getcwd())
+            except Exception as e:
+                print(f"Error executing code: {e}")
+
+        elif user_input.lower().startswith("help"):
+            # Provide help information
+            print("""
+Available commands:
+- load <file_path> as <df_name>: Load CSV data into a dataframe.
+- sql <SQL query>: Execute SQL query.
+- plot <pandas plotting code>: Generate plots using matplotlib.
+- exec <Python code>: Execute arbitrary Python code.
+- help: Show this help message.
+- /daq: Exit data analysis mode.
+""")
+
+        else:
+            # Unrecognized command
+            print("Unrecognized command. Type 'help' for a list of available commands.")
+
+    print("Exiting data analysis mode.")
+
+# modes.py
+
+import os
+import sys
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from io import StringIO
+from .llm_funcs import get_llm_response
+from .helpers import log_action
+
+def enter_data_mode(command_history, npc=None):
+    npc_name = npc.name if npc else "data_analyst"
+    print(f"Entering data mode (NPC: {npc_name}). Type '/dq' to exit.")
+
+    exec_env = {
+        'pd': pd,
+        'np': np,
+        'plt': plt,
+        'os': os,
+        'npc': npc,
+    }
+    
+    while True:
+        try:
+            user_input = input(f"{npc_name}> ").strip()
+            if user_input.lower() == "/dq":
+                break
+            elif user_input == "":
+                continue
+
+            # First check if input exists in exec_env
+            if user_input in exec_env:
+                result = exec_env[user_input]
+                if result is not None:
+                    if isinstance(result, pd.DataFrame):
+                        print(result.to_string())
+                    else:
+                        print(result)
+                continue
+
+            # Then check if it's a natural language query
+            if not any(keyword in user_input for keyword in ['=', '+', '-', '*', '/', '(', ')', '[', ']', '{', '}', 'import']):
+                if 'df' in exec_env and isinstance(exec_env['df'], pd.DataFrame):
+                    df_info = {
+                        'shape': exec_env['df'].shape,
+                        'columns': list(exec_env['df'].columns),
+                        'dtypes': exec_env['df'].dtypes.to_dict(),
+                        'head': exec_env['df'].head().to_dict(),
+                        'summary': exec_env['df'].describe().to_dict()
+                    }
+                    
+                    analysis_prompt = f"""Based on this DataFrame info: {df_info}
+                    Generate Python analysis commands to answer: {user_input}
+                    Return each command on a new line. Do not use markdown formatting or code blocks."""
+                    
+                    analysis_response = npc.get_llm_response(analysis_prompt).get('response', '')
+                    analysis_commands = [cmd.strip() for cmd in analysis_response.replace('```python', '').replace('```', '').split('\n') if cmd.strip()]
+                    results = []
+                    
+                    print("\nAnalyzing data...")
+                    for cmd in analysis_commands:
+                        if cmd.strip():
+                            try:
+                                result = eval(cmd, exec_env)
+                                if result is not None:
+                                    render_markdown(f"\n{cmd} ")
+                                    if isinstance(result, pd.DataFrame):
+                                        render_markdown(result.to_string())
+                                    else:
+                                        render_markdown(result)
+                                    results.append((cmd, result))
+                            except SyntaxError:
+                                try:
+                                    exec(cmd, exec_env)
+                                except Exception as e:
+                                    print(f"Error in {cmd}: {str(e)}")
+                            except Exception as e:
+                                print(f"Error in {cmd}: {str(e)}")
+                    
+                    if results:
+                        interpretation_prompt = f"""Based on these analysis results:
+                        {[(cmd, str(result)) for cmd, result in results]}
+                        
+                        Provide a clear, concise interpretation of what we found in the data.
+                        Focus on key insights and patterns. Do not use markdown formatting."""
+                        
+                        print("\nInterpretation:")
+                        interpretation = npc.get_llm_response(interpretation_prompt).get('response', '')
+                        interpretation = interpretation.replace('```', '').strip()
+                        render_markdown(interpretation)
+                    continue
+
+            # If not in exec_env and not natural language, try as Python code
+            try:
+                result = eval(user_input, exec_env)
+                if result is not None:
+                    if isinstance(result, pd.DataFrame):
+                        print(result.to_string())
+                    else:
+                        print(result)
+            except SyntaxError:
+                exec(user_input, exec_env)
+            except Exception as e:
+                print(f"Error: {str(e)}")
+
+        except KeyboardInterrupt:
+            print("\nKeyboardInterrupt detected. Exiting data mode.")
             break
+        except Exception as e:
+            print(f"Error: {str(e)}")
 
-        else:  # Process data operations or LLM requests
-            response, engine = execute_data_operations(
-                user_query, command_history, dataframes, npc=npc
-            )
-            if engine is not None and engine == "llm":
-                answer_prompt = f"""
-        Here is an input from the user:
-        {user_query}
-        Here is some useful data relevant to the query:
-        {response}
-
-        Now write a query to write a final response to be delivered to the user.
-
-        Your answer must be in the format:
-        {{"response": "Your response here."}}
-        """
-                final_response = get_llm_response(answer_prompt, format="json", npc=npc)
-                print(final_response["response"])
-                dataframes["data_output"] = response
-                dataframes["output"] = response
-
-        n_times += 1
-
-        if user_query.lower() == "/dq":
-            break
-
-    conn.close()
-    print("Exiting observation mode.")
+    return
 
 
 import cv2  # For video/image processing

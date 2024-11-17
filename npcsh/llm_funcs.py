@@ -1255,6 +1255,11 @@ def check_llm_command(
     - image_generation_tool: Generates images based on a text prompt.
     - generic_search_tool: Searches the web for information based on a query.
     - screen_capture_analysis_tool: Captures the whole screen and sends the image for analysis.
+    - data_loader: Loads data from a file into a DataFrame.
+    - stats_calculator: Calculates basic statistics on a DataFrame.
+    - data_plotter: Plots data from a DataFrame.
+    - database_query: Executes a query on tables in the ~/npcsh_history.db sqlite3 database.
+    
 
     In considering how to answer this, consider:
     - Whether it can be answered via a bash command on the user's computer.
@@ -1405,12 +1410,25 @@ def handle_tool_call(
     prompt = f"""
     The user wants to use the tool '{tool_name}' with the following request:
     '{command}'
+    Here is the tool file:
+    {tool}
+    
     Please extract the required inputs for the tool as a JSON object.
     Return only the JSON object without any markdown formatting.
     """
+    if npc and hasattr(npc, 'shared_context'):
+        if npc.shared_context.get('dataframes'):
+            context_info = "\nAvailable dataframes:\n"
+            for df_name in npc.shared_context['dataframes'].keys():
+                context_info += f"- {df_name}\n"
+            prompt += f'''Here is contextual info that may affect your choice: {context_info}
+            '''
+
+    
     # print(f"Tool prompt: {prompt}")
     response = get_llm_response(
-        prompt, format="json", model=model, provider=provider, npc=npc
+        prompt, format="json", model=model, provider=provider, npc=npc, 
+        
     )
     try:
         # Clean the response of markdown formatting
@@ -1437,7 +1455,7 @@ def handle_tool_call(
         return f"Missing inputs for tool '{tool_name}': {missing_inputs}"
 
     #try:
-    tool_output = tool.execute(input_values, npc.tools_dict, jinja_env)
+    tool_output = tool.execute(input_values, npc.tools_dict, jinja_env, command, npc=npc)
     # print(f"Tool output: {tool_output}")
     render_markdown(str(tool_output))
     if messages is not None:  # Check if messages is not None
