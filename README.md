@@ -37,6 +37,7 @@
 
 ## Linux install
 ```bash
+
 sudo apt-get install espeak
 sudo apt-get install portaudio19-dev python3-pyaudio
 sudo apt-get install alsa-base alsa-utils
@@ -44,6 +45,10 @@ sudo apt-get install libcairo2-dev
 sudo apt-get install libgirepository1.0-dev
 sudo apt-get install ffmpeg
 pip install npcsh
+```
+And if you don't have ollama installed, use this:
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
 ```
 
 
