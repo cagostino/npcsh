@@ -1254,6 +1254,7 @@ def check_llm_command(
     Available tools:
     - image_generation_tool: Generates images based on a text prompt.
     - generic_search_tool: Searches the web for information based on a query.
+    - local_search.tool: searches files in current and downstream directories to find items related to the user's query to help in answering.
     - screen_capture_analysis_tool: Captures the whole screen and sends the image for analysis.
     - data_loader: Loads data from a file into a DataFrame.
     - stats_calculator: Calculates basic statistics on a DataFrame.
@@ -1449,8 +1450,13 @@ def handle_tool_call(
         return f"Error extracting inputs for tool '{tool_name}'"
     # Input validation (example):
     required_inputs = tool.inputs
-    if not all(inp in input_values for inp in required_inputs):
-        missing_inputs = set(required_inputs) - set(input_values.keys())
+    missing_inputs = []
+    for inp in required_inputs:
+        if not isinstance(inp, dict):
+            #dicts contain the keywords so its fine if theyre missing from the inputs.            
+            if inp not in input_values:
+                missing_inputs.append(inp)
+    if len(missing_inputs) >0:        
         print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
         return f"Missing inputs for tool '{tool_name}': {missing_inputs}"
 
