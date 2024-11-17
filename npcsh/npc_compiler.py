@@ -13,15 +13,21 @@ from .llm_funcs import (
     get_data_response,
     npcsh_db_path,
     generate_image,
-    render_markdown
+    render_markdown, 
+    
 )
+import pathlib
+import fnmatch
 import matplotlib.pyplot as plt
 #plt.ion()
  
 import json
 from .helpers import search_web, get_npc_path
+import sklearn.feature_extraction.text
+import sklearn.metrics.pairwise
+import numpy as np
 
-
+import sklearn
 class SilentUndefined(Undefined):
     def _fail_with_undefined_error(self, *args, **kwargs):
         return ""
@@ -442,6 +448,15 @@ class Tool:
                 "render_markdown": render_markdown,
                 "search_web": search_web,
                 "json": json,
+                "sklearn": __import__('sklearn'),
+                "TfidfVectorizer": __import__('sklearn.feature_extraction.text').feature_extraction.text.TfidfVectorizer,
+                "cosine_similarity": __import__('sklearn.metrics.pairwise').metrics.pairwise.cosine_similarity,
+                "Path": __import__('pathlib').Path,
+            
+                
+                "fnmatch": fnmatch,
+                "pathlib": pathlib,
+                "subprocess": subprocess,
                 
             }
             exec_env = context.copy()
