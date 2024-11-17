@@ -14,7 +14,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.1.34",
+    version="0.1.35",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
