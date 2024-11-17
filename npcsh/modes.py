@@ -14,6 +14,8 @@ from .helpers import calibrate_silence, record_audio, speak_text, is_silent
 import sqlite3
 import time
 try:
+    import librosa  # For audio processing
+    
     from gtts import gTTS
     from playsound import playsound
     import whisper
@@ -25,6 +27,44 @@ import tempfile
 import os
 import json
 import datetime
+
+try:
+    import cv2  # For video/image processing
+except:
+    print("Error importing cv2.")
+    
+import numpy as np
+
+
+import base64
+
+import pandas as pd
+import os
+import sys
+
+from langchain_community.document_loaders import (
+    CSVLoader,
+    PyPDFLoader,
+    TextLoader,
+    UnstructuredExcelLoader,
+    DirectoryLoader,
+    UnstructuredFileLoader,
+)
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+import numpy as np
+import tempfile
+import json
+from PIL import Image  # For image loading
+try:
+    import fitz  # PyMuPDF
+except:
+    print("pymupdf's pdf package fitz is not installed")
+    
+import io
+
+
 
 
 
@@ -379,13 +419,6 @@ def enter_data_mode(command_history, npc=None):
     return
 
 
-import cv2  # For video/image processing
-import librosa  # For audio processing
-import numpy as np
-
-
-import base64
-
 
 def process_video(file_path, table_name):
     embeddings = []
@@ -471,31 +504,6 @@ def process_audio(file_path, table_name):
     except Exception as e:
         print(f"Error processing audio: {e}")
         return [], []  # Return empty lists in case of error
-
-
-import pandas as pd
-import os
-import sys
-from langchain_community.document_loaders import (
-    CSVLoader,
-    PyPDFLoader,
-    TextLoader,
-    UnstructuredExcelLoader,
-    DirectoryLoader,
-    UnstructuredFileLoader,
-)
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-
-import cv2
-import librosa
-import numpy as np
-import tempfile
-import json
-from PIL import Image  # For image loading
-import fitz  # PyMuPDF
-import io
 
 
 def load_data_into_table(file_path, table_name, cursor, conn):
