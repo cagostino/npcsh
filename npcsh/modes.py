@@ -700,7 +700,7 @@ def enter_spool_mode(command_history, inherit_last=0, npc=None):
                 assistant_reply,
                 os.getcwd(),
             )
-            print(assistant_reply)
+            render_markdown(assistant_reply)
 
         except (KeyboardInterrupt, EOFError):
             print("\nExiting spool mode.")
