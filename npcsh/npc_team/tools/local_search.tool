@@ -131,14 +131,16 @@ prompt:
   code: |
     You are a helpful coding assistant. Please help with this query:
     
-    {{ query }}
+    {{ inputs['query']  }}
     
     Here is the relevant context from the codebase:
     
     {{ relevant_context }}
     
-    Please provide a clear and helpful response based on the context provided.
+    Please provide a clear and helpful response to the user's query. 
+    Explain exactly how it is that you arrived at your answer and how it answers the user's query.
     If you reference specific files or code sections, indicate which file they came from.
+    In your response, you must explicitly mention what the users query was.
 
 postprocess:
   - engine: plain_english
