@@ -26,6 +26,7 @@ from .modes import (
     enter_data_mode,
 )
 
+import textwrap
 import json
 from .helpers import (
     log_action,
@@ -77,6 +78,12 @@ import pandas as pd
 import numpy as np
 
 
+def wrap_text(text, width=80):
+    lines = []
+    for paragraph in text.split('\n'):
+        lines.extend(textwrap.wrap(paragraph, width=width))
+    return '\n'.join(lines)
+
 def get_file_color(filepath):
     if os.path.isdir(filepath):
         return "blue", ["bold"]
@@ -113,7 +120,22 @@ import sys
 import time
 import signal
 
-
+def get_multiline_input(prompt):
+    lines = []
+    current_prompt = prompt
+    while True:
+        try:
+            line = input(current_prompt)
+            if line.endswith('\\'):
+                lines.append(line[:-1])  # Remove the backslash
+                # Use a continuation prompt for the next line
+                current_prompt = readline_safe_prompt('> ')
+            else:
+                lines.append(line)
+                break
+        except EOFError:
+            break  # Handle EOF (Ctrl+D)
+    return '\n'.join(lines)
 def start_interactive_session(command):
     """
     Start an interactive session for the given command.
@@ -360,7 +382,7 @@ def execute_command(
                                 output += f"Compiled NPC profile: {compiled_script}\n"
                             except Exception as e:
                                 output += f"Error compiling {filename}: {str(e)}\n"
-                render_markdown(output)
+                render_markdown(wrap_text(output))
 
             except Exception as e:
                 import traceback
@@ -696,6 +718,14 @@ def execute_command(
 
     return {"messages": messages, "output": output}
 
+def readline_safe_prompt(prompt):
+    import re
+    # This regex matches ANSI escape sequences
+    ansi_escape = re.compile(r'(\033\[[0-9;]*[a-zA-Z])')
+    # Wrap them with \001 and \002
+    def escape_sequence(m):
+        return '\001' + m.group(1) + '\002'
+    return ansi_escape.sub(escape_sequence, prompt)
 
 def setup_readline():
     history_file = os.path.expanduser("~/.npcsh_history")
@@ -705,18 +735,18 @@ def setup_readline():
         pass
 
     readline.set_history_length(1000)
-    readline.parse_and_bind("set editing-mode vi")
+    # Commented out because 'set' commands may not work as intended with parse_and_bind
+    # readline.parse_and_bind("set editing-mode vi")
     readline.parse_and_bind('"\e[A": history-search-backward')
     readline.parse_and_bind('"\e[B": history-search-forward')
     readline.parse_and_bind('"\C-r": reverse-search-history')
-    # Add these lines to enable multiline input with readline:
-    readline.parse_and_bind("set enable-bracketed-paste on")
-    readline.parse_and_bind("set mark-modified-lines on")
+    # Remove or adjust these lines if they cause issues
+    # readline.parse_and_bind("set enable-bracketed-paste on")
+    # readline.parse_and_bind("set mark-modified-lines on")
     readline.parse_and_bind("\C-e: end-of-line")
     readline.parse_and_bind("\C-a: beginning-of-line")
 
     return history_file
-
 
 def save_readline_history():
     readline.write_history_file(os.path.expanduser("~/.npcsh_readline_history"))
@@ -802,7 +832,8 @@ def main():
             else:
                 prompt = f"{colored(os.getcwd(), 'blue')}:{orange('npcsh')}> "
 
-            user_input = input(prompt).strip()
+            prompt = readline_safe_prompt(prompt)
+            user_input = get_multiline_input(prompt).strip()
 
             if user_input.lower() in ["exit", "quit"]:
                 if current_npc:
