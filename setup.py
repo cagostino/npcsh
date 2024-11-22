@@ -66,6 +66,6 @@ setup(
         "License :: OSI Approved :: MIT License",
     ],
     include_package_data=True,
-    data_files=[("npcsh/npc_team", extra_files)],
+    data_files=[("npcsh/npc_team", extra_files, './npcsh.png')],
     python_requires=">=3.10",
 )
