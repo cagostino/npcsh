@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="npcsh.png" alt="npcsh logo with sibiji the spider">
+  <img src="https://raw.githubusercontent.com/cagostino/npcsh/main/npcsh/npcsh.png" alt="npcsh logo with sibiji the spider">
 </p>                                      
 
 
