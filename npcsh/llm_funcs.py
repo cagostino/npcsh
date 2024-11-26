@@ -330,23 +330,19 @@ def get_anthropic_conversation(messages, model, npc=None, api_key=None, **kwargs
 def get_conversation(
     messages, provider=npcsh_provider, model=npcsh_model, npc=None, **kwargs
 ):
-    if npc is not None:
-        if npc.provider is not None:
-            provider = npc.provider
-        if npc.model is not None:
-            model = npc.model
-        if npc.api_url is not None:
-            api_url = npc.api_url
-
+    if model is not None and provider is not None:
+        pass  # Use explicitly provided model and provider
+    elif model is not None and provider is None:
+        provider = lookup_provider(model)
+    elif npc is not None and (npc.provider is not None or npc.model is not None):
+        provider = npc.provider if npc.provider else provider
+        model = npc.model if npc.model else model
+        api_url = npc.api_url if npc.api_url else api_url
     else:
-        if provider is None and model is None:
-            provider = "ollama"
-            if images is not None:
-                model = "llava:7b"
-            else:
-                model = "llama3.2"
-        elif provider is None and model is not None:
-            provider = lookupprovider(model)
+        provider = "ollama"
+        model = "llava:7b" if images is not None else "llama3.2"
+
+
 
     # print(provider, model)
     if provider == "ollama":
@@ -798,25 +794,31 @@ def get_anthropic_response(
         else:
             # only append to messages if the response is not json
             messages.append({"role": "assistant", "content": llm_response})
+        print('teststea')
         return items_to_return
 
     except Exception as e:
         return f"Error interacting with Anthropic: {e}"
 
 
-def lookupprovider(model):
-    if model in [
-        "phi3",
-        "llama3.2",
-        "llama3.1",
-        "gemma2:9b",
-    ]:  # replace with ollama attribute
+def lookup_provider(model):
+    """Determines the provider based on the model name."""
+    # Ollama models
+    ollama_prefixes = ["llama", "llava", "phi", "mistral", "codellama"]
+    if any(model.startswith(prefix) for prefix in ollama_prefixes):
         return "ollama"
-    elif model in ["gpt-4o-mini", "gpt-4o", "gpt-4o"]:  # replace with openai attribute
+    
+    # OpenAI models
+    openai_prefixes = ["gpt-", "dall-e-", "tts-", "whisper-"]
+    if any(model.startswith(prefix) for prefix in openai_prefixes):
         return "openai"
-    elif model in ["claude-3.5-haiku", "claude-3.5"]:  # replace with claude attribute
-        return "claude"
-
+    
+    # Anthropic models
+    if model.startswith("claude"):
+       return "anthropic"
+    if model.startswith("gemini"):
+        return "google"    
+    return None
 
 def get_llm_response(
     prompt,
@@ -828,9 +830,14 @@ def get_llm_response(
     api_url=None,
     **kwargs,
 ):
-    # print(provider)
-    # print(model)
-    if npc is not None:
+    #print(provider)
+    #print(model)
+    if model is not None and provider is not None:
+        pass
+    elif provider is None and model is not None:
+        provider = lookup_provider(model)
+    
+    elif npc is not None:
         if npc.provider is not None:
             provider = npc.provider
         if npc.model is not None:
@@ -839,15 +846,11 @@ def get_llm_response(
             api_url = npc.api_url
 
     else:
-        if provider is None and model is None:
-            provider = "ollama"
-            if images is not None:
-                model = "llava:7b"
-            else:
-                model = "llama3.2"
-        elif provider is None and model is not None:
-            provider = lookupprovider(model)
-    # print("werwer ", npc, model, provider)
+        provider = "ollama"
+        if images is not None:
+            model = "llava:7b"
+        else:
+            model = "llama3.2"
 
     if provider == "ollama":
         if model is None:
@@ -897,7 +900,6 @@ def get_llm_response(
         )
 
     elif provider == "anthropic":
-        # print("anth")
         if model is None:
             model = "claude-3-haiku-20240307"
         return get_anthropic_response(
@@ -1505,7 +1507,10 @@ def execute_llm_question(
     # print("Messages before get_conversation:", messages)
 
     # Use the existing messages list
-    response = get_conversation(messages, model=model, provider=provider, npc=npc)
+    response = get_conversation(messages, 
+                                model=model, 
+                                provider=provider, 
+                                npc=npc)
 
     # Print response from get_conversation for debugging
     # print("Response from get_conversation:", response)
