@@ -42,6 +42,17 @@ import pandas as pd
 import os
 import sys
 
+# modes.py
+
+import os
+import sys
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from io import StringIO
+from .llm_funcs import get_llm_response
+from .helpers import log_action
+
 from langchain_community.document_loaders import (
     CSVLoader,
     PyPDFLoader,
@@ -64,11 +75,24 @@ except:
     
 import io
 
+from typing import List, Dict, Any, Union, Optional
 
 
 
 
-def enter_whisper_mode(command_history, npc=None):
+def enter_whisper_mode(command_history : Any, 
+                       npc : Any = None) -> str:
+    """ 
+    Function Description:
+        This function is used to enter the whisper mode.
+    Args: 
+        command_history : Any : The command history object.
+    Keyword Args:
+        npc : Any : The NPC object.
+    Returns:
+        str : The output of the whisper mode.
+    """
+    
     if npc is not None:
         llm_name = npc.name
     else:
@@ -160,7 +184,20 @@ def enter_whisper_mode(command_history, npc=None):
 
 
 
-def enter_notes_mode(command_history, npc=None):
+def enter_notes_mode(command_history : Any,
+                     npc : Any = None) -> None:
+    """ 
+    Function Description:
+
+    Args:
+        command_history : Any : The command history object.
+    Keyword Args:
+        npc : Any : The NPC object.
+    Returns:
+        None
+        
+    """
+    
     npc_name = npc.name if npc else "base"
     print(f"Entering notes mode (NPC: {npc_name}). Type '/nq' to exit.")
 
@@ -175,7 +212,20 @@ def enter_notes_mode(command_history, npc=None):
     print("Exiting notes mode.")
 
 
-def save_note(note, command_history, npc=None):
+def save_note(note : str,
+             command_history : Any,
+             npc : Any = None) -> None:
+    """ 
+    Function Description:
+        This function is used to save a note.
+    Args:
+        note : str : The note to save.
+        command_history : Any : The command history object.
+    Keyword Args:
+        npc : Any : The NPC object.
+    Returns:
+        None
+    """
     current_dir = os.getcwd()
     timestamp = datetime.datetime.now().isoformat()
     npc_name = npc.name if npc else "base"
@@ -209,9 +259,25 @@ def save_note(note, command_history, npc=None):
     conn.commit()
 
     print("Note saved to database.")
+    # save the note with the current datestamp to the current working directory
+    with open(f"{current_dir}/note_{timestamp}.txt", "w") as f:
+        f.write(note)
+    
+    
 
-
-def enter_data_analysis_mode(command_history, npc=None):
+def enter_data_analysis_mode(command_history : Any,
+                             npc : Any = None) -> None:
+    """ 
+    Function Description:
+        This function is used to enter the data analysis mode.
+    Args:
+        command_history : Any : The command history object.
+    Keyword Args:
+        npc : Any : The NPC object.
+    Returns:
+        None
+    """
+                                 
     npc_name = npc.name if npc else "data_analyst"
     print(f"Entering data analysis mode (NPC: {npc_name}). Type '/daq' to exit.")
 
@@ -304,18 +370,20 @@ Available commands:
 
     print("Exiting data analysis mode.")
 
-# modes.py
 
-import os
-import sys
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from io import StringIO
-from .llm_funcs import get_llm_response
-from .helpers import log_action
 
-def enter_data_mode(command_history, npc=None):
+def enter_data_mode(command_history:  Any, 
+                    npc: Any = None) -> None:
+    """
+    Function Description:
+        This function is used to enter the data mode.
+    Args:
+        command_history : Any : The command history object.
+    Keyword Args:
+        npc : Any : The NPC object.
+    Returns:    
+        None
+    """    
     npc_name = npc.name if npc else "data_analyst"
     print(f"Entering data mode (NPC: {npc_name}). Type '/dq' to exit.")
 
@@ -420,7 +488,18 @@ def enter_data_mode(command_history, npc=None):
 
 
 
-def process_video(file_path, table_name):
+def process_video(file_path : str, table_name : str) -> List:
+    """ 
+    Function Description:
+        This function is used to process a video.
+    Args:
+        file_path : str : The file path.
+        table_name : str : The table name.
+    Keyword Args:
+        None
+    Returns:
+        List : The embeddings and texts.
+    """
     embeddings = []
     texts = []
     try:
@@ -469,7 +548,19 @@ def process_video(file_path, table_name):
         return [], []  # Return empty lists in case of error
 
 
-def process_audio(file_path, table_name):
+def process_audio(file_path :  str, table_name : str) -> List:
+    """
+    Function Description:
+        This function is used to process an audio file. 
+    Args:
+        file_path : str : The file path.
+        table_name : str : The table name.
+    Keyword Args:
+        None
+    Returns:    
+        List : The embeddings and texts. 
+    """
+
     embeddings = []
     texts = []
     try:
@@ -506,7 +597,24 @@ def process_audio(file_path, table_name):
         return [], []  # Return empty lists in case of error
 
 
-def load_data_into_table(file_path, table_name, cursor, conn):
+def load_data_into_table(file_path: str,
+                         table_name : str,
+                         cursor: sqlite3.Cursor,
+                         conn: sqlite3.Connection) -> None:
+ 
+    """
+    Function Description:
+        This function is used to load data into a table.
+    Args:
+        file_path : str : The file path.
+        table_name : str : The table name.
+        cursor : sqlite3.Cursor : The SQLite cursor.
+        conn : sqlite3.Connection : The SQLite connection.
+    Keyword Args:
+        None
+    Returns:    
+        None    
+    """
     try:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -633,7 +741,21 @@ def load_data_into_table(file_path, table_name, cursor, conn):
         raise e  # Re-raise the exception for handling in enter_observation_mode
 
 
-def enter_spool_mode(command_history, inherit_last=0, npc=None):
+def enter_spool_mode(command_history : Any,
+                     inherit_last : int = 0,
+                     npc : Any = None) -> Dict:
+    """ 
+    Function Description:
+        This function is used to enter the spool mode.
+    Args:
+        command_history : Any : The command history object.
+        inherit_last : int : The number of last commands to inherit.
+    Keyword Args:
+        npc : Any : The NPC object.
+    Returns:
+        Dict : The messages and output.
+        
+    """
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
     spool_context = []
@@ -711,7 +833,18 @@ def enter_spool_mode(command_history, inherit_last=0, npc=None):
                                }
 
 
-def initial_table_print(cursor):
+def initial_table_print(cursor : sqlite3.Cursor) -> None:
+    """
+    Function Description:
+        This function is used to print the initial table.   
+    Args:
+        cursor : sqlite3.Cursor : The SQLite cursor.
+    Keyword Args:
+        None
+    Returns:
+        None
+    """ 
+    
     cursor.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name != 'command_history'"
     )
@@ -722,12 +855,35 @@ def initial_table_print(cursor):
         print(f"{i}. {table[0]}")
 
 
-def get_data_response(request, npc=None):
+def get_data_response(request : str, npc : Any = None) -> Any:
+    """
+    Function Description:
+        This function is used to get the data response.
+    Args:
+        request : str : The request.
+    Keyword Args:
+        npc : Any : The NPC object.
+    Returns:
+        Any : The data output.
+    """     
     data_output = npc.get_data_response(request) if npc else None
     return data_output
 
 
-def create_new_table(cursor, conn):
+def create_new_table(cursor : sqlite3.Cursor, conn : sqlite3.Connection) -> None:
+    """ 
+    Function Description:
+        This function is used to create a new table.
+    Args:
+        cursor : sqlite3.Cursor : The SQLite cursor.
+        conn : sqlite3.Connection : The SQLite connection.
+    Keyword Args:
+        None
+    Returns:
+        None
+    """
+    
+
     table_name = input("Enter new table name: ").strip()
     columns = input("Enter column names separated by commas: ").strip()
 
@@ -739,14 +895,41 @@ def create_new_table(cursor, conn):
     print(f"Table '{table_name}' created successfully.")
 
 
-def delete_table(cursor, conn):
+def delete_table(cursor : sqlite3.Cursor, conn : sqlite3.Connection) -> None:
+    """ 
+    Function Description:
+        This function is used to delete a table.
+    Args:
+        cursor : sqlite3.Cursor : The SQLite cursor.
+        conn : sqlite3.Connection : The SQLite connection.
+    Keyword Args:
+        None
+    Returns:
+        None
+    """
+    
     table_name = input("Enter table name to delete: ").strip()
     cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
     conn.commit()
     print(f"Table '{table_name}' deleted successfully.")
 
 
-def add_observation(cursor, conn, table_name):
+def add_observation(cursor : sqlite3.Cursor,
+                    conn : sqlite3.Connection,
+                    table_name : str) -> None:
+    """ 
+    Function Description:
+        This function is used to add an observation.
+    Args:
+        cursor : sqlite3.Cursor : The SQLite cursor.
+        conn : sqlite3.Connection : The SQLite connection.
+        table_name : str : The table name.
+    Keyword Args:
+        None
+    Returns:
+        None
+    """
+    
     cursor.execute(f"PRAGMA table_info({table_name})")
     columns = [column[1] for column in cursor.fetchall() if column[1] != "id"]
 

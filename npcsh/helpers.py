@@ -6,6 +6,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
+
+from typing import List, Dict, Any
 import os
 import sqlite3
 import subprocess
@@ -30,6 +32,18 @@ try:
     import pyaudio
 except Exception as e:
     print(f"Error importing whisper: {e}")
+
+import requests
+from typing import Dict, List, Optional
+from bs4 import BeautifulSoup
+import urllib.parse
+from duckduckgo_search import DDGS
+from googlesearch import search
+
+import os
+import shutil
+import filecmp
+import sqlite3
 
 
 from .llm_funcs import get_llm_response
@@ -181,7 +195,17 @@ BASH_COMMANDS = [
 TERMINAL_EDITORS = ["vim", "emacs", "nano"]
 
 
-def capture_screenshot(npc=None):
+def capture_screenshot(npc : Any = None) -> Dict[str, str]:
+    """ 
+    Function Description:
+        This function captures a screenshot of the current screen and saves it to a file.
+    Args:
+        npc: The NPC object representing the current NPC.
+    Keyword Args:
+        None
+    Returns:
+        A dictionary containing the filename, file path, and model kwargs.
+    """
     # Ensure the directory exists
     directory = os.path.expanduser("~/.npcsh/screenshots")
     os.makedirs(directory, exist_ok=True)
@@ -233,7 +257,24 @@ def capture_screenshot(npc=None):
     return {"filename": filename, "file_path": file_path, "model_kwargs": model_kwargs}
 
 
-def analyze_image_base(user_prompt, file_path, filename, npc=None):
+def analyze_image_base(user_prompt : str,
+                       file_path : str,
+                       filename : str,
+                       npc=None : Any) -> Dict[str, str]:
+    """
+    Function Description:
+        This function analyzes an image using the LLM model and returns the response.   
+    Args:
+        user_prompt: The user prompt to provide to the LLM model.
+        file_path: The path to the image file.
+        filename: The name of the image file.
+    Keyword Args:
+        npc: The NPC object representing the current NPC.
+    Returns:
+        The response from the LLM model
+     
+    """
+    
     if os.path.exists(file_path):
         image_info = {"filename": filename, "file_path": file_path}
 
@@ -260,8 +301,28 @@ def analyze_image_base(user_prompt, file_path, filename, npc=None):
 
 
 def analyze_image(
-    command_history, user_prompt, file_path, filename, npc=None, **model_kwargs
-):
+    command_history : Any,
+    user_prompt : str,
+    file_path : str,
+    filename : str,
+    npc : Any = None,
+    **model_kwargs
+) -> Dict[str, str]:
+    """
+    Function Description:
+        This function captures a screenshot, analyzes it using the LLM model, and returns the response.
+    Args:
+        command_history: The command history object to add the command to.
+        user_prompt: The user prompt to provide to the LLM model.
+        file_path: The path to the image file.
+        filename: The name of the image file.
+    Keyword Args:
+        npc: The NPC object representing the current NPC.
+        model_kwargs: Additional keyword arguments for the LLM model.
+    Returns:
+        The response from the LLM model.
+    """
+    
     if os.path.exists(file_path):
         image_info = {"filename": filename, "file_path": file_path}
 
@@ -296,7 +357,20 @@ def analyze_image(
         return None
 
 
-def execute_set_command(command, value):
+def execute_set_command(command : str, value : str) -> str:
+    """
+    Function Description:
+        This function sets a configuration value in the .npcshrc file.
+    Args:
+        command: The command to execute.
+        value: The value to set.
+    Keyword Args:
+        None
+    Returns:
+        A message indicating the success or failure of the operation.
+    """
+    
+    
     config_path = os.path.expanduser("~/.npcshrc")
 
     # Map command to environment variable name
@@ -336,7 +410,18 @@ def execute_set_command(command, value):
     return f"{command.capitalize()} has been set to: {value}"
 
 
-def get_shell_config_file():
+def get_shell_config_file() -> str:
+    """
+     
+    Function Description:
+        This function returns the path to the shell configuration file.
+    Args:
+        None
+    Keyword Args:
+        None
+    Returns:
+        The path to the shell configuration file.
+    """
     # Check the current shell
     shell = os.environ.get("SHELL", "")
 
@@ -353,7 +438,18 @@ def get_shell_config_file():
         return os.path.expanduser("~/.bashrc")
 
 
-def ensure_npcshrc_exists():
+def ensure_npcshrc_exists() -> str:
+    """
+    Function Description:
+        This function ensures that the .npcshrc file exists in the user's home directory.
+    Args:
+        None
+    Keyword Args:
+        None
+    Returns:
+        The path to the .npcshrc file.
+    """
+    
     npcshrc_path = os.path.expanduser("~/.npcshrc")
     if not os.path.exists(npcshrc_path):
         with open(npcshrc_path, "w") as npcshrc:
@@ -367,7 +463,18 @@ def ensure_npcshrc_exists():
 
 
 # Function to check and download NLTK data if necessary
-def ensure_nltk_punkt():
+def ensure_nltk_punkt() -> None:
+    """
+    Function Description:
+        This function ensures that the NLTK 'punkt' tokenizer is downloaded.
+    Args:
+        None
+    Keyword Args:
+        None
+    Returns:
+        None
+    """
+    
     try:
         nltk.data.find("tokenizers/punkt")
     except LookupError:
@@ -375,14 +482,17 @@ def ensure_nltk_punkt():
         nltk.download("punkt")
 
 
-def load_all_files(directory, extensions=None, depth=1):
+def load_all_files(directory : str, extensions : List[str] = None, depth : int = 1) -> Dict[str, str]:
     """
-    Recursively load all files from the given directory up to a specified depth.
-
-    :param directory: The root directory to start searching from.
-    :param extensions: A list of file extensions to include. If None, all files are included.
-    :param depth: The maximum depth to recurse into subdirectories.
-    :return: A dictionary with file paths as keys and file contents as values.
+    Function Description:
+        This function loads all text files in a directory and its subdirectories.
+    Args:
+        directory: The directory to search.
+    Keyword Args:
+        extensions: A list of file extensions to include.
+        depth: The depth of subdirectories to search.
+    Returns:
+        A dictionary with file paths as keys and file contents as values.
     """
     text_data = {}
     if depth < 1:
@@ -430,19 +540,19 @@ def load_all_files(directory, extensions=None, depth=1):
     return text_data
 
 
-import requests
-from typing import Dict, List, Optional
-from bs4 import BeautifulSoup
-import urllib.parse
-from duckduckgo_search import DDGS
-from googlesearch import search
-
 
 
 def search_web(query: str, num_results: int = 5, provider: str = 'google') -> List[Dict[str, str]]:
     """
-    Search the web using Google or DuckDuckGo and fetch page content
-    Returns: List of dicts with 'title', 'link', and 'content' keys
+    Function Description:
+        This function searches the web for information based on a query.
+    Args:
+        query: The search query.
+    Keyword Args:
+        num_results: The number of search results to retrieve.
+        provider: The search engine provider to use ('google' or 'duckduckgo').
+    Returns:
+        A list of dictionaries with 'title', 'link', and 'content' keys.
     """
     results = []
     
@@ -486,15 +596,25 @@ def search_web(query: str, num_results: int = 5, provider: str = 'google') -> Li
         
     return results
 def rag_search(
-    query, text_data, embedding_model, text_data_embedded=None, similarity_threshold=0.2
-):
+    query : str,
+    text_data : Dict[str, str],
+    embedding_model : Any,
+    text_data_embedded : Optional[Dict[str, np.ndarray]] = None,
+    similarity_threshold : float = 0.2,
+) -> List[str]:
     """
-    Retrieve lines from documents that are relevant to the query.
+    Function Description:
+        This function retrieves lines from documents that are relevant to the query.
+    Args:
+        query: The query string.
+        text_data: A dictionary with file paths as keys and file contents as values.
+        embedding_model: The sentence embedding model.
+    Keyword Args:
+        text_data_embedded: A dictionary with file paths as keys and embedded file contents as values.
+        similarity_threshold: The similarity threshold for considering a line relevant.
+    Returns:
+        A list of relevant snippets.    
 
-    :param query: The query string.
-    :param text_data: A dictionary with file paths as keys and file contents as values.
-    :param similarity_threshold: The similarity threshold for considering a line relevant.
-    :return: A list of tuples (filename, snippet) of relevant snippets.
     """
 
     results = []
@@ -533,7 +653,18 @@ def rag_search(
     return results
 
 
-def add_npcshrc_to_shell_config():
+def add_npcshrc_to_shell_config() -> None:
+    """ 
+    Function Description:
+        This function adds the sourcing of the .npcshrc file to the user's shell configuration file.
+    Args:
+        None
+    Keyword Args:
+        None
+    Returns:
+        None
+    """
+    
     config_file = get_shell_config_file()
     npcshrc_line = "\n# Source NPCSH configuration\nif [ -f ~/.npcshrc ]; then\n    . ~/.npcshrc\nfi\n"
 
@@ -547,14 +678,34 @@ def add_npcshrc_to_shell_config():
             print(f".npcshrc already sourced in {config_file}")
 
 
-def setup_npcsh_config():
+def setup_npcsh_config() -> None:
+    """
+    Function Description:
+        This function initializes the NPCSH configuration.
+    Args:
+        None
+    Keyword Args:
+        None    
+    Returns:
+        None
+    """
+    
     ensure_npcshrc_exists()
     add_npcshrc_to_shell_config()
 
 
-def initialize_npc_project():
-    import os
-
+def initialize_npc_project() -> str:
+    """
+    Function Description:
+        This function initializes an NPC project in the current directory.
+    Args:   
+        None
+    Keyword Args:
+        None
+    Returns:
+        A message indicating the success or failure of the operation.
+    """
+    
     # Get the current directory
     current_directory = os.getcwd()
 
@@ -596,11 +747,34 @@ postprocess: ""
     return f"NPC project initialized in {npc_team_dir}"
 
 
-def is_npcsh_initialized():
+def is_npcsh_initialized() -> bool:
+    """
+    Function Description:
+        This function checks if the NPCSH initialization flag is set.
+    Args:
+        None
+    Keyword Args:
+        None
+    Returns:
+        A boolean indicating whether NPCSH is initialized.
+    """
+    
     return os.environ.get("NPCSH_INITIALIZED", None) == "1"
 
 
-def set_npcsh_initialized():
+def set_npcsh_initialized() -> None:
+    """
+    Function Description:
+        This function sets the NPCSH initialization flag in the .npcshrc file.
+    Args:
+        None
+    Keyword Args:   
+        None
+    Returns:
+
+        None
+    """
+    
     npcshrc_path = ensure_npcshrc_exists()
 
     with open(npcshrc_path, "r+") as npcshrc:
@@ -618,7 +792,18 @@ def set_npcsh_initialized():
     print("NPCSH initialization flag set in .npcshrc")
 
 
-def get_valid_npcs(db_path):
+def get_valid_npcs(db_path : str) -> List[str]:
+    """
+    Function Description:
+        This function retrieves a list of valid NPCs from the database.
+    Args:
+        db_path: The path to the database file.
+    Keyword Args:
+        None
+    Returns:
+        A list of valid NPCs.
+    """
+    
     db_conn = sqlite3.connect(db_path)
     cursor = db_conn.cursor()
     cursor.execute("SELECT name FROM compiled_npcs")
@@ -626,7 +811,19 @@ def get_valid_npcs(db_path):
     db_conn.close()
     return npcs
 
-def get_npc_from_command(command):
+def get_npc_from_command(command : str) -> Optional[str]:
+    """
+    Function Description:
+        This function extracts the NPC name from a command string.
+    Args:
+        command: The command string.
+        
+    Keyword Args:
+        None
+    Returns:
+        The NPC name if found, or None
+    """
+    
     parts = command.split()
     npc = None
     for part in parts:
@@ -634,7 +831,18 @@ def get_npc_from_command(command):
             npc = part.split("=")[1]
             break
     return npc
-def get_npc_path(npc_name, db_path):
+def get_npc_path(npc_name : str, db_path : str) -> Optional[str]:
+    """ 
+    Function Description:
+        This function retrieves the path to the compiled NPC file.
+    Args:
+        npc_name: The name of the NPC.
+        db_path: The path to the database file.
+    Keyword Args:
+        None
+    Returns:
+        The path to the NPC file if found, or None.
+    """
     # First, check in project npc_team directory
     project_npc_team_dir = os.path.abspath("./npc_team")
     npc_path = os.path.join(project_npc_team_dir, f"{npc_name}.npc")
@@ -650,16 +858,22 @@ def get_npc_path(npc_name, db_path):
         print(f"NPC file not found: {npc_name}")
         return None
         
-# helpers.py
-
-import os
-import shutil
-import filecmp
-import sqlite3
 
 
+def initialize_base_npcs_if_needed(db_path : str) -> None:
+    """ 
+    Function Description:
+        This function initializes the base NPCs if they are not already in the database.
+    Args:
+        db_path: The path to the database file.
+    Keyword Args:
 
-def initialize_base_npcs_if_needed(db_path):
+        None
+    Returns:
+        None
+    """
+    
+    
     if is_npcsh_initialized():
         return
 
@@ -712,11 +926,36 @@ def initialize_base_npcs_if_needed(db_path):
     set_npcsh_initialized()
     add_npcshrc_to_shell_config()
 
-def file_has_changed(source_path, destination_path):
+def file_has_changed(source_path : str, destination_path : str) -> bool:
+    """ 
+    Function Description:
+        This function compares two files to determine if they are different.
+    Args:
+        source_path: The path to the source file.
+        destination_path: The path to the destination file.
+    Keyword Args:
+        None
+    Returns:
+        A boolean indicating whether the files are different
+    """
+    
     # Compare file modification times or contents to decide whether to update the file
     return not filecmp.cmp(source_path, destination_path, shallow=False)
 
-def is_valid_npc(npc, db_path):
+def is_valid_npc(npc : str , db_path : str) -> bool:
+    """ 
+    Function Description:
+        This function checks if an NPC is valid based on the database.
+    Args:
+        npc: The name of the NPC.
+        db_path: The path to the database file.
+    Keyword Args:
+        None
+    Returns:
+        A boolean indicating whether the NPC is valid.
+    """
+    
+    
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM compiled_npcs WHERE name = ?", (npc,))
@@ -730,6 +969,18 @@ def get_audio_level(audio_data):
 
 
 def calibrate_silence(sample_rate=16000, duration=2):
+    """ 
+    Function Description:
+        This function calibrates the silence level for audio recording.
+    Args:
+        None
+    Keyword Args:
+        sample_rate: The sample rate for audio recording.
+        duration: The duration in seconds for calibration.
+    Returns:
+        The silence threshold level.
+    """
+    
     p = pyaudio.PyAudio()
     stream = p.open(
         format=pyaudio.paInt16,
@@ -755,11 +1006,38 @@ def calibrate_silence(sample_rate=16000, duration=2):
     return silence_threshold
 
 
-def is_silent(audio_data, threshold):
+def is_silent(audio_data : bytes,          
+              threshold : float) -> bool:
+    """ 
+    Function Description:
+        This function checks if audio data is silent based on a threshold.
+    Args:
+        audio_data: The audio data to check.
+        threshold: The silence threshold level.
+    Keyword Args:
+        None
+    Returns:
+        A boolean indicating whether the audio is silent.
+    """
+    
+    
     return get_audio_level(audio_data) < threshold
 
 
-def record_audio(sample_rate=16000, max_duration=10, silence_threshold=None):
+def record_audio(sample_rate : int = 16000, max_duration : int = 10, silence_threshold : Optional[float] = None) -> bytes:
+    """ 
+    Function Description:
+        This function records audio from the microphone.
+    Args:
+        None
+    Keyword Args:
+        sample_rate: The sample rate for audio recording.
+        max_duration: The maximum duration in seconds.
+        silence_threshold: The silence threshold level.
+    Returns:
+        The recorded audio data.
+    """
+    
     if silence_threshold is None:
         silence_threshold = calibrate_silence()
 
@@ -808,7 +1086,18 @@ def record_audio(sample_rate=16000, max_duration=10, silence_threshold=None):
     return b"".join(frames)
 
 
-def speak_text(text):
+def speak_text(text : str) -> None:
+    """
+    Function Description:
+        This function converts text to speech and plays the audio.
+    Args:
+        text: The text to convert to speech.
+    Keyword Args:
+        None
+    Returns:
+        None
+    """
+    
     try:
         tts = gTTS(text=text, lang="en")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
@@ -819,17 +1108,35 @@ def speak_text(text):
         print(f"Text-to-speech error: {e}")
 
 
-def open_terminal_editor(command):
+def open_terminal_editor(command : str) -> None:
+    """ 
+    Function Description:
+        This function opens a terminal-based text editor.
+    Args:
+        command: The command to open the editor.
+    Keyword Args:   
+        None
+    Returns:
+        None
+    """
+    
     try:
         os.system(command)
     except Exception as e:
         print(f"Error opening terminal editor: {e}")
 
-
-# Helper functions for language-specific execution remain the same
-
-
-def execute_python(code):
+def execute_python(code : str) -> str:
+    """ 
+    Function Description:
+        This function executes Python code and returns the output.
+    Args:
+        code: The Python code to execute.
+    Keyword Args:
+        None
+    Returns:
+        The output of the code execution.
+    """
+    
     try:
         result = subprocess.run(
             ["python", "-c", code], capture_output=True, text=True, timeout=30
@@ -839,7 +1146,18 @@ def execute_python(code):
         return "Error: Execution timed out"
 
 
-def execute_r(code):
+def execute_r(code : str) -> str:
+    """
+    Function Description:
+        This function executes R code and returns the output.
+    Args:
+        code: The R code to execute.
+    Keyword Args:
+        None
+    Returns:
+        The output of the code execution.
+    """
+    
     try:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".R", delete=False
@@ -857,74 +1175,35 @@ def execute_r(code):
         return "Error: Execution timed out"
 
 
-def execute_sql(code):
-    # This is a placeholder. You'll need to implement SQL execution based on your database setup.
-    return "SQL execution not implemented yet."
-
-
-def execute_scala(code):
+def execute_sql(code : str) -> str:
+    """
+    Function Description:
+        This function executes SQL code and returns the output.
+    Args:
+        code: The SQL code to execute.
+    Keyword Args:
+        None
+    Returns:
+        result: The output of the code execution.
+    """
+    # use pandas to run the sql
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".scala", delete=False
-        ) as temp_file:
-            temp_file.write(
-                f"object TempObject {{ def main(args: Array[String]): Unit = {{ {code} }} }}"
-            )
-            temp_file_path = temp_file.name
-
-        compile_result = subprocess.run(
-            ["scalac", temp_file_path], capture_output=True, text=True, timeout=30
-        )
-        if compile_result.returncode != 0:
-            os.unlink(temp_file_path)
-            return f"Compilation Error: {compile_result.stderr}"
-
-        run_result = subprocess.run(
-            ["scala", "TempObject"], capture_output=True, text=True, timeout=30
-        )
-        os.unlink(temp_file_path)
-        return (
-            run_result.stdout
-            if run_result.returncode == 0
-            else f"Runtime Error: {run_result.stderr}"
-        )
-    except subprocess.TimeoutExpired:
-        os.unlink(temp_file_path)
-        return "Error: Execution timed out"
-
-
-def execute_java(code):
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".java", delete=False
-        ) as temp_file:
-            temp_file.write(
-                f"public class TempClass {{ public static void main(String[] args) {{ {code} }} }}"
-            )
-            temp_file_path = temp_file.name
-
-        compile_result = subprocess.run(
-            ["javac", temp_file_path], capture_output=True, text=True, timeout=30
-        )
-        if compile_result.returncode != 0:
-            os.unlink(temp_file_path)
-            return f"Compilation Error: {compile_result.stderr}"
-
-        run_result = subprocess.run(
-            ["java", "TempClass"], capture_output=True, text=True, timeout=30
-        )
-        os.unlink(temp_file_path)
-        return (
-            run_result.stdout
-            if run_result.returncode == 0
-            else f"Runtime Error: {run_result.stderr}"
-        )
-    except subprocess.TimeoutExpired:
-        os.unlink(temp_file_path)
-        return "Error: Execution timed out"
-
-
-def list_directory(args):
+        result = pd.read_sql_query(code, con=sqlite3.connect("npcsh_history.db"))
+        return result
+    except Exception as e:
+        return f"Error: {e}"
+    
+def list_directory(args : List[str]) -> None:
+    """ 
+    Function Description:
+        This function lists the contents of a directory.
+    Args:
+        args: The command arguments.
+    Keyword Args:
+        None
+    Returns:
+        None
+    """
     directory = args[0] if args else "."
     try:
         files = os.listdir(directory)
@@ -934,7 +1213,18 @@ def list_directory(args):
         print(f"Error listing directory: {e}")
 
 
-def read_file(args):
+def read_file(args : List[str]) -> None:
+    """
+    Function Description:
+        This function reads the contents of a file.
+    Args:
+        args: The command arguments.
+    Keyword Args:
+        None
+    Returns:
+        None
+    """
+    
     if not args:
         print("Usage: /read <filename>")
         return
@@ -947,5 +1237,16 @@ def read_file(args):
         print(f"Error reading file: {e}")
 
 
-def log_action(action, detail=""):
+def log_action(action : str, detail : str = "") -> None:
+    """ 
+    Function Description:
+        This function logs an action with optional detail.
+    Args:
+        action: The action to log.
+        detail: Additional detail to log.
+    Keyword Args:
+        None
+    Returns:
+        None
+    """    
     logging.info(f"{action}: {detail}")
