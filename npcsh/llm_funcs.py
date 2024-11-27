@@ -107,6 +107,95 @@ npcsh_db_path = os.path.expanduser(
 )
 
 
+def get_model_and_provider(command : str,
+                           available_models : list) -> tuple:
+    """
+    Function Description:
+        Extracts model and provider from command and autocompletes if possible.
+    Args:
+        command : str : Command string
+        available_models : list : List of available models
+    Keyword Args:
+        None
+    Returns:
+        model_name : str : Model name
+        provider : str : Provider
+        cleaned_command : str : Clean
+        
+                           
+    """
+    
+    model_match = re.search(r"@(\S+)", command)
+    if model_match:
+        model_name = model_match.group(1)
+        # Autocomplete model name
+        matches = [m for m in available_models if m.startswith(model_name)]
+        if matches:
+            if len(matches) == 1:
+                model_name = matches[0] # Complete the name if only one match
+            # Find provider for the (potentially autocompleted) model
+            provider = lookup_provider(model_name)
+            if provider:
+                # Remove the model tag from the command
+                cleaned_command = command.replace(f"@{model_match.group(1)}", "").strip()
+                #print(cleaned_command, 'cleaned_command')
+                return model_name, provider, cleaned_command
+            else:
+                return None, None, command  # Provider not found
+        else:
+            return None, None, command # No matching model
+    else:
+        return None, None, command  # No model specified
+
+
+def get_available_models() -> list:
+    """
+    Function Description:
+        Fetches available models from Ollama, OpenAI, and Anthropic.
+    Args:
+        None    
+    Keyword Args:
+        None
+    Returns:
+        available_models : list : List of available models
+         
+    """
+    available_models = []
+    
+    # Ollama models
+    try:
+        response = subprocess.run(['ollama', 'list'], capture_output=True, text=True, check=True)
+        for line in response.stdout.split('\n')[1:]:  # Skip header line
+            if line.strip():
+                model_name = line.split()[0].split(':')[0]  # Get name before colon
+                available_models.append(model_name)
+    except subprocess.CalledProcessError as e:
+        print(f"Error fetching Ollama models: {e}")
+
+    # OpenAI models
+    openai_models = [
+                "gpt-4-turbo",
+                "gpt-4o",
+                "gpt-4o-mini",
+                "dall-e-3",
+                "dall-e-2",
+            ]
+    available_models.extend(openai_models)
+
+    # Anthropic models
+    anthropic_models = [
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307",
+        "claude-2.1",
+        "claude-2.0",
+        "claude-instant-1.2"
+    ]
+    available_models.extend(anthropic_models)
+    return available_models
+
+
+
 def generate_image_ollama(prompt : str, model : str) -> str:
     """ 
     Function Description:

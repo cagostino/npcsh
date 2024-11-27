@@ -68,10 +68,12 @@ class NPC:
     def __str__(self):
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
 
-    def get_data_response(self, request):
+    def get_data_response(self, request : str):
         return get_data_response(request, self.db_conn, self.tables)
 
-    def get_llm_response(self, request, **kwargs):
+    def get_llm_response(self, 
+                         request : str,
+                         **kwargs):
         print(self.model, self.provider)
         return get_llm_response(request, self.model, self.provider, npc=self, **kwargs)
 
@@ -95,7 +97,8 @@ class NPCCompiler:
             ),
             undefined=SilentUndefined
         )
-    def generate_tool_script(self, tool):
+    def generate_tool_script(self, tool : Tool
+                             ):
         script_content = f"""
     # Auto-generated script for tool: {tool.tool_name}
 
@@ -178,7 +181,8 @@ class NPCCompiler:
 
         return list(tool_dict.values())
 
-    def load_tool_from_file(self, tool_path):
+    def load_tool_from_file(self, 
+                            tool_path : str) -> Union[dict, None]:
         try:
             with open(tool_path, "r") as f:
                 tool_content = f.read()
@@ -196,7 +200,7 @@ class NPCCompiler:
         except Exception as e:
             print(f"Error loading tool {tool_path}: {e}")
             return None
-    def parse_all_npcs(self):
+    def parse_all_npcs(self) -> None:
         directories = [self.npc_directory]
         if os.path.exists(self.project_npc_directory):
             directories.append(self.project_npc_directory)
@@ -205,7 +209,7 @@ class NPCCompiler:
                 if filename.endswith(".npc"):
                     npc_path = os.path.join(directory, filename)
                     self.parse_npc_file(npc_path)
-    def parse_npc_file(self, npc_file_path: str):
+    def parse_npc_file(self, npc_file_path: str) -> dict:
         npc_file = os.path.basename(npc_file_path)
         if npc_file in self.npc_cache:
             # Project NPCs override global NPCs
@@ -228,7 +232,7 @@ class NPCCompiler:
         for npc_file in self.npc_cache:
             self.resolve_npc_profile(npc_file)
 
-    def resolve_npc_profile(self, npc_file: str):
+    def resolve_npc_profile(self, npc_file: str) -> dict:
         if npc_file in self.resolved_npcs:
             return self.resolved_npcs[npc_file]
 
@@ -247,7 +251,7 @@ class NPCCompiler:
 
         self.resolved_npcs[npc_file] = profile
         return profile
-    def finalize_npc_profile(self, npc_file: str):
+    def finalize_npc_profile(self, npc_file: str) -> dict:
         profile = self.resolved_npcs.get(npc_file)
         if not profile:
             raise ValueError(f"NPC {npc_file} has not been resolved.")
@@ -265,7 +269,7 @@ class NPCCompiler:
 
         return profile
 
-    def compile_pipe(self, pipe_file: str, initial_input=None):
+    def compile_pipe(self, pipe_file: str, initial_input=None) -> list:
         if pipe_file in self.pipe_cache:
             return self.pipe_cache[pipe_file]
 
@@ -321,7 +325,7 @@ class NPCCompiler:
         except Exception as e:
             raise ValueError(f"Error compiling pipeline {pipe_file}: {str(e)}")
 
-    def merge_profiles(self, parent, child):
+    def merge_profiles(self, parent, child) -> dict:
         merged = parent.copy()
         for key, value in child.items():
             if isinstance(value, list) and key in merged:
@@ -332,7 +336,7 @@ class NPCCompiler:
                 merged[key] = value
         return merged
 
-    def update_compiled_npcs_table(self, npc_file, parsed_content):
+    def update_compiled_npcs_table(self, npc_file, parsed_content) -> None:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -351,7 +355,7 @@ class NPCCompiler:
             )  # Print the full error
 
 class Tool:
-    def __init__(self, tool_data):
+    def __init__(self, tool_data : dict):
         if not tool_data or not isinstance(tool_data, dict):
             raise ValueError("Invalid tool data provided.")
         if "tool_name" not in tool_data:
@@ -364,7 +368,7 @@ class Tool:
         self.prompt = self.parse_step(tool_data.get("prompt", {}))
         self.postprocess = self.parse_steps(tool_data.get("postprocess", []))
 
-    def parse_step(self, step):
+    def parse_step(self, step : Union[dict, str]) -> dict:
         if isinstance(step, dict):
             return {
                 "engine": step.get("engine", "plain_english"),
@@ -375,12 +379,17 @@ class Tool:
         else:
             raise ValueError("Invalid step format")
 
-    def parse_steps(self, steps):
+    def parse_steps(self, steps : list) -> list:
         return [self.parse_step(step) for step in steps]
 
 
 
-    def execute(self, input_values, tools_dict, jinja_env, command, npc=None):
+    def execute(self, input_values : dict,
+                tools_dict : dict,
+                jinja_env : Environment,
+                command : str,
+                npc=None):
+        
         context = npc.shared_context
         context.update({
             "inputs": input_values,
@@ -407,7 +416,13 @@ class Tool:
             return context.get('llm_response')
             
 
-    def execute_step(self, step, context, jinja_env, npc=None):
+    def execute_step(self, step: dict
+                     context: dict,
+                     jinja_env: Environment,
+                     npc : NPC = None):
+        
+        
+
         engine = step.get("engine", "plain_english")
         code = step.get("code", "")
 
@@ -543,7 +558,7 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         raise ValueError(f"Missing required key in NPC file {npc_file}: {str(e)}")
     except Exception as e:
         raise ValueError(f"Error loading NPC from file {npc_file}: {str(e)}")
-def load_tools_from_directory(directory):
+def load_tools_from_directory(directory) -> list:
     tools = []
     if os.path.exists(directory):
         for filename in os.listdir(directory):
