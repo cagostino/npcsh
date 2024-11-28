@@ -1,11 +1,22 @@
 ## functions for dataframes
+import os
+import sqlite3
+import json
+import pandas as pd
+import numpy as np
+import io
+from PIL import Image
+import fitz  # PyMuPDF
+from typing import Optional
+
+from .llm_funcs import get_llm_response
+from .audio import process_audio
+from .video import process_video
 
 
-def load_data_into_table(file_path: str,
-                         table_name : str,
-                         cursor: sqlite3.Cursor,
-                         conn: sqlite3.Connection) -> None:
- 
+def load_data_into_table(
+    file_path: str, table_name: str, cursor: sqlite3.Cursor, conn: sqlite3.Connection
+) -> None:
     """
     Function Description:
         This function is used to load data into a table.
@@ -16,8 +27,8 @@ def load_data_into_table(file_path: str,
         conn : sqlite3.Connection : The SQLite connection.
     Keyword Args:
         None
-    Returns:    
-        None    
+    Returns:
+        None
     """
     try:
         if not os.path.exists(file_path):
@@ -112,9 +123,9 @@ def load_data_into_table(file_path: str,
                     "video_frames": [video_frames.tobytes()],
                     "shape": [video_frames.shape],
                     "dtype": [video_frames.dtype.str],
-                    "audio_array": [audio_array.tobytes()]
-                    if audio_array is not None
-                    else None,
+                    "audio_array": (
+                        [audio_array.tobytes()] if audio_array is not None else None
+                    ),
                     "audio_rate": [sr] if audio_array is not None else None,
                 }
             )
@@ -145,11 +156,8 @@ def load_data_into_table(file_path: str,
         raise e  # Re-raise the exception for handling in enter_observation_mode
 
 
-
-
-
-def create_new_table(cursor : sqlite3.Cursor, conn : sqlite3.Connection) -> None:
-    """ 
+def create_new_table(cursor: sqlite3.Cursor, conn: sqlite3.Connection) -> None:
+    """
     Function Description:
         This function is used to create a new table.
     Args:
@@ -160,7 +168,6 @@ def create_new_table(cursor : sqlite3.Cursor, conn : sqlite3.Connection) -> None
     Returns:
         None
     """
-    
 
     table_name = input("Enter new table name: ").strip()
     columns = input("Enter column names separated by commas: ").strip()
@@ -173,8 +180,8 @@ def create_new_table(cursor : sqlite3.Cursor, conn : sqlite3.Connection) -> None
     print(f"Table '{table_name}' created successfully.")
 
 
-def delete_table(cursor : sqlite3.Cursor, conn : sqlite3.Connection) -> None:
-    """ 
+def delete_table(cursor: sqlite3.Cursor, conn: sqlite3.Connection) -> None:
+    """
     Function Description:
         This function is used to delete a table.
     Args:
@@ -185,17 +192,17 @@ def delete_table(cursor : sqlite3.Cursor, conn : sqlite3.Connection) -> None:
     Returns:
         None
     """
-    
+
     table_name = input("Enter table name to delete: ").strip()
     cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
     conn.commit()
     print(f"Table '{table_name}' deleted successfully.")
 
 
-def add_observation(cursor : sqlite3.Cursor,
-                    conn : sqlite3.Connection,
-                    table_name : str) -> None:
-    """ 
+def add_observation(
+    cursor: sqlite3.Cursor, conn: sqlite3.Connection, table_name: str
+) -> None:
+    """
     Function Description:
         This function is used to add an observation.
     Args:
@@ -207,7 +214,7 @@ def add_observation(cursor : sqlite3.Cursor,
     Returns:
         None
     """
-    
+
     cursor.execute(f"PRAGMA table_info({table_name})")
     columns = [column[1] for column in cursor.fetchall() if column[1] != "id"]
 

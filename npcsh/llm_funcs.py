@@ -1,70 +1,21 @@
+# Remove duplicate imports
 import subprocess
 import requests
 import os
 import json
-import ollama
+import ollama  # Add to setup.py if missing
 import sqlite3
 import pandas as pd
 import openai
 from dotenv import load_dotenv
 from openai import OpenAI
 import anthropic
-
-import markdown
 import re
-from pygments import highlight
-from pygments.lexers import get_lexer_by_name
-from pygments.formatters import TerminalFormatter
-
-import textwrap
-from rich.console import Console
-from rich.markdown import Markdown, CodeBlock
 from jinja2 import Environment, FileSystemLoader, Template, Undefined
 
 from datetime import datetime
-from typing import List, Dict, Any
-import base64  # For image encoding
+from typing import List, Dict, Any, Optional, Union
 
-import base64
-import json
-import requests
-from PIL import Image
-import io
-
-import matplotlib.pyplot as plt  # Import for showing plots
-from IPython.display import (
-    display,
-)  # For displaying DataFrames in a more interactive way
-import numpy as np
-import pandas as pd
-
-from typing import Optional, List, Dict, Any
-
-class LeftAlignedCodeBlock(CodeBlock):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.margin = (0, 0)  # Set left margin to 0
-
-
-class LeftAlignedMarkdown(Markdown):
-    elements = Markdown.elements.copy()
-    elements["code_block"] = LeftAlignedCodeBlock
-
-
-def render_markdown(text : str) -> None:
-    """ 
-    Function Description:
-        This function renders markdown text in a left-aligned format.
-    Args:
-        text (str): The markdown text to render.
-    Keyword Args:
-        None
-    Returns:
-        None
-    """
-    console = Console()
-    md = LeftAlignedMarkdown(text)
-    console.print(md)
 
 # Load environment variables from .env file
 def load_env_from_execution_dir() -> None:
@@ -78,7 +29,7 @@ def load_env_from_execution_dir() -> None:
     Returns:
         None
     """
-    
+
     # Get the directory where the script is being executed
     execution_dir = os.path.abspath(os.getcwd())
     # print(f"Execution directory: {execution_dir}")
@@ -93,8 +44,6 @@ def load_env_from_execution_dir() -> None:
         print(f"Warning: No .env file found in {execution_dir}")
 
 
-
-
 load_env_from_execution_dir()
 
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", None)
@@ -107,8 +56,7 @@ npcsh_db_path = os.path.expanduser(
 )
 
 
-def get_model_and_provider(command : str,
-                           available_models : list) -> tuple:
+def get_model_and_provider(command: str, available_models: list) -> tuple:
     """
     Function Description:
         Extracts model and provider from command and autocompletes if possible.
@@ -121,10 +69,10 @@ def get_model_and_provider(command : str,
         model_name : str : Model name
         provider : str : Provider
         cleaned_command : str : Clean
-        
-                           
+
+
     """
-    
+
     model_match = re.search(r"@(\S+)", command)
     if model_match:
         model_name = model_match.group(1)
@@ -132,18 +80,20 @@ def get_model_and_provider(command : str,
         matches = [m for m in available_models if m.startswith(model_name)]
         if matches:
             if len(matches) == 1:
-                model_name = matches[0] # Complete the name if only one match
+                model_name = matches[0]  # Complete the name if only one match
             # Find provider for the (potentially autocompleted) model
             provider = lookup_provider(model_name)
             if provider:
                 # Remove the model tag from the command
-                cleaned_command = command.replace(f"@{model_match.group(1)}", "").strip()
-                #print(cleaned_command, 'cleaned_command')
+                cleaned_command = command.replace(
+                    f"@{model_match.group(1)}", ""
+                ).strip()
+                # print(cleaned_command, 'cleaned_command')
                 return model_name, provider, cleaned_command
             else:
                 return None, None, command  # Provider not found
         else:
-            return None, None, command # No matching model
+            return None, None, command  # No matching model
     else:
         return None, None, command  # No model specified
 
@@ -153,33 +103,35 @@ def get_available_models() -> list:
     Function Description:
         Fetches available models from Ollama, OpenAI, and Anthropic.
     Args:
-        None    
+        None
     Keyword Args:
         None
     Returns:
         available_models : list : List of available models
-         
+
     """
     available_models = []
-    
+
     # Ollama models
     try:
-        response = subprocess.run(['ollama', 'list'], capture_output=True, text=True, check=True)
-        for line in response.stdout.split('\n')[1:]:  # Skip header line
+        response = subprocess.run(
+            ["ollama", "list"], capture_output=True, text=True, check=True
+        )
+        for line in response.stdout.split("\n")[1:]:  # Skip header line
             if line.strip():
-                model_name = line.split()[0].split(':')[0]  # Get name before colon
+                model_name = line.split()[0].split(":")[0]  # Get name before colon
                 available_models.append(model_name)
     except subprocess.CalledProcessError as e:
         print(f"Error fetching Ollama models: {e}")
 
     # OpenAI models
     openai_models = [
-                "gpt-4-turbo",
-                "gpt-4o",
-                "gpt-4o-mini",
-                "dall-e-3",
-                "dall-e-2",
-            ]
+        "gpt-4-turbo",
+        "gpt-4o",
+        "gpt-4o-mini",
+        "dall-e-3",
+        "dall-e-2",
+    ]
     available_models.extend(openai_models)
 
     # Anthropic models
@@ -189,15 +141,14 @@ def get_available_models() -> list:
         "claude-3-haiku-20240307",
         "claude-2.1",
         "claude-2.0",
-        "claude-instant-1.2"
+        "claude-instant-1.2",
     ]
     available_models.extend(anthropic_models)
     return available_models
 
 
-
-def generate_image_ollama(prompt : str, model : str) -> str:
-    """ 
+def generate_image_ollama(prompt: str, model: str) -> str:
+    """
     Function Description:
         This function generates an image using the Ollama API.
     Args:
@@ -220,7 +171,7 @@ def generate_image_ollama(prompt : str, model : str) -> str:
 
 
 def generate_image_openai(prompt: str, model: str, api_key: str) -> str:
-    """ 
+    """
     Function Description:
         This function generates an image using the OpenAI API.
     Args:
@@ -251,8 +202,7 @@ def generate_image_openai(prompt: str, model: str, api_key: str) -> str:
         return image
 
 
-def generate_image_anthropic(prompt : str, model : str, api_key : str) -> str:
-    
+def generate_image_anthropic(prompt: str, model: str, api_key: str) -> str:
     """
     Function Description:
         This function generates an image using the Anthropic API.
@@ -265,8 +215,8 @@ def generate_image_anthropic(prompt : str, model : str, api_key : str) -> str:
     Returns:
         str: The URL of the generated image.
     """
-    raise NotImplementedError("This function is not yet implemented.")    
-    
+    raise NotImplementedError("This function is not yet implemented.")
+
     url = "https://api.anthropic.com/v1/images/generate"
     headers = {"Authorization": f"Bearer {api_key}"}
     data = {"model": model, "prompt": prompt}
@@ -278,10 +228,9 @@ def generate_image_anthropic(prompt : str, model : str, api_key : str) -> str:
         raise Exception(f"Error: {response.status_code}, {response.text}")
 
 
-def generate_image_openai_like(prompt : str,
-                               model : str,
-                               api_url : str,
-                               api_key : str) -> str:
+def generate_image_openai_like(
+    prompt: str, model: str, api_url: str, api_key: str
+) -> str:
     """
     Function Description:
         This function generates an image using an OpenAI-like API.
@@ -295,7 +244,7 @@ def generate_image_openai_like(prompt : str,
     Returns:
         str: The URL of the generated
     """
-    
+
     raise NotImplementedError("This function is not yet implemented.")
 
     url = f"{api_url}/v1/images/generations"
@@ -308,10 +257,12 @@ def generate_image_openai_like(prompt : str,
 
     else:
         raise Exception(f"Error: {response.status_code}, {response.text}")
+
+
 def generate_image_stable_diffusion(
     prompt: str,
     model: str,
-    api_url : str,
+    api_url: str,
 ):
     """
     Function Description:
@@ -326,16 +277,16 @@ def generate_image_stable_diffusion(
         str: The URL of the generated image.
     """
     raise NotImplementedError("This function is not yet implemented.")
-    
+
 
 def generate_image(
-    prompt : str,
-    model : str = npcsh_model,
-    provider : str = npcsh_provider,
-    filename : str = None,
-    npc : Any = None,
+    prompt: str,
+    model: str = npcsh_model,
+    provider: str = npcsh_provider,
+    filename: str = None,
+    npc: Any = None,
 ):
-    """ 
+    """
     Function Description:
         This function generates an image using the specified provider and model.
     Args:
@@ -383,7 +334,7 @@ def generate_image(
         return filename
 
 
-def get_system_message(npc : Any) -> str:
+def get_system_message(npc: Any) -> str:
     """
     Function Description:
         This function generates a system message for the NPC.
@@ -394,7 +345,7 @@ def get_system_message(npc : Any) -> str:
     Returns:
         str: The system message for the NPC.
     """
-    
+
     system_message = f"""
     .
     ..
@@ -408,11 +359,13 @@ def get_system_message(npc : Any) -> str:
     ..........
     Hello!
     Welcome to the team.
-    You are an NPC working as part of our team. 
+    You are an NPC working as part of our team.
     You are the {npc.name} NPC with the following primary directive: {npc.primary_directive}.
+    Users may refer to you by your assistant name, {npc.name} and you shouold consider this to be your core identity.
+
     In some cases, users may request insights into data contained in a local database.
-    For these purposes, you may use any data contained within these sql tables 
-    {npc.tables}        
+    For these purposes, you may use any data contained within these sql tables
+    {npc.tables}
 
     which are contained in the database at {npcsh_db_path}.
     """
@@ -433,10 +386,9 @@ def get_system_message(npc : Any) -> str:
     return system_message
 
 
-def get_ollama_conversation(messages : List[Dict[str, str]],
-                            model : str,
-                            npc : Any = None
-                            ) -> List[Dict[str, str]]:
+def get_ollama_conversation(
+    messages: List[Dict[str, str]], model: str, npc: Any = None
+) -> List[Dict[str, str]]:
     """
     Function Description:
         This function generates a conversation using the Ollama API.
@@ -448,7 +400,7 @@ def get_ollama_conversation(messages : List[Dict[str, str]],
     Returns:
         List[Dict[str, str]]: The list of messages in the conversation.
     """
-    
+
     messages_copy = messages.copy()
     if messages_copy[0]["role"] != "system":
         if npc is not None:
@@ -460,12 +412,13 @@ def get_ollama_conversation(messages : List[Dict[str, str]],
     return messages_copy
 
 
-def get_openai_conversation(messages : List[Dict[str, str]],
-                            model : str,
-                            npc : Any = None,
-                            api_key : str = None,
-                            **kwargs
-                            ) -> List[Dict[str, str]]:
+def get_openai_conversation(
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    api_key: str = None,
+    **kwargs,
+) -> List[Dict[str, str]]:
     """
     Function Description:
         This function generates a conversation using the OpenAI API.
@@ -478,7 +431,7 @@ def get_openai_conversation(messages : List[Dict[str, str]],
     Returns:
         List[Dict[str, str]]: The list of messages in the conversation.
     """
-    
+
     try:
         if api_key is None:
             api_key = os.environ["OPENAI_API_KEY"]
@@ -517,7 +470,7 @@ def get_openai_like_conversation(
     npc: Any = None,
     api_url: str = None,
     api_key: str = None,
-    **kwargs
+    **kwargs,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -574,11 +527,13 @@ def get_openai_like_conversation(
         return f"Error interacting with API: {e}"
 
 
-def get_anthropic_conversation(messages : List[Dict[str, str]],
-                               model : str,
-                               npc : Any = None,
-                               api_key : str = None,
-                               **kwargs) -> List[Dict[str, str]]:
+def get_anthropic_conversation(
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    api_key: str = None,
+    **kwargs,
+) -> List[Dict[str, str]]:
     """
     Function Description:
         This function generates a conversation using the Anthropic API.
@@ -591,7 +546,7 @@ def get_anthropic_conversation(messages : List[Dict[str, str]],
     Returns:
         List[Dict[str, str]]: The list of messages in the conversation.
     """
-    
+
     try:
         if api_key is None:
             api_key = os.getenv("ANTHROPIC_API_KEY", None)
@@ -623,15 +578,17 @@ def get_anthropic_conversation(messages : List[Dict[str, str]],
         return messages
 
     except Exception as e:
-        return f"Error interacting with Anthropic: {e}"
+        return f"Error interacting with Anthropic conversations: {e}"
 
 
 def get_conversation(
-    messages : List[Dict[str, str]],
-    provider : str = npcsh_provider,
-    model : str = npcsh_model,
-    npc : Any = None,
-    **kwargs
+    messages: List[Dict[str, str]],
+    provider: str = npcsh_provider,
+    model: str = npcsh_model,
+    images: List[Dict[str, str]] = None,
+    npc: Any = None,
+    api_url: str = None,
+    **kwargs,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -645,8 +602,6 @@ def get_conversation(
     Returns:
         List[Dict[str, str]]: The list of messages in the conversation.
     """
-    
-    
 
     if model is not None and provider is not None:
         pass  # Use explicitly provided model and provider
@@ -660,8 +615,6 @@ def get_conversation(
         provider = "ollama"
         model = "llava:7b" if images is not None else "llama3.2"
 
-
-
     # print(provider, model)
     if provider == "ollama":
         return get_ollama_conversation(messages, model, npc=npc, **kwargs)
@@ -673,22 +626,19 @@ def get_conversation(
         return "Error: Invalid provider specified."
 
 
-def debug_loop(prompt : str,
-               error : str,
-               model : str ) -> bool:
+def debug_loop(prompt: str, error: str, model: str) -> bool:
     """
-    Function Description:   
+    Function Description:
         This function generates a debug loop using the specified model.
-    Args:   
+    Args:
         prompt (str): The prompt for the debug loop.
         error (str): The error message to check for.
         model (str): The model to use for the debug loop.
     Keyword Args:
         None
-    Returns:    
+    Returns:
         bool: Whether the debug loop was successful.
     """
-    
 
     response = get_ollama_response(prompt, model)
     print(response)
@@ -699,13 +649,13 @@ def debug_loop(prompt : str,
 
 
 def get_data_response(
-    request : str,
-    db_conn : sqlite3.Connection,
-    tables : str = None,
-    n_try_freq : int = 5,
-    extra_context : str = None,
-    history : str = None,
-    npc : Any = None,
+    request: str,
+    db_conn: sqlite3.Connection,
+    tables: str = None,
+    n_try_freq: int = 5,
+    extra_context: str = None,
+    history: str = None,
+    npc: Any = None,
 ):
     """
     Function Description:
@@ -721,22 +671,22 @@ def get_data_response(
         npc (Any): The NPC object.
     Returns:
         Any: The response to the data request.
-        
+
     """
     prompt = f"""
-            Here is a request from a user: 
+            Here is a request from a user:
 
             ```
             {request}
             ```
-            
-            You need to satisfy their request. 
-            
+
+            You need to satisfy their request.
+
             """
 
     if tables is not None:
         prompt += f"""
-        Here are the tables you have access to: 
+        Here are the tables you have access to:
         {tables}
         """
     if extra_context is not None:
@@ -753,7 +703,7 @@ def get_data_response(
 
             Please either write :
             1) an SQL query that will return the requested data.
-            or 
+            or
             2) a query that will provide you more information so that you can answer the request.
 
             Return the query and the choice you made, i.e. whether you chose 1 or 2.
@@ -761,11 +711,11 @@ def get_data_response(
 
             This is a description of the types and requirements for the outputs.
             {{
-                "query": {"type": "string", 
+                "query": {"type": "string",
                           "description": "a valid SQL query that will accomplish the task"},
-                "choice": {"type":"int", 
+                "choice": {"type":"int",
                            "enum":[1,2]}
-                "choice_explanation": {"type": "string", 
+                "choice_explanation": {"type": "string",
                                         "description": "a brief explanation of why you chose 1 or 2"}
             }}
             Do not return any extra information. Respond only with the json.
@@ -802,14 +752,12 @@ def get_data_response(
 
 
 def check_output_sufficient(
-    request : str,
-    
-    response : pd.DataFrame,
-    
-    query : str,
-    model : str = None,
-    provider : str = None,
-    npc : Any = None,
+    request: str,
+    response: pd.DataFrame,
+    query: str,
+    model: str = None,
+    provider: str = None,
+    npc: Any = None,
 ):
     prompt = f"""
 
@@ -820,26 +768,26 @@ def check_output_sufficient(
             You have extracted a result from the database using the following query:
                             ```
                 {query}
-                    ``` 
+                    ```
             Here is the result:
                             ```
                 {response.head(),
                     response.describe()}
-                    ``` 
+                    ```
             Is this result sufficient to answer the user's request?
 
             Return a json with the following
-            key: 'IS_SUFFICIENT' 
+            key: 'IS_SUFFICIENT'
             Here is a description of the types and requirements for the output.
                             ```
                 {{
-                    "IS_SUFFICIENT": {"type": "bool", 
+                    "IS_SUFFICIENT": {"type": "bool",
                                         "description": "whether the result is sufficient to answer the user's request"}
                 }}
-                            ```   
-            
-            
-                                                        
+                            ```
+
+
+
             """
     llm_response = get_llm_response(
         prompt, format="json", model=model, provider=provider, npc=npc
@@ -851,13 +799,13 @@ def check_output_sufficient(
 
 
 def process_data_output(
-    llm_response : Dict[str, Any],
-    db_conn : sqlite3.Connection,
-    request : str,
-    tables : str = None,
-    n_try_freq : int = 5,
-    history : str = None,
-    npc : Any = None,
+    llm_response: Dict[str, Any],
+    db_conn: sqlite3.Connection,
+    request: str,
+    tables: str = None,
+    n_try_freq: int = 5,
+    history: str = None,
+    npc: Any = None,
 ):
     """
     Function Description:
@@ -874,7 +822,7 @@ def process_data_output(
     Returns:
         Any: The processed output of the data request.
     """
-    
+
     if llm_response["choice"] == 1:
         query = llm_response["query"]
         try:
@@ -886,7 +834,7 @@ def process_data_output(
                 return {"response": response, "code": 200}
             else:
                 output = {
-                    "response": f"""The result in the response : ```{response.head()} ``` 
+                    "response": f"""The result in the response : ```{response.head()} ```
                         was not sufficient to answer the user's request. """,
                     "code": 400,
                 }
@@ -905,17 +853,17 @@ def process_data_output(
                 extra_context = f"""
 
 
-                You indicated that you would need to run 
+                You indicated that you would need to run
                 the following query to provide a more complete response:
                         ```
                     {query}
-                        ``` 
+                        ```
                 Here is the result:
                                 ```
                     {response.head(),
                         response.describe()}
-                        ``` 
-                                                            
+                        ```
+
                 """
                 if history is not None:
                     extra_context += f"""
@@ -940,15 +888,14 @@ def process_data_output(
         return {"response": "Error: Invalid choice in response", "code": 400}
 
 
-
 def get_ollama_response(
-    prompt : str,
-    model : str,
-    images : List[Dict[str, str]] = None,
-    npc : Any = None,
-    format : str = None,
-    messages : List[Dict[str, str]] = None,
-    **kwargs
+    prompt: str,
+    model: str,
+    images: List[Dict[str, str]] = None,
+    npc: Any = None,
+    format: str = None,
+    messages: List[Dict[str, str]] = None,
+    **kwargs,
 ):
     """
     Function Description:
@@ -964,7 +911,7 @@ def get_ollama_response(
     Returns:
         Any: The response generated by the Ollama API.
     """
-    
+
     # print(prompt)
     try:
         if images:
@@ -1018,15 +965,15 @@ def get_ollama_response(
 
 
 def get_openai_response(
-    prompt : str,
-    model : str,
-    images : List[Dict[str, str]] = None,
-    npc : Any = None,
-    format : str = None,
-    api_key : str = None,
-    messages : List[Dict[str, str]] = None,
+    prompt: str,
+    model: str,
+    images: List[Dict[str, str]] = None,
+    npc: Any = None,
+    format: str = None,
+    api_key: str = None,
+    messages: List[Dict[str, str]] = None,
 ):
-    """ 
+    """
     Function Description:
         This function generates a response using the OpenAI API.
     Args:
@@ -1041,8 +988,7 @@ def get_openai_response(
     Returns:
         Any: The response generated by the OpenAI API.
     """
-    
-        
+
     try:
         if api_key is None:
             api_key = os.environ["OPENAI_API_KEY"]
@@ -1054,22 +1000,21 @@ def get_openai_response(
         if messages is None or len(messages) == 0:
             messages = [
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": [
-                    {"type":"text", 
-                     "text":prompt}
-                    ]
-                 },
+                {"role": "user", "content": [{"type": "text", "text": prompt}]},
             ]
         if images:
             for image in images:
-                with open(image['file_path'], "rb") as image_file:
-                    image_data = base64.b64encode(compress_image(image_file.read())).decode("utf-8")
-                    messages[-1]['content'].append(
-                        {"type":"image_url", 
-                         "image_url":
-                             {
-                                 "url": f"data:image/jpeg;base64,{image_data}",
-                             }}
+                with open(image["file_path"], "rb") as image_file:
+                    image_data = base64.b64encode(
+                        compress_image(image_file.read())
+                    ).decode("utf-8")
+                    messages[-1]["content"].append(
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_data}",
+                            },
+                        }
                     )
 
         completion = client.chat.completions.create(model=model, messages=messages)
@@ -1094,41 +1039,42 @@ def get_openai_response(
             return items_to_return
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
+
+
 def compress_image(image_bytes, max_size=(800, 800)):
     from PIL import Image
     import io
-    
+
     img = Image.open(io.BytesIO(image_bytes))
-    
+
     # Convert RGBA to RGB if necessary
-    if img.mode == 'RGBA':
+    if img.mode == "RGBA":
         # Create white background
-        background = Image.new('RGB', img.size, (255, 255, 255))
+        background = Image.new("RGB", img.size, (255, 255, 255))
         # Paste the image using alpha channel as mask
         background.paste(img, mask=img.split()[3])
         img = background
-    
+
     # Resize if needed
     img.thumbnail(max_size)
-    
+
     # Save as JPEG
     buffer = io.BytesIO()
-    img.save(buffer, format='JPEG', quality=85)
+    img.save(buffer, format="JPEG", quality=85)
     return buffer.getvalue()
 
 
-
 def get_anthropic_response(
-    prompt : str,
-    model : str,
-    images : List[Dict[str, str]] = None,
-    npc : Any = None,
-    format : str = None,
-    api_key : str = None,
-    messages : List[Dict[str, str]] = None,
-    **kwargs
+    prompt: str,
+    model: str,
+    images: List[Dict[str, str]] = None,
+    npc: Any = None,
+    format: str = None,
+    api_key: str = None,
+    messages: List[Dict[str, str]] = None,
+    **kwargs,
 ):
-    """ 
+    """
     Function Description:
         This function generates a response using the Anthropic API.
     Args:
@@ -1143,8 +1089,7 @@ def get_anthropic_response(
     Returns:
         Any: The response generated by the Anthropic API.
     """
-    
-    
+
     try:
         if api_key is None:
             api_key = os.getenv("ANTHROPIC_API_KEY", None)
@@ -1159,7 +1104,9 @@ def get_anthropic_response(
             for img in images:
                 # load image and base 64 encode
                 with open(img["file_path"], "rb") as image_file:
-                    img["data"] = base64.b64encode(compress_image(image_file.read())).decode("utf-8")
+                    img["data"] = base64.b64encode(
+                        compress_image(image_file.read())
+                    ).decode("utf-8")
                     img["media_type"] = "image/jpeg"
                     message_content.append(
                         {
@@ -1206,52 +1153,52 @@ def get_anthropic_response(
         else:
             # only append to messages if the response is not json
             messages.append({"role": "assistant", "content": llm_response})
-        print('teststea')
+        # print("teststea")
         return items_to_return
 
     except Exception as e:
-        return f"Error interacting with Anthropic: {e}"
+        return f"Error interacting with Anthropic llm response: {e}"
 
 
-def lookup_provider(model : str) -> str:
-    
+def lookup_provider(model: str) -> str:
     """
     Function Description:
-        This function determines the provider based on the model name.  
+        This function determines the provider based on the model name.
     Args:
-        model (str): The model name.    
+        model (str): The model name.
     Keyword Args:
         None
     Returns:
-        str: The provider based on the model name.  
+        str: The provider based on the model name.
     """
     ollama_prefixes = ["llama", "llava", "phi", "mistral", "codellama", "gemma"]
     if any(model.startswith(prefix) for prefix in ollama_prefixes):
         return "ollama"
-    
+
     # OpenAI models
     openai_prefixes = ["gpt-", "dall-e-", "whisper-", "o1"]
     if any(model.startswith(prefix) for prefix in openai_prefixes):
         return "openai"
-    
+
     # Anthropic models
     if model.startswith("claude"):
-       return "anthropic"
+        return "anthropic"
     if model.startswith("gemini"):
-        return "google"    
+        return "google"
     return None
 
+
 def get_llm_response(
-    prompt : str,
-    provider : str = npcsh_provider,
-    model : str = npcsh_model,
-    images : List[Dict[str, str]] = None,
-    npc : Any = None,
-    messages : List[Dict[str, str]] = None,
-    api_url : str = None,
-    **kwargs
+    prompt: str,
+    provider: str = npcsh_provider,
+    model: str = npcsh_model,
+    images: List[Dict[str, str]] = None,
+    npc: Any = None,
+    messages: List[Dict[str, str]] = None,
+    api_url: str = None,
+    **kwargs,
 ):
-    """ 
+    """
     Function Description:
         This function generates a response using the specified provider and model.
     Args:
@@ -1270,7 +1217,7 @@ def get_llm_response(
         pass
     elif provider is None and model is not None:
         provider = lookup_provider(model)
-    
+
     elif npc is not None:
         if npc.provider is not None:
             provider = npc.provider
@@ -1343,9 +1290,7 @@ def get_llm_response(
         return "Error: Invalid provider specified."
 
 
-
-
-def load_data(file_path : str, dataframes : Dict[str, pd.DataFrame], name : str):
+def load_data(file_path: str, dataframes: Dict[str, pd.DataFrame], name: str):
     """
     Function Description:
         This function loads data from a file.
@@ -1360,15 +1305,14 @@ def load_data(file_path : str, dataframes : Dict[str, pd.DataFrame], name : str)
     """
     dataframes[name] = pd.read_csv(file_path)
     print(f"Data loaded as '{name}'")
-    
 
 
 def execute_data_operations(
-    query : str,
-    command_history : Any,
-    dataframes : Dict[str, pd.DataFrame],
-    npc : Any = None,
-    db_path : str = "~/npcsh_history.db",
+    query: str,
+    command_history: Any,
+    dataframes: Dict[str, pd.DataFrame],
+    npc: Any = None,
+    db_path: str = "~/npcsh_history.db",
 ):
     """
     Function Description:
@@ -1383,7 +1327,7 @@ def execute_data_operations(
     Returns:
         Any: The result of the data operations.
     """
-    
+
     location = os.getcwd()
     db_path = os.path.expanduser(db_path)
 
@@ -1401,13 +1345,13 @@ def execute_data_operations(
 
             # Handle the result
             if isinstance(result, (pd.DataFrame, pd.Series)):
-                render_markdown(result)
+                # render_markdown(result)
                 return result, "pd"
             elif isinstance(result, plt.Figure):
                 plt.show()
                 return result, "pd"
             elif result is not None:
-                render_markdown(result)
+                # render_markdown(result)
 
                 return result, "pd"
 
@@ -1488,7 +1432,7 @@ def execute_data_operations(
         return f"Error executing query: {e}", None
 
 
-def get_available_tables(db_path : str) -> str:
+def get_available_tables(db_path: str) -> str:
     """
     Function Description:
         This function gets the available tables in the database.
@@ -1499,7 +1443,7 @@ def get_available_tables(db_path : str) -> str:
     Returns:
         str: The available tables in the database.
     """
-    
+
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
@@ -1514,7 +1458,6 @@ def get_available_tables(db_path : str) -> str:
         return ""
 
 
-
 def execute_llm_command(
     command: str,
     command_history: Any,
@@ -1525,7 +1468,7 @@ def execute_llm_command(
     retrieved_docs=None,
     n_docs=5,
 ) -> str:
-    """ 
+    """
     Function Description:
         This function executes an LLM command.
     Args:
@@ -1541,8 +1484,7 @@ def execute_llm_command(
     Returns:
         str: The result of the LLM command.
     """
-    
-    
+
     max_attempts = 5
     attempt = 0
     subcommands = []
@@ -1615,18 +1557,18 @@ def execute_llm_command(
             print(f"Command executed with output: {result.stdout}")
 
             prompt = f"""
-                Here was the output of the result for the {command} inquiry  
+                Here was the output of the result for the {command} inquiry
                 which ran this bash command {bash_command}:
 
                 {result.stdout}
 
                 Provide a simple response to the user that explains to them
-                what you did and how it accomplishes what they asked for. 
+                what you did and how it accomplishes what they asked for.
                 """
             if len(context) > 0:
                 prompt += f"""
                 What follows is the context of the text files in the user's directory that are potentially relevant to their request
-                Use these to help inform how you respond. 
+                Use these to help inform how you respond.
                 You must read the context and use it to provide the user with a more helpful answer related to their specific text data.
 
                 CONTEXT:
@@ -1644,7 +1586,7 @@ def execute_llm_command(
 
             output = response.get("response", "")
 
-            render_markdown(output)
+            # render_markdown(output)
             command_history.add(command, subcommands, output, location)
 
             return {"messages": messages, "output": output}
@@ -1658,11 +1600,11 @@ def execute_llm_command(
             Please suggest a fix or an alternative command.
             Respond with a JSON object containing the key "bash_command" with the suggested command.
             Do not include any additional markdown formatting.
-            
+
             """
 
             if len(context) > 0:
-                error_prompt += f"""           
+                error_prompt += f"""
                     What follows is the context of the text files in the user's directory that are potentially relevant to their request
                     Use these to help inform your decision.
                     {context}
@@ -1708,20 +1650,21 @@ def execute_llm_command(
 
 
 def check_llm_command(
-    command : str,
-    command_history : Any,
-    model : str = None,
-    provider : str = None,
-    npc : Any = None,
-    retrieved_docs = None,
-    n_docs = 5,
+    command: str,
+    command_history: Any,
+    model: str = None,
+    provider: str = None,
+    npc: Any = None,
+    retrieved_docs=None,
+    messages: List[Dict[str, str]] = None,
+    n_docs=5,
 ):
     """
-    Function Description:   
+    Function Description:
         This function checks an LLM command.
     Args:
         command (str): The command to check.
-        command_history (Any): The command history. 
+        command_history (Any): The command history.
     Keyword Args:
         model (str): The model to use for checking the command.
         provider (str): The provider to use for checking the command.
@@ -1731,7 +1674,7 @@ def check_llm_command(
     Returns:
         Any: The result of checking the LLM command.
     """
-    
+
     location = os.getcwd()
 
     if messages is None:
@@ -1763,7 +1706,7 @@ def check_llm_command(
     - stats_calculator: Calculates basic statistics on a DataFrame.
     - data_plotter: Plots data from a DataFrame.
     - database_query: Executes a query on tables in the ~/npcsh_history.db sqlite3 database.
-    
+
 
     In considering how to answer this, consider:
     - Whether it can be answered via a bash command on the user's computer.
@@ -1882,16 +1825,16 @@ def check_llm_command(
 
 
 def handle_tool_call(
-    command : str,
-    tool_name : str,
-    command_history : Any,
-    model : str = npcsh_model,
-    provider : str = npcsh_provider,
-    messages : List[Dict[str, str]] = None,
-    npc : Any = None,
-    retrieved_docs  = None,
-    n_docs : int = 5,) ->  Union[str, Dict[str, Any]]:
-    
+    command: str,
+    tool_name: str,
+    command_history: Any,
+    model: str = npcsh_model,
+    provider: str = npcsh_provider,
+    messages: List[Dict[str, str]] = None,
+    npc: Any = None,
+    retrieved_docs=None,
+    n_docs: int = 5,
+) -> Union[str, Dict[str, Any]]:
     """
     Function Description:
         This function handles a tool call.
@@ -1909,7 +1852,7 @@ def handle_tool_call(
     Returns:
         Union[str, Dict[str, Any]]: The result of handling
         the tool call.
-        
+
     """
     print(f"handle_tool_call invoked with tool_name: {tool_name}")
     if not npc or not npc.tools_dict:
@@ -1935,23 +1878,25 @@ def handle_tool_call(
     '{command}'
     Here is the tool file:
     {tool}
-    
+
     Please extract the required inputs for the tool as a JSON object.
     Return only the JSON object without any markdown formatting.
     """
-    if npc and hasattr(npc, 'shared_context'):
-        if npc.shared_context.get('dataframes'):
+    if npc and hasattr(npc, "shared_context"):
+        if npc.shared_context.get("dataframes"):
             context_info = "\nAvailable dataframes:\n"
-            for df_name in npc.shared_context['dataframes'].keys():
+            for df_name in npc.shared_context["dataframes"].keys():
                 context_info += f"- {df_name}\n"
-            prompt += f'''Here is contextual info that may affect your choice: {context_info}
-            '''
+            prompt += f"""Here is contextual info that may affect your choice: {context_info}
+            """
 
-    
     # print(f"Tool prompt: {prompt}")
     response = get_llm_response(
-        prompt, format="json", model=model, provider=provider, npc=npc, 
-        
+        prompt,
+        format="json",
+        model=model,
+        provider=provider,
+        npc=npc,
     )
     try:
         # Clean the response of markdown formatting
@@ -1975,35 +1920,36 @@ def handle_tool_call(
     missing_inputs = []
     for inp in required_inputs:
         if not isinstance(inp, dict):
-            #dicts contain the keywords so its fine if theyre missing from the inputs.            
+            # dicts contain the keywords so its fine if theyre missing from the inputs.
             if inp not in input_values:
                 missing_inputs.append(inp)
-    if len(missing_inputs) >0:        
+    if len(missing_inputs) > 0:
         print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
         return f"Missing inputs for tool '{tool_name}': {missing_inputs}"
 
-    #try:
-    tool_output = tool.execute(input_values, npc.tools_dict, jinja_env, command, npc=npc)
+    # try:
+    tool_output = tool.execute(
+        input_values, npc.tools_dict, jinja_env, command, npc=npc
+    )
     # print(f"Tool output: {tool_output}")
-    render_markdown(str(tool_output))
+    # render_markdown(str(tool_output))
     if messages is not None:  # Check if messages is not None
         messages.append({"role": "assistant", "content": str(tool_output)})
     return {"messages": messages, "output": tool_output}
-    #except Exception as e:
+    # except Exception as e:
     #    print(f"Error executing tool {tool_name}: {e}")
     #    return f"Error executing tool {tool_name}: {e}"
 
 
 def execute_llm_question(
-    command : str,
-    command_history : Any,
-    model : str = npcsh_model,  
-    provider : str = npcsh_provider,
-    npc : Any = None,
-    messages : List[Dict[str, str]] = None,
-    retrieved_docs = None,
-    n_docs : int = 5,
-
+    command: str,
+    command_history: Any,
+    model: str = npcsh_model,
+    provider: str = npcsh_provider,
+    npc: Any = None,
+    messages: List[Dict[str, str]] = None,
+    retrieved_docs=None,
+    n_docs: int = 5,
 ):
     location = os.getcwd()
     if messages is None:
@@ -2022,16 +1968,13 @@ def execute_llm_question(
         # messages.append({"role": "system", "content": context_message})
 
     # Append the user's message to messages
-    # messages.append({"role": "user", "content": command})
+    messages.append({"role": "user", "content": command})
 
     # Print messages before calling get_conversation for debugging
     # print("Messages before get_conversation:", messages)
 
     # Use the existing messages list
-    response = get_conversation(messages, 
-                                model=model, 
-                                provider=provider, 
-                                npc=npc)
+    response = get_conversation(messages, model=model, provider=provider, npc=npc)
 
     # Print response from get_conversation for debugging
     # print("Response from get_conversation:", response)
@@ -2044,6 +1987,6 @@ def execute_llm_question(
     else:
         output = "Error: Invalid response from conversation function"
 
-    render_markdown(output)
+    # render_markdown(output)
     command_history.add(command, [], output, location)
     return {"messages": messages, "output": output}

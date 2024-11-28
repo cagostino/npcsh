@@ -1,98 +1,63 @@
-# npcsh.py
 import os
-
+import sys
 import readline
 import atexit
+import re
+import pty
+import select
+import termios
+import tty
+import shlex
+import json
 from datetime import datetime
-import pandas as pd
 
-# Configure logging
+# Third-party imports
+import pandas as pd
 import sqlite3
+import numpy as np
 from termcolor import colored
 from dotenv import load_dotenv
 import subprocess
+from typing import Dict, Any, List, Optional
+
+try:
+    from sentence_transformers import SentenceTransformer
+except:
+    print("Could not load the sentence-transformers package.")
+# Local imports
 from .command_history import CommandHistory
 from .llm_funcs import (
-    render_markdown,
     execute_llm_command,
     execute_llm_question,
     generate_image,
     lookup_provider,
     check_llm_command,
+    get_conversation,
+    get_system_message,
+)
+from .search import rag_search, search_web
+from .helpers import (
+    load_all_files,
+    initialize_npc_project,
+    setup_npcsh_config,
+    is_npcsh_initialized,
+    initialize_base_npcs_if_needed,
 )
 from .cli_helpers import (
     enter_whisper_mode,
     enter_notes_mode,
+    render_markdown,
+    log_action,
     enter_spool_mode,
     enter_data_mode,
+    complete,  # For command completion
+    readline_safe_prompt,
+    get_multiline_input,
+    setup_readline,
+    execute_command,
+    orange,  # For colored prompt
 )
-
-import textwrap
-import json
-from .helpers import (
-    log_action,
-    load_all_files,
-    rag_search,
-    capture_screenshot,
-    initialize_npc_project,
-    list_directory,
-    analyze_image,
-    read_file,
-    ensure_npcshrc_exists,
-    setup_npcsh_config,
-    execute_java,
-    execute_scala,
-    execute_r,
-    execute_sql,
-    execute_python,
-    BASH_COMMANDS,
-    TERMINAL_EDITORS,
-    open_terminal_editor,
-    get_npc_from_command,
-    is_valid_npc,
-    get_npc_path,
-    initialize_base_npcs_if_needed,
-    is_npcsh_initialized,
-    set_npcsh_initialized,
-    get_valid_npcs,
-)
-from .cli_helpers import interactive_commands, 
-from sentence_transformers import SentenceTransformer, util
-
-from .npc_compiler import NPCCompiler, NPC, load_npc_from_file
-
-from colorama import Fore, Back, Style
-import warnings
-
-warnings.filterwarnings(
-    "ignore", category=FutureWarning, module="transformers"
-)  # transformers
-# warnings.filterwarnings(
-#    "ignore", message="CUDA initialization: The NVIDIA driver on your system is too old"
-# )
-
-import shlex
-import subprocess
-import os
-from dotenv import load_dotenv
-import json
-import pandas as pd
-import numpy as np
-import re
-
-
-
-import pty
-import select
-import termios
-import tty
-import sys
-
-import time
-import signal
-
-
-
+from .npc_compiler import NPCCompiler
 
 
 def main() -> None:
@@ -105,9 +70,9 @@ def main() -> None:
         None
     Returns:
         None
-        
+
     """
-    
+
     setup_npcsh_config()
     if "NPCSH_DB_PATH" in os.environ:
         db_path = os.path.expanduser(os.environ["NPCSH_DB_PATH"])
@@ -116,16 +81,30 @@ def main() -> None:
 
     command_history = CommandHistory(db_path)
     global valid_commands  # Make sure it's global
-    valid_commands = ["/compile", "/com", "/whisper", "/notes", "/data", "/cmd", "/command", 
-                     "/set", "/sample", "/spool", "/sp", "/help", "/exit", "/quit"]
-    
-    readline.set_completer_delims(' \t\n')  # Simplified delims
+    valid_commands = [
+        "/compile",
+        "/com",
+        "/whisper",
+        "/notes",
+        "/data",
+        "/cmd",
+        "/command",
+        "/set",
+        "/sample",
+        "/spool",
+        "/sp",
+        "/help",
+        "/exit",
+        "/quit",
+    ]
+
+    readline.set_completer_delims(" \t\n")  # Simplified delims
     readline.set_completer(complete)
-    if sys.platform == 'darwin':  # For macOS
+    if sys.platform == "darwin":  # For macOS
         readline.parse_and_bind("bind ^I rl_complete")
     else:  # For Linux and others
-        readline.parse_and_bind("tab: complete")    
-    
+        readline.parse_and_bind("tab: complete")
+
     # Initialize base NPCs and tools
     initialize_base_npcs_if_needed(db_path)
 
@@ -147,7 +126,7 @@ def main() -> None:
             if filename.endswith(".npc"):
                 npc_file_path = os.path.join(project_npc_directory, filename)
                 npc_compiler.compile(npc_file_path)
-                
+
     # Load all files for RAG searches
     # Define the directory to load text files from
     text_data_directory = os.path.abspath("./")

@@ -1,12 +1,18 @@
-# audio
+# Move optional imports into try/except
 try:
     import whisper
     from playsound import playsound
     from gtts import gTTS
     import pyaudio
 except Exception as e:
-    print(f"Error importing whisper: {e}")
+    print(f"Error importing audio dependencies: {e}")
 
+import numpy as np
+import tempfile
+import os
+import time
+from typing import Optional, List
+from .llm_funcs import get_llm_response
 
 
 def get_audio_level(audio_data):
@@ -14,7 +20,7 @@ def get_audio_level(audio_data):
 
 
 def calibrate_silence(sample_rate=16000, duration=2):
-    """ 
+    """
     Function Description:
         This function calibrates the silence level for audio recording.
     Args:
@@ -25,7 +31,7 @@ def calibrate_silence(sample_rate=16000, duration=2):
     Returns:
         The silence threshold level.
     """
-    
+
     p = pyaudio.PyAudio()
     stream = p.open(
         format=pyaudio.paInt16,
@@ -51,9 +57,8 @@ def calibrate_silence(sample_rate=16000, duration=2):
     return silence_threshold
 
 
-def is_silent(audio_data : bytes,          
-              threshold : float) -> bool:
-    """ 
+def is_silent(audio_data: bytes, threshold: float) -> bool:
+    """
     Function Description:
         This function checks if audio data is silent based on a threshold.
     Args:
@@ -64,13 +69,16 @@ def is_silent(audio_data : bytes,
     Returns:
         A boolean indicating whether the audio is silent.
     """
-    
-    
+
     return get_audio_level(audio_data) < threshold
 
 
-def record_audio(sample_rate : int = 16000, max_duration : int = 10, silence_threshold : Optional[float] = None) -> bytes:
-    """ 
+def record_audio(
+    sample_rate: int = 16000,
+    max_duration: int = 10,
+    silence_threshold: Optional[float] = None,
+) -> bytes:
+    """
     Function Description:
         This function records audio from the microphone.
     Args:
@@ -82,7 +90,7 @@ def record_audio(sample_rate : int = 16000, max_duration : int = 10, silence_thr
     Returns:
         The recorded audio data.
     """
-    
+
     if silence_threshold is None:
         silence_threshold = calibrate_silence()
 
@@ -131,7 +139,7 @@ def record_audio(sample_rate : int = 16000, max_duration : int = 10, silence_thr
     return b"".join(frames)
 
 
-def speak_text(text : str) -> None:
+def speak_text(text: str) -> None:
     """
     Function Description:
         This function converts text to speech and plays the audio.
@@ -142,7 +150,7 @@ def speak_text(text : str) -> None:
     Returns:
         None
     """
-    
+
     try:
         tts = gTTS(text=text, lang="en")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
@@ -153,20 +161,17 @@ def speak_text(text : str) -> None:
         print(f"Text-to-speech error: {e}")
 
 
-
-
-
-def process_audio(file_path :  str, table_name : str) -> List:
+def process_audio(file_path: str, table_name: str) -> List:
     """
     Function Description:
-        This function is used to process an audio file. 
+        This function is used to process an audio file.
     Args:
         file_path : str : The file path.
         table_name : str : The table name.
     Keyword Args:
         None
-    Returns:    
-        List : The embeddings and texts. 
+    Returns:
+        List : The embeddings and texts.
     """
 
     embeddings = []

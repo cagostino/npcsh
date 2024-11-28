@@ -1,8 +1,54 @@
-# cli_helpers.py
-from .llm_funcs import get_available_models, get_model_and_provider, execute_llm_command, execute_llm_question
-from .npc_compiler import NPCCompiler, NPC, load_npc_from_file, get_npc_path, get_valid_npcs
-from .helpers import log_action, rag_search, change_directory
-from .modes import enter_whisper_mode, enter_notes_mode, enter_spool_mode, enter_data_mode
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+from typing import Dict, Any, List, Optional, Union
+import numpy as np
+import readline
+from colorama import Fore, Back, Style
+import re
+import tempfile
+import sqlite3
+import wave
+import datetime
+
+import shlex
+import logging
+import textwrap
+import subprocess
+from termcolor import colored
+import sys
+import termios
+import tty
+import pty
+import select
+import signal
+import time
+
+import whisper
+
+try:
+    from sentence_transformers import SentenceTransformer
+except:
+    print("Could not load the sentence-transformers package.")
+
+from .llm_funcs import (
+    get_available_models,
+    get_model_and_provider,
+    execute_llm_command,
+    execute_llm_question,
+    get_conversation,
+    get_system_message,
+    check_llm_command,
+)
+from .helpers import get_valid_npcs, get_npc_path
+from .npc_compiler import NPCCompiler, NPC, load_npc_from_file
+from .search import rag_search
+from .audio import calibrate_silence, record_audio, speak_text
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.syntax import Syntax
+from .command_history import CommandHistory
+
 
 interactive_commands = {
     "ipython": ["ipython"],
@@ -13,7 +59,7 @@ interactive_commands = {
 BASH_COMMANDS = [
     "open",
     "alias",
-    "bg", 
+    "bg",
     "bind",
     "break",
     "builtin",
@@ -153,8 +199,120 @@ BASH_COMMANDS = [
 ]
 
 
-def log_action(action : str, detail : str = "") -> None:
-    """ 
+def preprocess_code_block(code_text):
+    """
+    Preprocess code block text to remove leading spaces.
+    """
+    lines = code_text.split("\n")
+    return "\n".join(line.lstrip() for line in lines)
+
+
+def render_code_block(code_text):
+    """
+    Render code block with no leading spaces.
+    """
+    processed_code = preprocess_code_block(code_text)
+    console = Console()
+    console.print(processed_code, style="")
+
+
+def preprocess_markdown(md_text):
+    """
+    Preprocess markdown text to handle code blocks separately.
+    """
+    lines = md_text.split("\n")
+    processed_lines = []
+
+    inside_code_block = False
+    current_code_block = []
+
+    for line in lines:
+        if line.startswith("```"):  # Toggle code block
+            if inside_code_block:
+                # Close code block, unindent, and append
+                processed_lines.append("```")
+                processed_lines.extend(
+                    textwrap.dedent("\n".join(current_code_block)).split("\n")
+                )
+                processed_lines.append("```")
+                current_code_block = []
+            inside_code_block = not inside_code_block
+        elif inside_code_block:
+            current_code_block.append(line)
+        else:
+            processed_lines.append(line)
+
+    return "\n".join(processed_lines)
+
+
+def render_markdown(text: str) -> None:
+    """
+    Renders markdown text, but handles code blocks as plain syntax-highlighted text.
+    """
+    lines = text.split("\n")
+    console = Console()
+
+    inside_code_block = False
+    code_lines = []
+    lang = None
+
+    for line in lines:
+        if line.startswith("```"):
+            if inside_code_block:
+                # End of code block - render the collected code
+                code = "\n".join(code_lines)
+                if code.strip():
+                    syntax = Syntax(
+                        code, lang or "python", theme="monokai", line_numbers=False
+                    )
+                    console.print(syntax)
+                code_lines = []
+            else:
+                # Start of code block - get language if specified
+                lang = line[3:].strip() or None
+            inside_code_block = not inside_code_block
+        elif inside_code_block:
+            code_lines.append(line)
+        else:
+            # Regular markdown
+            console.print(Markdown(line))
+
+
+def change_directory(command_parts: list, messages: list) -> dict:
+    """
+    Function Description:
+        Changes the current directory.
+    Args:
+        command_parts : list : Command parts
+        messages : list : Messages
+    Keyword Args:
+        None
+    Returns:
+        dict : dict : Dictionary
+
+    """
+
+    try:
+        if len(command_parts) > 1:
+            new_dir = os.path.expanduser(command_parts[1])
+        else:
+            new_dir = os.path.expanduser("~")
+        os.chdir(new_dir)
+        return {
+            "messages": messages,
+            "output": f"Changed directory to {os.getcwd()}",
+        }
+    except FileNotFoundError:
+        return {
+            "messages": messages,
+            "output": f"Directory not found: {new_dir}",
+        }
+    except PermissionError:
+        return {"messages": messages, "output": f"Permission denied: {new_dir}"}
+
+
+def log_action(action: str, detail: str = "") -> None:
+    """
     Function Description:
         This function logs an action with optional detail.
     Args:
@@ -164,16 +322,15 @@ def log_action(action : str, detail : str = "") -> None:
         None
     Returns:
         None
-    """    
+    """
     logging.info(f"{action}: {detail}")
+
 
 TERMINAL_EDITORS = ["vim", "emacs", "nano"]
 
 
-def complete(text: str,
-             state: int) -> str:
-    
-    """ 
+def complete(text: str, state: int) -> str:
+    """
     Function Description:
         Handles autocompletion for the npcsh shell.
     Args:
@@ -183,64 +340,62 @@ def complete(text: str,
         None
     Returns:
         None
-        
+
     """
     buffer = readline.get_line_buffer()
     available_models = get_available_models()
-    
+
     # If completing a model name
-    if '@' in buffer:
-        at_index = buffer.rfind('@')
-        model_text = buffer[at_index+1:]
+    if "@" in buffer:
+        at_index = buffer.rfind("@")
+        model_text = buffer[at_index + 1 :]
         model_completions = [m for m in available_models if m.startswith(model_text)]
-        
+
         try:
             # Return the full text including @ symbol
-            return '@' + model_completions[state]
+            return "@" + model_completions[state]
         except IndexError:
             return None
-    
+
     # If completing a command
-    elif text.startswith('/'):
+    elif text.startswith("/"):
         command_completions = [c for c in valid_commands if c.startswith(text)]
         try:
             return command_completions[state]
         except IndexError:
             return None
-    
-    return None
-def global_completions(text : str,
-                       
-                       command_parts: list) -> list:
 
+    return None
+
+
+def global_completions(text: str, command_parts: list) -> list:
     """
     Function Description:
         Handles global autocompletions for the npcsh shell.
     Args:
         text : str : Text to autocomplete
-        command_parts : list : List of command parts    
+        command_parts : list : List of command parts
     Keyword Args:
         None
     Returns:
-        completions : list : List of completions    
-         
+        completions : list : List of completions
+
     """
     if not command_parts:
         return [c + " " for c in valid_commands if c.startswith(text)]
     elif command_parts[0] in ["/compile", "/com"]:
         # Autocomplete NPC files
-        return [f for f in os.listdir('.') if f.endswith(".npc") and f.startswith(text)]
+        return [f for f in os.listdir(".") if f.endswith(".npc") and f.startswith(text)]
     elif command_parts[0] == "/read":
         # Autocomplete filenames
-        return [f for f in os.listdir('.') if f.startswith(text)]
+        return [f for f in os.listdir(".") if f.startswith(text)]
     else:
         # Default filename completion
-        return [f for f in os.listdir('.') if f.startswith(text)]
+        return [f for f in os.listdir(".") if f.startswith(text)]
 
 
-def wrap_text(text : str,
-              width : int = 80) -> str:
-    """ 
+def wrap_text(text: str, width: int = 80) -> str:
+    """
     Function Description:
         Wraps text to a specified width.
     Args:
@@ -252,24 +407,25 @@ def wrap_text(text : str,
         lines : str : Wrapped text
     """
     lines = []
-    for paragraph in text.split('\n'):
+    for paragraph in text.split("\n"):
         lines.extend(textwrap.wrap(paragraph, width=width))
-    return '\n'.join(lines)
+    return "\n".join(lines)
 
-def get_file_color(filepath : str) -> tuple:
+
+def get_file_color(filepath: str) -> tuple:
     """
     Function Description:
         Returns color and attributes for a given file path.
     Args:
-        filepath : str : File path  
+        filepath : str : File path
     Keyword Args:
         None
     Returns:
         color : str : Color
-        attrs : list : List of attributes   
-         
+        attrs : list : List of attributes
+
     """
-    
+
     if os.path.isdir(filepath):
         return "blue", ["bold"]
     elif os.access(filepath, os.X_OK):
@@ -295,7 +451,8 @@ def get_file_color(filepath : str) -> tuple:
     else:
         return "white", []
 
-def readline_safe_prompt(prompt : str) -> str:
+
+def readline_safe_prompt(prompt: str) -> str:
     """
     Function Description:
         Escapes ANSI escape sequences in the prompt.
@@ -305,17 +462,20 @@ def readline_safe_prompt(prompt : str) -> str:
         None
     Returns:
         prompt : str : Prompt
-        
+
     """
     # This regex matches ANSI escape sequences
-    ansi_escape = re.compile(r'(\033\[[0-9;]*[a-zA-Z])')
+    ansi_escape = re.compile(r"(\033\[[0-9;]*[a-zA-Z])")
+
     # Wrap them with \001 and \002
     def escape_sequence(m):
-        return '\001' + m.group(1) + '\002'
+        return "\001" + m.group(1) + "\002"
+
     return ansi_escape.sub(escape_sequence, prompt)
 
+
 def setup_readline() -> str:
-    """ 
+    """
     Function Description:
         Sets up readline for the npcsh shell.
     Args:
@@ -331,7 +491,6 @@ def setup_readline() -> str:
     except FileNotFoundError:
         pass
 
-
     readline.set_history_length(1000)
     # Commented out because 'set' commands may not work as intended with parse_and_bind
     # readline.parse_and_bind("set editing-mode vi")
@@ -346,12 +505,13 @@ def setup_readline() -> str:
 
     return history_file
 
+
 def save_readline_history():
     readline.write_history_file(os.path.expanduser("~/.npcsh_readline_history"))
 
 
 def orange(text: str) -> str:
-    """ 
+    """
     Function Description:
         Returns orange text.
     Args:
@@ -360,13 +520,13 @@ def orange(text: str) -> str:
         None
     Returns:
         text : str : Text
-        
+
     """
     return f"\033[38;2;255;165;0m{text}{Style.RESET_ALL}"
 
 
-def get_multiline_input(prompt : str) -> str:
-    """ 
+def get_multiline_input(prompt: str) -> str:
+    """
     Function Description:
         Gets multiline input from the user.
     Args:
@@ -375,24 +535,26 @@ def get_multiline_input(prompt : str) -> str:
         None
     Returns:
         lines : str : Lines
-        
+
     """
     lines = []
     current_prompt = prompt
     while True:
         try:
             line = input(current_prompt)
-            if line.endswith('\\'):
+            if line.endswith("\\"):
                 lines.append(line[:-1])  # Remove the backslash
                 # Use a continuation prompt for the next line
-                current_prompt = readline_safe_prompt('> ')
+                current_prompt = readline_safe_prompt("> ")
             else:
                 lines.append(line)
                 break
         except EOFError:
             break  # Handle EOF (Ctrl+D)
-    return '\n'.join(lines)
-def start_interactive_session(command : list) -> int:
+    return "\n".join(lines)
+
+
+def start_interactive_session(command: list) -> int:
     """
     Function Description:
         Starts an interactive session.
@@ -402,7 +564,7 @@ def start_interactive_session(command : list) -> int:
         None
     Returns:
         returncode : int : Return code
-        
+
     """
     # Save the current terminal settings
     old_tty = termios.tcgetattr(sys.stdin)
@@ -459,9 +621,7 @@ def start_interactive_session(command : list) -> int:
     return p.returncode
 
 
-
-def validate_bash_command(command_parts : 
-                          list) -> bool:    
+def validate_bash_command(command_parts: list) -> bool:
     """
     Function Description:
         Validate if the command sequence is a valid bash command with proper arguments/flags.
@@ -521,7 +681,6 @@ def validate_bash_command(command_parts :
             "requires_arg": True,
         },
         "which": {"flags": ["-a", "-s", "-v"], "requires_arg": True},
-        
     }
 
     base_command = command_parts[0]
@@ -556,16 +715,22 @@ def validate_bash_command(command_parts :
 
     return True
 
-def execute_slash_command(command : str,
-                          command_history : CommandHistory,
-                          db_path : str,
-                          npc_compiler : NPCCompiler,
-                          embedding_model=None,
-                          current_npc=None,
-                          text_data=None,
-                          text_data_embedded=None,
-                          messages=None):
-    """ 
+
+def execute_slash_command(
+    command: str,
+    command_history: CommandHistory,
+    db_path: str,
+    db_conn: sqlite3.Connection,
+    npc_compiler: NPCCompiler,
+    valid_npcs: list,
+    npc: NPC = None,
+    retrieved_docs: list = None,
+    embedding_model=None,
+    text_data=None,
+    text_data_embedded=None,
+    messages=None,
+):
+    """
     Function Description:
         Executes a slash command.
     Args:
@@ -582,13 +747,10 @@ def execute_slash_command(command : str,
     Returns:
         dict : dict : Dictionary
     """
-    
 
     command = command[1:]
-    
-    log_action("Command Executed", command)
-    
 
+    log_action("Command Executed", command)
 
     command_parts = command.split()
     command_name = command_parts[0]
@@ -623,14 +785,11 @@ def execute_slash_command(command : str,
                             output += f"Compiled NPC profile: {compiled_script}\n"
                         except Exception as e:
                             output += f"Error compiling {filename}: {str(e)}\n"
-            render_markdown(wrap_text(output))
 
         except Exception as e:
             import traceback
 
-            output = (
-                f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
-            )
+            output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
             print(output)
     elif command_name == "pipe":
         if len(args) > 0:  # Specific NPC file(s) provided
@@ -683,7 +842,7 @@ def execute_slash_command(command : str,
                 file_path,
                 filename,
                 npc=npc,
-            ) 
+            )
 
         else:
             output = capture_screenshot(npc=npc)
@@ -711,36 +870,50 @@ def execute_slash_command(command : str,
                 "output": None,
             }  # Return None to indicate failure
     elif command_name == "help":  # New help command
-        output = """
-        Available commands:
+        output = """# Available Commands
 
-        /compile [npc_file1.npc npc_file2.npc ...]: Compiles specified NPC profile(s). If no arguments are provided, compiles all NPCs in the npc_profiles directory.
-        /com [npc_file1.npc npc_file2.npc ...]: Alias for /compile.
-        /whisper: Enter whisper mode.
-        /notes: Enter notes mode.
-        /data: Enter data mode.
-        /cmd <command>: Execute a command using the current NPC's LLM.
-        /command <command>: Alias for /cmd.
-        /set <model|provider|db_path> <value>: Sets the specified parameter. Enclose the value in quotes.
-        /sample <question>: Asks the current NPC a question.
-        /spool [inherit_last=<n>]: Enters spool mode. Optionally inherits the last <n> messages.
-        /sp [inherit_last=<n>]: Alias for /spool.
-        /<npc_name>: Enters the specified NPC's mode.
-        /help: Displays this help message.
-        /exit or /quit: Exits the current NPC mode or the npcsh shell.
+/compile [npc_file1.npc npc_file2.npc ...] #Compiles specified NPC profile(s). If no arguments are provided, compiles all NPCs in the npc_profiles directory.
 
-        Bash commands and other programs can be executed directly.
-        """
-        print(output)  # Print the help message
-        return {"messages": messages, "output": None}
-        # Don't add /help to command history
+/com [npc_file1.npc npc_file2.npc ...] #Alias for /compile.
+
+/whisper   # Enter whisper mode.
+
+/notes # Enter notes mode.
+
+/data # Enter data mode.
+
+/cmd <command> #Execute a command using the current NPC's LLM.
+
+/command <command> #Alias for /cmd.
+
+/set <model|provider|db_path> <value> #Sets the specified parameter. Enclose the value in quotes.
+
+/sample <question> #Asks the current NPC a question.
+
+/spool [inherit_last=<n>] #Enters spool mode. Optionally inherits the last <n> messages.
+
+/sp [inherit_last=<n>] #Alias for /spool.
+
+/<npc_name> #Enters the specified NPC's mode.
+
+/help #Displays this help message.
+
+/exit or /quit #Exits the current NPC mode or the npcsh shell.
+
+#Note
+Bash commands and other programs can be executed directly."""
+
+        return {
+            "messages": messages,
+            "output": output,
+        }
 
     elif command_name == "whisper":
-        try:
-            output = enter_whisper_mode(command_history, npc=npc)
-        except Exception as e:
-            print(f"Error entering whisper mode: {str(e)}")
-            output = "Error entering whisper mode"
+        # try:
+        output = enter_whisper_mode(command_history, npc=npc)
+        # except Exception as e:
+        #    print(f"Error entering whisper mode: {str(e)}")
+        #    output = "Error entering whisper mode"
 
     elif command_name == "notes":
         output = enter_notes_mode(command_history, npc=npc)
@@ -788,7 +961,9 @@ def execute_slash_command(command : str,
     return {"messages": messages, "output": output, "subcommands": subcommands}
 
     ## flush  the current shell context
-def execute_set_command(command : str, value : str) -> str:
+
+
+def execute_set_command(command: str, value: str) -> str:
     """
     Function Description:
         This function sets a configuration value in the .npcshrc file.
@@ -800,8 +975,7 @@ def execute_set_command(command : str, value : str) -> str:
     Returns:
         A message indicating the success or failure of the operation.
     """
-    
-    
+
     config_path = os.path.expanduser("~/.npcshrc")
 
     # Map command to environment variable name
@@ -840,20 +1014,22 @@ def execute_set_command(command : str, value : str) -> str:
 
     return f"{command.capitalize()} has been set to: {value}"
 
-    
-def execute_hash_command(command : str,
-                         command_history : CommandHistory,
-                         npc : NPC = None,
-                         retrieved_docs : list = None,
-                         messages : list = None, 
-                         model : str = None,
-                         provider : str = None) -> str:
+
+def execute_hash_command(
+    command: str,
+    command_history: CommandHistory,
+    npc: NPC = None,
+    retrieved_docs: list = None,
+    messages: list = None,
+    model: str = None,
+    provider: str = None,
+) -> str:
     """
     Function Description:
-        Executes a hash command.    
+        Executes a hash command.
     Args:
         command : str : Command
-        command_history : CommandHistory : Command history  
+        command_history : CommandHistory : Command history
     Keyword Args:
         npc : NPC : NPC
         retrieved_docs : list : Retrieved documents
@@ -862,7 +1038,7 @@ def execute_hash_command(command : str,
         provider : str : Provider
     Returns:
         output : str : Output
-         
+
     """
 
     command_parts = command[1:].split()
@@ -884,22 +1060,23 @@ def execute_hash_command(command : str,
             messages=messages,
             model=model,
             provider=provider,
-            
         )
     return output
-def get_npc_from_command(command : str) -> Optional[str]:
+
+
+def get_npc_from_command(command: str) -> Optional[str]:
     """
     Function Description:
         This function extracts the NPC name from a command string.
     Args:
         command: The command string.
-        
+
     Keyword Args:
         None
     Returns:
         The NPC name if found, or None
     """
-    
+
     parts = command.split()
     npc = None
     for part in parts:
@@ -909,55 +1086,52 @@ def get_npc_from_command(command : str) -> Optional[str]:
     return npc
 
 
-def open_terminal_editor(command : str) -> None:
-    """ 
+def open_terminal_editor(command: str) -> None:
+    """
     Function Description:
         This function opens a terminal-based text editor.
     Args:
         command: The command to open the editor.
-    Keyword Args:   
+    Keyword Args:
         None
     Returns:
         None
     """
-    
+
     try:
         os.system(command)
     except Exception as e:
         print(f"Error opening terminal editor: {e}")
 
 
-
 def execute_command(
-    command : str,
-    
-    command_history : CommandHistory,
-    db_path : str,
-    npc_compiler : NPCCompiler,
-    embedding_model : Union[SentenceTransformer, Any] = None,
-    current_npc : NPC = None,
-
-    text_data : str = None,
-    text_data_embedded : np.ndarray = None,
-    messages : list = None,
+    command: str,
+    command_history: CommandHistory,
+    db_path: str,
+    npc_compiler: NPCCompiler,
+    embedding_model: Union[SentenceTransformer, Any] = None,
+    current_npc: NPC = None,
+    text_data: str = None,
+    text_data_embedded: np.ndarray = None,
+    messages: list = None,
 ):
     """
     Function Description:
         Executes a command.
-    Args:   
+    Args:
         command : str : Command
         command_history : CommandHistory : Command history
         db_path : str : Database path
-        npc_compiler : NPCCompiler : NPC compiler   
+        npc_compiler : NPCCompiler : NPC compiler
     Keyword Args:
         embedding_model : Union[SentenceTransformer, Any] : Embedding model
         current_npc : NPC : Current NPC
         text_data : str : Text data
         text_data_embedded : np.ndarray : Embedded text data
-        messages : list : Messages  
+        messages : list : Messages
     Returns:
-        dict : dict : Dictionary    
-         
+        dict : dict : Dictionary
+
     """
     subcommands = []
     output = ""
@@ -1000,24 +1174,27 @@ def execute_command(
     # print(command, 'command', len(command), len(command.strip()))
     available_models = get_available_models()
 
-
-
     if len(command.strip()) == 0:
         return {"messages": messages, "output": output}
     if messages is None:
         messages = []
     messages.append({"role": "user", "content": command})  # Add user message
-    model_override, provider_override, command = get_model_and_provider(command, available_models)
-    #print(command, model_override, provider_override)
+    model_override, provider_override, command = get_model_and_provider(
+        command, available_models
+    )
+    # print(command, model_override, provider_override)
     if command.startswith("/"):
-        
+
         result = execute_slash_command(
             command,
             command_history,
             db_path,
+            db_conn,
             npc_compiler,
+            valid_npcs,
             embedding_model=embedding_model,
-            current_npc=current_npc,
+            npc=current_npc,
+            retrieved_docs=retrieved_docs,
             text_data=text_data,
             text_data_embedded=text_data_embedded,
             messages=messages,
@@ -1025,10 +1202,16 @@ def execute_command(
         output = result.get("output", "")
         new_messages = result.get("messages", None)
         subcommands = result.get("subcommands", [])
-        
+
     elif command.startswith("#"):
-        output = execute_hash_command(command, command_history, npc=npc, retrieved_docs=retrieved_docs, messages=messages)
-        
+        output = execute_hash_command(
+            command,
+            command_history,
+            npc=npc,
+            retrieved_docs=retrieved_docs,
+            messages=messages,
+        )
+
     else:
         # Check if it's a bash command
         # print(command)
@@ -1064,7 +1247,8 @@ def execute_command(
         elif command_parts[0] == "cd":
             change_dir_result = change_directory(command_parts, messages)
             messages = change_dir_result["messages"]
-            output = change_dir_result["output"]    
+            output = change_dir_result["output"]
+
         elif command_parts[0] in BASH_COMMANDS:
             if command_parts[0] in TERMINAL_EDITORS:
                 return {"messages": messages, "output": open_terminal_editor(command)}
@@ -1080,7 +1264,6 @@ def execute_command(
                         messages=messages,
                         model=model_override,
                         provider=provider_override,
-                        
                     )
                 else:  # ONLY execute if valid
                     try:
@@ -1139,7 +1322,7 @@ def execute_command(
                     output = colored(f"Error executing command: {e}", "red")
 
         else:
-            #print(model_override, provider_override)
+            # print(model_override, provider_override)
             output = check_llm_command(
                 command,
                 command_history,
@@ -1153,9 +1336,6 @@ def execute_command(
     # Add command to history
     command_history.add(command, subcommands, output, location)
 
-    # Print the output
-    # if output:
-    #    print(output)
     if isinstance(output, dict):
         response = output.get("output", "")
         new_messages = output.get("messages", None)
@@ -1163,59 +1343,25 @@ def execute_command(
             messages = new_messages
         output = response
 
+    # Only render markdown once, at the end
+    if output:
+        render_markdown(output)
+
     return {"messages": messages, "output": output}
 
 
-
-def change_directory(command_parts : list,
-                     
-                     messages : list) -> dict:
-    """ 
-    Function Description:
-        Changes the current directory.
-    Args:
-        command_parts : list : Command parts
-        messages : list : Messages
-    Keyword Args:
-        None
-    Returns:
-        dict : dict : Dictionary
-        
+def enter_whisper_mode(command_history: Any, npc: Any = None) -> str:
     """
-    
-    try:
-        if len(command_parts) > 1:
-            new_dir = os.path.expanduser(command_parts[1])
-        else:
-            new_dir = os.path.expanduser("~")
-        os.chdir(new_dir)
-        return {
-            "messages": messages,
-            "output": f"Changed directory to {os.getcwd()}",
-        }
-    except FileNotFoundError:
-        return {
-            "messages": messages,
-            "output": f"Directory not found: {new_dir}",
-        } 
-    except PermissionError:
-        return {"messages": messages, "output": f"Permission denied: {new_dir}"}
-
-
-
-def enter_whisper_mode(command_history : Any, 
-                       npc : Any = None) -> str:
-    """ 
     Function Description:
         This function is used to enter the whisper mode.
-    Args: 
+    Args:
         command_history : Any : The command history object.
     Keyword Args:
         npc : Any : The NPC object.
     Returns:
         str : The output of the whisper mode.
     """
-    
+
     if npc is not None:
         llm_name = npc.name
     else:
@@ -1276,18 +1422,18 @@ def enter_whisper_mode(command_history : Any,
             whisper_output.append(
                 f"{llm_name}: {llm_response['output']}"
             )  # Add to output
-            speak_text(llm_response["output"])  # Speak assistant's reply
+            # speak_text(llm_response["output"])  # Speak assistant's reply
         elif isinstance(llm_response, list) and len(llm_response) > 0:
             assistant_reply = messages[-1]["content"]
             print(f"{llm_name}: {assistant_reply}")  # Print assistant's reply
             whisper_output.append(f"{llm_name}: {assistant_reply}")  # Add to output
-            speak_text(assistant_reply)  # Speak assistant's reply
+            # speak_text(assistant_reply)  # Speak assistant's reply
         elif isinstance(
             llm_response, str
         ):  # Handle string responses (errors or direct replies)
             print(f"{llm_name}: {llm_response}")
             whisper_output.append(f"{llm_name}: {llm_response}")
-            speak_text(llm_response)
+            # speak_text(llm_response)
 
         # command_history.add(...)  This is now handled inside check_llm_command
 
@@ -1305,11 +1451,8 @@ def enter_whisper_mode(command_history : Any,
     return "\n".join(whisper_output)
 
 
-
-
-def enter_notes_mode(command_history : Any,
-                     npc : Any = None) -> None:
-    """ 
+def enter_notes_mode(command_history: Any, npc: Any = None) -> None:
+    """
     Function Description:
 
     Args:
@@ -1318,9 +1461,9 @@ def enter_notes_mode(command_history : Any,
         npc : Any : The NPC object.
     Returns:
         None
-        
+
     """
-    
+
     npc_name = npc.name if npc else "base"
     print(f"Entering notes mode (NPC: {npc_name}). Type '/nq' to exit.")
 
@@ -1335,10 +1478,8 @@ def enter_notes_mode(command_history : Any,
     print("Exiting notes mode.")
 
 
-def save_note(note : str,
-             command_history : Any,
-             npc : Any = None) -> None:
-    """ 
+def save_note(note: str, command_history: Any, npc: Any = None) -> None:
+    """
     Function Description:
         This function is used to save a note.
     Args:
@@ -1385,12 +1526,10 @@ def save_note(note : str,
     # save the note with the current datestamp to the current working directory
     with open(f"{current_dir}/note_{timestamp}.txt", "w") as f:
         f.write(note)
-    
-    
 
-def enter_data_analysis_mode(command_history : Any,
-                             npc : Any = None) -> None:
-    """ 
+
+def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
+    """
     Function Description:
         This function is used to enter the data analysis mode.
     Args:
@@ -1400,12 +1539,12 @@ def enter_data_analysis_mode(command_history : Any,
     Returns:
         None
     """
-                                 
+
     npc_name = npc.name if npc else "data_analyst"
     print(f"Entering data analysis mode (NPC: {npc_name}). Type '/daq' to exit.")
 
     dataframes = {}  # Dict to store dataframes by name
-    context = {'dataframes': dataframes}  # Context to store variables
+    context = {"dataframes": dataframes}  # Context to store variables
     messages = []  # For conversation history if needed
 
     while True:
@@ -1423,17 +1562,19 @@ def enter_data_analysis_mode(command_history : Any,
             try:
                 parts = user_input.split()
                 file_path = parts[1]
-                if 'as' in parts:
-                    as_index = parts.index('as')
+                if "as" in parts:
+                    as_index = parts.index("as")
                     df_name = parts[as_index + 1]
                 else:
-                    df_name = 'df'  # Default dataframe name
+                    df_name = "df"  # Default dataframe name
                 # Load data into dataframe
                 df = pd.read_csv(file_path)
                 dataframes[df_name] = df
                 print(f"Data loaded into dataframe '{df_name}'")
                 # Record in command_history
-                command_history.add(user_input, ["load"], f"Loaded data into {df_name}", os.getcwd())
+                command_history.add(
+                    user_input, ["load"], f"Loaded data into {df_name}", os.getcwd()
+                )
             except Exception as e:
                 print(f"Error loading data: {e}")
 
@@ -1444,9 +1585,11 @@ def enter_data_analysis_mode(command_history : Any,
                 df = pd.read_sql_query(query, npc.db_conn)
                 print(df)
                 # Optionally store result in a dataframe
-                dataframes['sql_result'] = df
+                dataframes["sql_result"] = df
                 print("Result stored in dataframe 'sql_result'")
-                command_history.add(user_input, ["sql"], "Executed SQL query", os.getcwd())
+                command_history.add(
+                    user_input, ["sql"], "Executed SQL query", os.getcwd()
+                )
             except Exception as e:
                 print(f"Error executing SQL query: {e}")
 
@@ -1455,7 +1598,7 @@ def enter_data_analysis_mode(command_history : Any,
             try:
                 code = user_input[5:]  # Remove 'plot ' prefix
                 # Prepare execution environment
-                exec_globals = {'pd': pd, 'plt': plt, **dataframes}
+                exec_globals = {"pd": pd, "plt": plt, **dataframes}
                 exec(code, exec_globals)
                 plt.show()
                 command_history.add(user_input, ["plot"], "Generated plot", os.getcwd())
@@ -1467,17 +1610,24 @@ def enter_data_analysis_mode(command_history : Any,
             try:
                 code = user_input[5:]  # Remove 'exec ' prefix
                 # Prepare execution environment
-                exec_globals = {'pd': pd, 'plt': plt, **dataframes}
+                exec_globals = {"pd": pd, "plt": plt, **dataframes}
                 exec(code, exec_globals)
                 # Update dataframes with any new or modified dataframes
-                dataframes.update({k: v for k, v in exec_globals.items() if isinstance(v, pd.DataFrame)})
+                dataframes.update(
+                    {
+                        k: v
+                        for k, v in exec_globals.items()
+                        if isinstance(v, pd.DataFrame)
+                    }
+                )
                 command_history.add(user_input, ["exec"], "Executed code", os.getcwd())
             except Exception as e:
                 print(f"Error executing code: {e}")
 
         elif user_input.lower().startswith("help"):
             # Provide help information
-            print("""
+            print(
+                """
 Available commands:
 - load <file_path> as <df_name>: Load CSV data into a dataframe.
 - sql <SQL query>: Execute SQL query.
@@ -1485,7 +1635,8 @@ Available commands:
 - exec <Python code>: Execute arbitrary Python code.
 - help: Show this help message.
 - /daq: Exit data analysis mode.
-""")
+"""
+            )
 
         else:
             # Unrecognized command
@@ -1494,9 +1645,7 @@ Available commands:
     print("Exiting data analysis mode.")
 
 
-
-def enter_data_mode(command_history:  Any, 
-                    npc: Any = None) -> None:
+def enter_data_mode(command_history: Any, npc: Any = None) -> None:
     """
     Function Description:
         This function is used to enter the data mode.
@@ -1504,20 +1653,20 @@ def enter_data_mode(command_history:  Any,
         command_history : Any : The command history object.
     Keyword Args:
         npc : Any : The NPC object.
-    Returns:    
+    Returns:
         None
-    """    
+    """
     npc_name = npc.name if npc else "data_analyst"
     print(f"Entering data mode (NPC: {npc_name}). Type '/dq' to exit.")
 
     exec_env = {
-        'pd': pd,
-        'np': np,
-        'plt': plt,
-        'os': os,
-        'npc': npc,
+        "pd": pd,
+        "np": np,
+        "plt": plt,
+        "os": os,
+        "npc": npc,
     }
-    
+
     while True:
         try:
             user_input = input(f"{npc_name}> ").strip()
@@ -1537,24 +1686,48 @@ def enter_data_mode(command_history:  Any,
                 continue
 
             # Then check if it's a natural language query
-            if not any(keyword in user_input for keyword in ['=', '+', '-', '*', '/', '(', ')', '[', ']', '{', '}', 'import']):
-                if 'df' in exec_env and isinstance(exec_env['df'], pd.DataFrame):
+            if not any(
+                keyword in user_input
+                for keyword in [
+                    "=",
+                    "+",
+                    "-",
+                    "*",
+                    "/",
+                    "(",
+                    ")",
+                    "[",
+                    "]",
+                    "{",
+                    "}",
+                    "import",
+                ]
+            ):
+                if "df" in exec_env and isinstance(exec_env["df"], pd.DataFrame):
                     df_info = {
-                        'shape': exec_env['df'].shape,
-                        'columns': list(exec_env['df'].columns),
-                        'dtypes': exec_env['df'].dtypes.to_dict(),
-                        'head': exec_env['df'].head().to_dict(),
-                        'summary': exec_env['df'].describe().to_dict()
+                        "shape": exec_env["df"].shape,
+                        "columns": list(exec_env["df"].columns),
+                        "dtypes": exec_env["df"].dtypes.to_dict(),
+                        "head": exec_env["df"].head().to_dict(),
+                        "summary": exec_env["df"].describe().to_dict(),
                     }
-                    
+
                     analysis_prompt = f"""Based on this DataFrame info: {df_info}
                     Generate Python analysis commands to answer: {user_input}
                     Return each command on a new line. Do not use markdown formatting or code blocks."""
-                    
-                    analysis_response = npc.get_llm_response(analysis_prompt).get('response', '')
-                    analysis_commands = [cmd.strip() for cmd in analysis_response.replace('```python', '').replace('```', '').split('\n') if cmd.strip()]
+
+                    analysis_response = npc.get_llm_response(analysis_prompt).get(
+                        "response", ""
+                    )
+                    analysis_commands = [
+                        cmd.strip()
+                        for cmd in analysis_response.replace("```python", "")
+                        .replace("```", "")
+                        .split("\n")
+                        if cmd.strip()
+                    ]
                     results = []
-                    
+
                     print("\nAnalyzing data...")
                     for cmd in analysis_commands:
                         if cmd.strip():
@@ -1574,17 +1747,19 @@ def enter_data_mode(command_history:  Any,
                                     print(f"Error in {cmd}: {str(e)}")
                             except Exception as e:
                                 print(f"Error in {cmd}: {str(e)}")
-                    
+
                     if results:
                         interpretation_prompt = f"""Based on these analysis results:
                         {[(cmd, str(result)) for cmd, result in results]}
-                        
+
                         Provide a clear, concise interpretation of what we found in the data.
                         Focus on key insights and patterns. Do not use markdown formatting."""
-                        
+
                         print("\nInterpretation:")
-                        interpretation = npc.get_llm_response(interpretation_prompt).get('response', '')
-                        interpretation = interpretation.replace('```', '').strip()
+                        interpretation = npc.get_llm_response(
+                            interpretation_prompt
+                        ).get("response", "")
+                        interpretation = interpretation.replace("```", "").strip()
                         render_markdown(interpretation)
                     continue
 
@@ -1610,10 +1785,10 @@ def enter_data_mode(command_history:  Any,
     return
 
 
-def enter_spool_mode(command_history : Any,
-                     inherit_last : int = 0,
-                     npc : Any = None) -> Dict:
-    """ 
+def enter_spool_mode(
+    command_history: Any, inherit_last: int = 0, npc: Any = None
+) -> Dict:
+    """
     Function Description:
         This function is used to enter the spool mode.
     Args:
@@ -1623,7 +1798,7 @@ def enter_spool_mode(command_history : Any,
         npc : Any : The NPC object.
     Returns:
         Dict : The messages and output.
-        
+
     """
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
@@ -1697,6 +1872,9 @@ def enter_spool_mode(command_history : Any,
             print("\nExiting spool mode.")
             break
 
-    return {'messages': spool_context, 
-            "output":"\n".join( [msg["content"] for msg in spool_context if msg["role"] == "assistant"])
-                               }
+    return {
+        "messages": spool_context,
+        "output": "\n".join(
+            [msg["content"] for msg in spool_context if msg["role"] == "assistant"]
+        ),
+    }

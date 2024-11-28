@@ -1,7 +1,15 @@
-#image.py 
+# image.py
+# import os
+import time
+import platform
+import subprocess
+from typing import Dict, Any
 
-def capture_screenshot(npc : Any = None) -> Dict[str, str]:
-    """ 
+from .llm_funcs import get_llm_response
+
+
+def capture_screenshot(npc: Any = None) -> Dict[str, str]:
+    """
     Function Description:
         This function captures a screenshot of the current screen and saves it to a file.
     Args:
@@ -62,13 +70,12 @@ def capture_screenshot(npc : Any = None) -> Dict[str, str]:
     return {"filename": filename, "file_path": file_path, "model_kwargs": model_kwargs}
 
 
-def analyze_image_base(user_prompt : str,
-                       file_path : str,
-                       filename : str,
-                       npc=None : Any) -> Dict[str, str]:
+def analyze_image_base(
+    user_prompt: str, file_path: str, filename: str, npc: Any = None
+) -> Dict[str, str]:
     """
     Function Description:
-        This function analyzes an image using the LLM model and returns the response.   
+        This function analyzes an image using the LLM model and returns the response.
     Args:
         user_prompt: The user prompt to provide to the LLM model.
         file_path: The path to the image file.
@@ -77,9 +84,9 @@ def analyze_image_base(user_prompt : str,
         npc: The NPC object representing the current NPC.
     Returns:
         The response from the LLM model
-     
+
     """
-    
+
     if os.path.exists(file_path):
         image_info = {"filename": filename, "file_path": file_path}
 
@@ -89,7 +96,7 @@ def analyze_image_base(user_prompt : str,
 
             # Add to command history *inside* the try block
 
-            #print(response["response"])  # Print response after adding to history
+            # print(response["response"])  # Print response after adding to history
             return response
 
             # except Exception as e:
@@ -106,12 +113,12 @@ def analyze_image_base(user_prompt : str,
 
 
 def analyze_image(
-    command_history : Any,
-    user_prompt : str,
-    file_path : str,
-    filename : str,
-    npc : Any = None,
-    **model_kwargs
+    command_history: Any,
+    user_prompt: str,
+    file_path: str,
+    filename: str,
+    npc: Any = None,
+    **model_kwargs,
 ) -> Dict[str, str]:
     """
     Function Description:
@@ -127,7 +134,7 @@ def analyze_image(
     Returns:
         The response from the LLM model.
     """
-    
+
     if os.path.exists(file_path):
         image_info = {"filename": filename, "file_path": file_path}
 
@@ -144,8 +151,8 @@ def analyze_image(
                     response,
                     os.getcwd(),
                 )
-                #import pdb 
-                #pdb.set_trace()
+                # import pdb
+                # pdb.set_trace()
                 print(response["response"])  # Print response after adding to history
                 return response
 

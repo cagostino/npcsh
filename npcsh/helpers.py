@@ -1,13 +1,5 @@
-# helpers.py
 import logging
-
-logging.basicConfig(
-    filename=".npcsh.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 import sqlite3
 import subprocess
@@ -15,11 +7,10 @@ import platform
 import yaml
 import nltk
 import numpy as np
-import sqlite3
-import time
-import numpy as np
-import wave
-import tempfile
+
+import filecmp
+
+import shutil
 
 try:
     from sentence_transformers import util
@@ -27,31 +18,9 @@ except Exception as e:
     print(f"Error importing sentence_transformers: {e}")
 
 
-import requests
-from typing import Dict, List, Optional
-from bs4 import BeautifulSoup
-import urllib.parse
-from duckduckgo_search import DDGS
-from googlesearch import search
-
-import os
-import shutil
-import filecmp
-import sqlite3
-
-
-from .llm_funcs import get_llm_response
-
-
-
-
-
-
-
-
 def get_shell_config_file() -> str:
     """
-     
+
     Function Description:
         This function returns the path to the shell configuration file.
     Args:
@@ -76,18 +45,19 @@ def get_shell_config_file() -> str:
         # Default to .bashrc if we can't determine the shell
         return os.path.expanduser("~/.bashrc")
 
-def initial_table_print(cursor : sqlite3.Cursor) -> None:
+
+def initial_table_print(cursor: sqlite3.Cursor) -> None:
     """
     Function Description:
-        This function is used to print the initial table.   
+        This function is used to print the initial table.
     Args:
         cursor : sqlite3.Cursor : The SQLite cursor.
     Keyword Args:
         None
     Returns:
         None
-    """ 
-    
+    """
+
     cursor.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name != 'command_history'"
     )
@@ -96,7 +66,6 @@ def initial_table_print(cursor : sqlite3.Cursor) -> None:
     print("\nAvailable tables:")
     for i, table in enumerate(tables, 1):
         print(f"{i}. {table[0]}")
-
 
 
 def ensure_npcshrc_exists() -> str:
@@ -110,7 +79,7 @@ def ensure_npcshrc_exists() -> str:
     Returns:
         The path to the .npcshrc file.
     """
-    
+
     npcshrc_path = os.path.expanduser("~/.npcshrc")
     if not os.path.exists(npcshrc_path):
         with open(npcshrc_path, "w") as npcshrc:
@@ -135,7 +104,7 @@ def ensure_nltk_punkt() -> None:
     Returns:
         None
     """
-    
+
     try:
         nltk.data.find("tokenizers/punkt")
     except LookupError:
@@ -143,7 +112,9 @@ def ensure_nltk_punkt() -> None:
         nltk.download("punkt")
 
 
-def load_all_files(directory : str, extensions : List[str] = None, depth : int = 1) -> Dict[str, str]:
+def load_all_files(
+    directory: str, extensions: List[str] = None, depth: int = 1
+) -> Dict[str, str]:
     """
     Function Description:
         This function loads all text files in a directory and its subdirectories.
@@ -201,9 +172,8 @@ def load_all_files(directory : str, extensions : List[str] = None, depth : int =
     return text_data
 
 
-
 def add_npcshrc_to_shell_config() -> None:
-    """ 
+    """
     Function Description:
         This function adds the sourcing of the .npcshrc file to the user's shell configuration file.
     Args:
@@ -213,7 +183,7 @@ def add_npcshrc_to_shell_config() -> None:
     Returns:
         None
     """
-    
+
     config_file = get_shell_config_file()
     npcshrc_line = "\n# Source NPCSH configuration\nif [ -f ~/.npcshrc ]; then\n    . ~/.npcshrc\nfi\n"
 
@@ -234,11 +204,11 @@ def setup_npcsh_config() -> None:
     Args:
         None
     Keyword Args:
-        None    
+        None
     Returns:
         None
     """
-    
+
     ensure_npcshrc_exists()
     add_npcshrc_to_shell_config()
 
@@ -247,14 +217,14 @@ def initialize_npc_project() -> str:
     """
     Function Description:
         This function initializes an NPC project in the current directory.
-    Args:   
+    Args:
         None
     Keyword Args:
         None
     Returns:
         A message indicating the success or failure of the operation.
     """
-    
+
     # Get the current directory
     current_directory = os.getcwd()
 
@@ -307,7 +277,7 @@ def is_npcsh_initialized() -> bool:
     Returns:
         A boolean indicating whether NPCSH is initialized.
     """
-    
+
     return os.environ.get("NPCSH_INITIALIZED", None) == "1"
 
 
@@ -317,13 +287,13 @@ def set_npcsh_initialized() -> None:
         This function sets the NPCSH initialization flag in the .npcshrc file.
     Args:
         None
-    Keyword Args:   
+    Keyword Args:
         None
     Returns:
 
         None
     """
-    
+
     npcshrc_path = ensure_npcshrc_exists()
 
     with open(npcshrc_path, "r+") as npcshrc:
@@ -341,7 +311,7 @@ def set_npcsh_initialized() -> None:
     print("NPCSH initialization flag set in .npcshrc")
 
 
-def get_valid_npcs(db_path : str) -> List[str]:
+def get_valid_npcs(db_path: str) -> List[str]:
     """
     Function Description:
         This function retrieves a list of valid NPCs from the database.
@@ -352,7 +322,7 @@ def get_valid_npcs(db_path : str) -> List[str]:
     Returns:
         A list of valid NPCs.
     """
-    
+
     db_conn = sqlite3.connect(db_path)
     cursor = db_conn.cursor()
     cursor.execute("SELECT name FROM compiled_npcs")
@@ -360,8 +330,9 @@ def get_valid_npcs(db_path : str) -> List[str]:
     db_conn.close()
     return npcs
 
-def get_npc_path(npc_name : str, db_path : str) -> Optional[str]:
-    """ 
+
+def get_npc_path(npc_name: str, db_path: str) -> Optional[str]:
+    """
     Function Description:
         This function retrieves the path to the compiled NPC file.
     Args:
@@ -386,11 +357,10 @@ def get_npc_path(npc_name : str, db_path : str) -> Optional[str]:
     else:
         print(f"NPC file not found: {npc_name}")
         return None
-        
 
 
-def initialize_base_npcs_if_needed(db_path : str) -> None:
-    """ 
+def initialize_base_npcs_if_needed(db_path: str) -> None:
+    """
     Function Description:
         This function initializes the base NPCs if they are not already in the database.
     Args:
@@ -401,8 +371,7 @@ def initialize_base_npcs_if_needed(db_path : str) -> None:
     Returns:
         None
     """
-    
-    
+
     if is_npcsh_initialized():
         return
 
@@ -411,13 +380,13 @@ def initialize_base_npcs_if_needed(db_path : str) -> None:
 
     # Create the compiled_npcs table if it doesn't exist
     cursor.execute(
-        '''
+        """
         CREATE TABLE IF NOT EXISTS compiled_npcs (
             name TEXT PRIMARY KEY,
             source_path TEXT NOT NULL,
             compiled_content TEXT
         )
-        '''
+        """
     )
 
     # Get the path to the npc_team directory in the package
@@ -435,7 +404,9 @@ def initialize_base_npcs_if_needed(db_path : str) -> None:
         if filename.endswith(".npc"):
             source_path = os.path.join(package_npc_team_dir, filename)
             destination_path = os.path.join(user_npc_team_dir, filename)
-            if not os.path.exists(destination_path) or file_has_changed(source_path, destination_path):
+            if not os.path.exists(destination_path) or file_has_changed(
+                source_path, destination_path
+            ):
                 shutil.copy2(source_path, destination_path)
                 print(f"Copied {filename} to {destination_path}")
 
@@ -446,7 +417,9 @@ def initialize_base_npcs_if_needed(db_path : str) -> None:
             if filename.endswith(".tool"):
                 source_tool_path = os.path.join(package_tools_dir, filename)
                 destination_tool_path = os.path.join(user_tools_dir, filename)
-                if (not os.path.exists(destination_tool_path)) or file_has_changed(source_tool_path, destination_tool_path):
+                if (not os.path.exists(destination_tool_path)) or file_has_changed(
+                    source_tool_path, destination_tool_path
+                ):
                     shutil.copy2(source_tool_path, destination_tool_path)
                     print(f"Copied tool {filename} to {destination_tool_path}")
 
@@ -455,8 +428,9 @@ def initialize_base_npcs_if_needed(db_path : str) -> None:
     set_npcsh_initialized()
     add_npcshrc_to_shell_config()
 
-def file_has_changed(source_path : str, destination_path : str) -> bool:
-    """ 
+
+def file_has_changed(source_path: str, destination_path: str) -> bool:
+    """
     Function Description:
         This function compares two files to determine if they are different.
     Args:
@@ -467,12 +441,13 @@ def file_has_changed(source_path : str, destination_path : str) -> bool:
     Returns:
         A boolean indicating whether the files are different
     """
-    
+
     # Compare file modification times or contents to decide whether to update the file
     return not filecmp.cmp(source_path, destination_path, shallow=False)
 
-def is_valid_npc(npc : str , db_path : str) -> bool:
-    """ 
+
+def is_valid_npc(npc: str, db_path: str) -> bool:
+    """
     Function Description:
         This function checks if an NPC is valid based on the database.
     Args:
@@ -483,8 +458,7 @@ def is_valid_npc(npc : str , db_path : str) -> bool:
     Returns:
         A boolean indicating whether the NPC is valid.
     """
-    
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM compiled_npcs WHERE name = ?", (npc,))
@@ -493,8 +467,8 @@ def is_valid_npc(npc : str , db_path : str) -> bool:
     return result is not None
 
 
-def execute_python(code : str) -> str:
-    """ 
+def execute_python(code: str) -> str:
+    """
     Function Description:
         This function executes Python code and returns the output.
     Args:
@@ -504,7 +478,7 @@ def execute_python(code : str) -> str:
     Returns:
         The output of the code execution.
     """
-    
+
     try:
         result = subprocess.run(
             ["python", "-c", code], capture_output=True, text=True, timeout=30
@@ -514,7 +488,7 @@ def execute_python(code : str) -> str:
         return "Error: Execution timed out"
 
 
-def execute_r(code : str) -> str:
+def execute_r(code: str) -> str:
     """
     Function Description:
         This function executes R code and returns the output.
@@ -525,7 +499,7 @@ def execute_r(code : str) -> str:
     Returns:
         The output of the code execution.
     """
-    
+
     try:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".R", delete=False
@@ -543,7 +517,7 @@ def execute_r(code : str) -> str:
         return "Error: Execution timed out"
 
 
-def execute_sql(code : str) -> str:
+def execute_sql(code: str) -> str:
     """
     Function Description:
         This function executes SQL code and returns the output.
@@ -560,9 +534,10 @@ def execute_sql(code : str) -> str:
         return result
     except Exception as e:
         return f"Error: {e}"
-    
-def list_directory(args : List[str]) -> None:
-    """ 
+
+
+def list_directory(args: List[str]) -> None:
+    """
     Function Description:
         This function lists the contents of a directory.
     Args:
@@ -581,7 +556,7 @@ def list_directory(args : List[str]) -> None:
         print(f"Error listing directory: {e}")
 
 
-def read_file(args : List[str]) -> None:
+def read_file(args: List[str]) -> None:
     """
     Function Description:
         This function reads the contents of a file.
@@ -592,7 +567,7 @@ def read_file(args : List[str]) -> None:
     Returns:
         None
     """
-    
+
     if not args:
         print("Usage: /read <filename>")
         return
@@ -603,4 +578,3 @@ def read_file(args : List[str]) -> None:
             print(content)
     except Exception as e:
         print(f"Error reading file: {e}")
-

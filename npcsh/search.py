@@ -1,9 +1,21 @@
 # search.py
 
+import requests
+from bs4 import BeautifulSoup
+from duckduckgo_search import DDGS
+from googlesearch import search
+from typing import List, Dict, Any, Optional
+import numpy as np
+
+try:
+    from sentence_transformers import util
+except:
+    pass
 
 
-
-def search_web(query: str, num_results: int = 5, provider: str = 'google') -> List[Dict[str, str]]:
+def search_web(
+    query: str, num_results: int = 5, provider: str = "google"
+) -> List[Dict[str, str]]:
     """
     Function Description:
         This function searches the web for information based on a query.
@@ -16,52 +28,60 @@ def search_web(query: str, num_results: int = 5, provider: str = 'google') -> Li
         A list of dictionaries with 'title', 'link', and 'content' keys.
     """
     results = []
-    
+
     try:
-        if provider == 'duckduckgo':
+        if provider == "duckduckgo":
             ddgs = DDGS()
             search_results = ddgs.text(query, max_results=num_results)
-            urls = [r['link'] for r in search_results]
+            urls = [r["link"] for r in search_results]
         else:  # google
             urls = list(search(query, num_results=num_results))
-        
+
         for url in urls:
             try:
                 # Fetch the webpage content
-                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                }
                 response = requests.get(url, headers=headers, timeout=5)
                 response.raise_for_status()
-                
+
                 # Parse with BeautifulSoup
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
+                soup = BeautifulSoup(response.text, "html.parser")
+
                 # Get title and content
                 title = soup.title.string if soup.title else url
-                
+
                 # Extract text content and clean it up
-                content = ' '.join([p.get_text() for p in soup.find_all('p')])
-                content = ' '.join(content.split())  # Clean up whitespace
-                
-                results.append({
-                    'title': title,
-                    'link': url,
-                    'content': content[:500] + '...' if len(content) > 500 else content
-                })
-                
+                content = " ".join([p.get_text() for p in soup.find_all("p")])
+                content = " ".join(content.split())  # Clean up whitespace
+
+                results.append(
+                    {
+                        "title": title,
+                        "link": url,
+                        "content": (
+                            content[:500] + "..." if len(content) > 500 else content
+                        ),
+                    }
+                )
+
             except Exception as e:
                 print(f"Error fetching {url}: {str(e)}")
                 continue
-                
+
     except Exception as e:
         print(f"Search error: {str(e)}")
-        
+
     return results
+
+
 def rag_search(
-    query : str,
-    text_data : Dict[str, str],
-    embedding_model : Any,
-    text_data_embedded : Optional[Dict[str, np.ndarray]] = None,
-    similarity_threshold : float = 0.2,
+    query: str,
+    text_data: Dict[str, str],
+    embedding_model: Any,
+    text_data_embedded: Optional[Dict[str, np.ndarray]] = None,
+    similarity_threshold: float = 0.2,
 ) -> List[str]:
     """
     Function Description:
@@ -74,7 +94,7 @@ def rag_search(
         text_data_embedded: A dictionary with file paths as keys and embedded file contents as values.
         similarity_threshold: The similarity threshold for considering a line relevant.
     Returns:
-        A list of relevant snippets.    
+        A list of relevant snippets.
 
     """
 
