@@ -17,6 +17,7 @@ from .llm_funcs import (
     execute_llm_command,
     execute_llm_question,
     generate_image,
+    lookup_provider,
     check_llm_command,
 )
 from .modes import (
@@ -76,6 +77,119 @@ from dotenv import load_dotenv
 import json
 import pandas as pd
 import numpy as np
+import re
+
+
+def get_model_and_provider(command, available_models):
+    """Extracts model and provider from command and autocompletes if possible."""
+    model_match = re.search(r"@(\S+)", command)
+    if model_match:
+        model_name = model_match.group(1)
+        # Autocomplete model name
+        matches = [m for m in available_models if m.startswith(model_name)]
+        if matches:
+            if len(matches) == 1:
+                model_name = matches[0] # Complete the name if only one match
+            # Find provider for the (potentially autocompleted) model
+            provider = lookup_provider(model_name)
+            if provider:
+                # Remove the model tag from the command
+                cleaned_command = command.replace(f"@{model_match.group(1)}", "").strip()
+                #print(cleaned_command, 'cleaned_command')
+                return model_name, provider, cleaned_command
+            else:
+                return None, None, command  # Provider not found
+        else:
+            return None, None, command # No matching model
+    else:
+        return None, None, command  # No model specified
+
+
+def get_available_models():
+    """Fetches available models from providers (Ollama, OpenAI, Anthropic)."""
+    available_models = []
+    
+    # Ollama models
+    try:
+        response = subprocess.run(['ollama', 'list'], capture_output=True, text=True, check=True)
+        for line in response.stdout.split('\n')[1:]:  # Skip header line
+            if line.strip():
+                model_name = line.split()[0].split(':')[0]  # Get name before colon
+                available_models.append(model_name)
+    except subprocess.CalledProcessError as e:
+        print(f"Error fetching Ollama models: {e}")
+
+    # OpenAI models
+    try:
+        import openai
+        if os.getenv("OPENAI_API_KEY"):
+            openai_models = [
+                "gpt-4-turbo",
+                "gpt-4o",
+                "gpt-4o-mini",
+                "dall-e-3",
+                "dall-e-2",
+            ]
+            available_models.extend(openai_models)
+    except ImportError:
+        print("OpenAI package not installed")
+
+    # Anthropic models
+    try:
+        import anthropic
+        if os.getenv("ANTHROPIC_API_KEY"):
+            anthropic_models = [
+                "claude-3-opus-20240229",
+                "claude-3-sonnet-20240229",
+                "claude-3-haiku-20240307",
+                "claude-2.1",
+                "claude-2.0",
+                "claude-instant-1.2"
+            ]
+            available_models.extend(anthropic_models)
+    except ImportError:
+        print("Anthropic package not installed")
+
+    return available_models
+def complete(text, state):
+    """Custom completer for commands and model names"""
+    buffer = readline.get_line_buffer()
+    available_models = get_available_models()
+    
+    # If completing a model name
+    if '@' in buffer:
+        at_index = buffer.rfind('@')
+        model_text = buffer[at_index+1:]
+        model_completions = [m for m in available_models if m.startswith(model_text)]
+        
+        try:
+            # Return the full text including @ symbol
+            return '@' + model_completions[state]
+        except IndexError:
+            return None
+    
+    # If completing a command
+    elif text.startswith('/'):
+        command_completions = [c for c in valid_commands if c.startswith(text)]
+        try:
+            return command_completions[state]
+        except IndexError:
+            return None
+    
+    return None
+def global_completions(text, command_parts):
+    """Handles completions for other commands and files."""
+    if not command_parts:
+        return [c + " " for c in valid_commands if c.startswith(text)]
+    elif command_parts[0] in ["/compile", "/com"]:
+        # Autocomplete NPC files
+        return [f for f in os.listdir('.') if f.endswith(".npc") and f.startswith(text)]
+    elif command_parts[0] == "/read":
+        # Autocomplete filenames
+        return [f for f in os.listdir('.') if f.startswith(text)]
+    else:
+        # Default filename completion
+        return [f for f in os.listdir('.') if f.startswith(text)]
 
 
 def wrap_text(text, width=80):
@@ -247,13 +361,14 @@ def validate_bash_command(command_parts):
                 "--count",
                 "--heading",
             ],
-            "requires_arg": False,
+            "requires_arg": True,
         },
         "open": {
             "flags": ["-a", "-e", "-t", "-f", "-F", "-W", "-n", "-g", "-h"],
             "requires_arg": True,
         },
-        "which": {"flags": ["-a", "-s", "-v"], "requires_arg": False},
+        "which": {"flags": ["-a", "-s", "-v"], "requires_arg": True},
+        
     }
 
     base_command = command_parts[0]
@@ -339,15 +454,22 @@ def execute_command(
     else:
         npc = current_npc
     # print(command, 'command', len(command), len(command.strip()))
+    available_models = get_available_models()
+
+
 
     if len(command.strip()) == 0:
         return {"messages": messages, "output": output}
     if messages is None:
         messages = []
     messages.append({"role": "user", "content": command})  # Add user message
+    model_override, provider_override, command = get_model_and_provider(command, available_models)
+    #print(command, model_override, provider_override)
     if command.startswith("/"):
         command = command[1:]
+        
         log_action("Command Executed", command)
+        
 
         command_parts = command.split()
         command_name = command_parts[0]
@@ -568,9 +690,15 @@ def execute_command(
                 npc=npc,
                 retrieved_docs=retrieved_docs,
                 messages=messages,
+                model=model_override,
+                provider=provider_override,
+                
             )
 
     else:
+
+        
+        
         # Check if it's a bash command
         # print(command)
         try:
@@ -633,6 +761,9 @@ def execute_command(
                         npc=npc,
                         retrieved_docs=retrieved_docs,
                         messages=messages,
+                        model=model_override,
+                        provider=provider_override,
+                        
                     )
                 else:  # ONLY execute if valid
                     try:
@@ -691,16 +822,15 @@ def execute_command(
                     output = colored(f"Error executing command: {e}", "red")
 
         else:
-            # print('dsf')
-            # print(npc)
-
-            # print(messages)
+            #print(model_override, provider_override)
             output = check_llm_command(
                 command,
                 command_history,
                 npc=npc,
                 retrieved_docs=retrieved_docs,
                 messages=messages,
+                model=model_override,
+                provider=provider_override,
             )
 
     # Add command to history
@@ -719,7 +849,6 @@ def execute_command(
     return {"messages": messages, "output": output}
 
 def readline_safe_prompt(prompt):
-    import re
     # This regex matches ANSI escape sequences
     ansi_escape = re.compile(r'(\033\[[0-9;]*[a-zA-Z])')
     # Wrap them with \001 and \002
@@ -767,7 +896,17 @@ def main():
         db_path = os.path.expanduser("~/npcsh_history.db")
 
     command_history = CommandHistory(db_path)
-
+    global valid_commands  # Make sure it's global
+    valid_commands = ["/compile", "/com", "/whisper", "/notes", "/data", "/cmd", "/command", 
+                     "/set", "/sample", "/spool", "/sp", "/help", "/exit", "/quit"]
+    
+    readline.set_completer_delims(' \t\n')  # Simplified delims
+    readline.set_completer(complete)
+    if sys.platform == 'darwin':  # For macOS
+        readline.parse_and_bind("bind ^I rl_complete")
+    else:  # For Linux and others
+        readline.parse_and_bind("tab: complete")    
+    
     # Initialize base NPCs and tools
     initialize_base_npcs_if_needed(db_path)
 

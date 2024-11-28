@@ -563,6 +563,6 @@ def load_tools_from_directory(directory):
                         tools.append(tool)
                     except yaml.YAMLError as e:
                         print(f"Error parsing tool {filename}: {e}")
-    else:
-        print(f"Tools directory not found: {directory}")
+    #else:
+        #print(f"Tools directory not found: {directory}")
     return tools

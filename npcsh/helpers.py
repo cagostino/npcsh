@@ -38,7 +38,7 @@ from .llm_funcs import get_llm_response
 BASH_COMMANDS = [
     "open",
     "alias",
-    "bg",
+    "bg", 
     "bind",
     "break",
     "builtin",
@@ -435,22 +435,56 @@ from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 import urllib.parse
 from duckduckgo_search import DDGS
+from googlesearch import search
 
 
-def search_web(query: str, num_results: int = 5) -> List[Dict[str, str]]:
+
+def search_web(query: str, num_results: int = 5, provider: str = 'google') -> List[Dict[str, str]]:
     """
-    Search the web using DuckDuckGo
-    Returns: List of dicts with 'title', 'link', and 'snippet' keys
+    Search the web using Google or DuckDuckGo and fetch page content
+    Returns: List of dicts with 'title', 'link', and 'content' keys
     """
-    # Encode the query for URL
-    encoded_query = urllib.parse.quote(query)
-
-    # HTML search which gives better results than their API
-    results = DDGS().text(query, max_results=num_results)
-
+    results = []
+    
+    try:
+        if provider == 'duckduckgo':
+            ddgs = DDGS()
+            search_results = ddgs.text(query, max_results=num_results)
+            urls = [r['link'] for r in search_results]
+        else:  # google
+            urls = list(search(query, num_results=num_results))
+        
+        for url in urls:
+            try:
+                # Fetch the webpage content
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+                response = requests.get(url, headers=headers, timeout=5)
+                response.raise_for_status()
+                
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Get title and content
+                title = soup.title.string if soup.title else url
+                
+                # Extract text content and clean it up
+                content = ' '.join([p.get_text() for p in soup.find_all('p')])
+                content = ' '.join(content.split())  # Clean up whitespace
+                
+                results.append({
+                    'title': title,
+                    'link': url,
+                    'content': content[:500] + '...' if len(content) > 500 else content
+                })
+                
+            except Exception as e:
+                print(f"Error fetching {url}: {str(e)}")
+                continue
+                
+    except Exception as e:
+        print(f"Search error: {str(e)}")
+        
     return results
-
-
 def rag_search(
     query, text_data, embedding_model, text_data_embedded=None, similarity_threshold=0.2
 ):
@@ -591,29 +625,6 @@ def get_valid_npcs(db_path):
     npcs = [row[0] for row in cursor.fetchall()]
     db_conn.close()
     return npcs
-def load_tools_from_directory(directory):
-    tools = []
-    if os.path.exists(directory):
-        for filename in os.listdir(directory):
-            if filename.endswith(".tool"):
-                full_path = os.path.join(directory, filename)
-                with open(full_path, "r") as f:
-                    tool_content = f.read()
-                    try:
-                        if not tool_content.strip():
-                            print(f"Tool file {filename} is empty. Skipping.")
-                            continue
-                        tool_data = yaml.safe_load(tool_content)
-                        if tool_data is None:
-                            print(f"Tool file {filename} is invalid or empty. Skipping.")
-                            continue
-                        tool = Tool(tool_data)
-                        tools.append(tool)
-                    except yaml.YAMLError as e:
-                        print(f"Error parsing tool {filename}: {e}")
-    else:
-        print(f"Tools directory not found: {directory}")
-    return tools
 
 def get_npc_from_command(command):
     parts = command.split()
