@@ -896,6 +896,8 @@ def execute_slash_command(
 
 /sp [inherit_last=<n>] #Alias for /spool.
 
+/vixynt [filename=<filename>] <prompt> #Captures a screenshot and generates an image with the specified prompt.
+
 /<npc_name> #Enters the specified NPC's mode.
 
 /help #Displays this help message.
