@@ -729,6 +729,8 @@ def execute_slash_command(
     text_data=None,
     text_data_embedded=None,
     messages=None,
+    model: str = None,
+    provider: str = None,
 ):
     """
     Function Description:
@@ -936,7 +938,13 @@ Bash commands and other programs can be executed directly."""
             }
     elif command_name == "sample":
         output = execute_llm_question(
-            command, command_history, npc=npc, retrieved_docs=retrieved_docs
+            command,
+            command_history,
+            npc=npc,
+            retrieved_docs=retrieved_docs,
+            messages=messages,
+            model=model,
+            provider=provider,
         )
     elif command_name == "spool" or command_name == "sp":
         inherit_last = 0
@@ -1198,6 +1206,8 @@ def execute_command(
             text_data=text_data,
             text_data_embedded=text_data_embedded,
             messages=messages,
+            model=model_override,
+            provider=provider_override,
         )
         output = result.get("output", "")
         new_messages = result.get("messages", None)
@@ -1259,7 +1269,7 @@ def execute_command(
                     output = check_llm_command(
                         command,
                         command_history,
-                        npc=npc,
+                        npc=current_npc,
                         retrieved_docs=retrieved_docs,
                         messages=messages,
                         model=model_override,
@@ -1326,7 +1336,7 @@ def execute_command(
             output = check_llm_command(
                 command,
                 command_history,
-                npc=npc,
+                npc=current_npc,
                 retrieved_docs=retrieved_docs,
                 messages=messages,
                 model=model_override,
