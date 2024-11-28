@@ -1,33 +1,39 @@
 import subprocess
 import sqlite3
-
 import numpy as np
 import os
 import yaml
-from jinja2 import Environment, FileSystemLoader, TemplateError, Template, Undefined
-
+from jinja2 import Environment, FileSystemLoader, Template, Undefined
 import pandas as pd
-from .llm_funcs import (
-    get_llm_response,
-    process_data_output,
-    get_data_response,
-    npcsh_db_path,
-    generate_image,
-    render_markdown, 
-    
-)
+import pathlib
+from typing import Dict, Any, Optional, Union
+import matplotlib.pyplot as plt
+import json
 import pathlib
 import fnmatch
 import matplotlib.pyplot as plt
-#plt.ion()
- 
-import json
-from .helpers import search_web, get_npc_path
+
+# plt.ion()
+
 import sklearn.feature_extraction.text
 import sklearn.metrics.pairwise
 import numpy as np
 
 import sklearn
+
+
+from .llm_funcs import (
+    get_llm_response,
+    process_data_output,
+    get_data_response,
+    generate_image,
+)
+
+from .helpers import get_npc_path
+
+from .search import search_web, rag_search
+
+
 class SilentUndefined(Undefined):
     def _fail_with_undefined_error(self, *args, **kwargs):
         return ""
@@ -60,20 +66,165 @@ class NPC:
         self.tools = tools or []
         self.tools_dict = {tool.tool_name: tool for tool in self.tools}
         self.shared_context = {
-            'dataframes': {},
-            'current_data': None,
-            'computation_results': {}
+            "dataframes": {},
+            "current_data": None,
+            "computation_results": {},
         }
 
     def __str__(self):
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
 
-    def get_data_response(self, request):
+    def get_data_response(self, request: str):
         return get_data_response(request, self.db_conn, self.tables)
 
-    def get_llm_response(self, request, **kwargs):
+    def get_llm_response(self, request: str, **kwargs):
         print(self.model, self.provider)
         return get_llm_response(request, self.model, self.provider, npc=self, **kwargs)
+
+
+class Tool:
+    def __init__(self, tool_data: dict):
+        if not tool_data or not isinstance(tool_data, dict):
+            raise ValueError("Invalid tool data provided.")
+        if "tool_name" not in tool_data:
+            raise KeyError("Missing 'tool_name' in tool definition.")
+        self.tool_name = tool_data.get("tool_name")
+        self.inputs = tool_data.get("inputs", [])
+
+        # Parse steps with engines
+        self.preprocess = self.parse_steps(tool_data.get("preprocess", []))
+        self.prompt = self.parse_step(tool_data.get("prompt", {}))
+        self.postprocess = self.parse_steps(tool_data.get("postprocess", []))
+
+    def parse_step(self, step: Union[dict, str]) -> dict:
+        if isinstance(step, dict):
+            return {
+                "engine": step.get("engine", "plain_english"),
+                "code": step.get("code", ""),
+            }
+        elif isinstance(step, str):  # For backward compatibility
+            return {"engine": "plain_english", "code": step}
+        else:
+            raise ValueError("Invalid step format")
+
+    def parse_steps(self, steps: list) -> list:
+        return [self.parse_step(step) for step in steps]
+
+    def execute(
+        self,
+        input_values: dict,
+        tools_dict: dict,
+        jinja_env: Environment,
+        command: str,
+        npc=None,
+    ):
+
+        context = npc.shared_context
+        context.update(
+            {
+                "inputs": input_values,
+                "tools": tools_dict,
+                "llm_response": None,
+                "output": None,
+                "command": command,
+            }
+        )
+        # Process Preprocess Steps
+        for step in self.preprocess:
+            context = self.execute_step(step, context, jinja_env, npc=npc)
+
+        # Process Prompt
+        context = self.execute_step(self.prompt, context, jinja_env, npc=npc)
+
+        # Process Postprocess Steps
+        for step in self.postprocess:
+            context = self.execute_step(step, context, jinja_env, npc=npc)
+
+        # Return the final output
+        if context.get("output") is not None:
+            return context.get("output")
+        elif context.get("llm_response") is not None:
+            return context.get("llm_response")
+
+    def execute_step(
+        self, step: dict, context: dict, jinja_env: Environment, npc: NPC = None
+    ):
+
+        engine = step.get("engine", "plain_english")
+        code = step.get("code", "")
+
+        if engine == "plain_english":
+
+            # Create template with debugging
+            from jinja2 import Environment, DebugUndefined
+
+            debug_env = Environment(undefined=DebugUndefined)
+            template = debug_env.from_string(code)
+
+            rendered_text = template.render(**context)  # Unpack context as kwargs
+            # print(len(rendered_text.strip()))
+            if len(rendered_text.strip()) > 0:
+                llm_response = get_llm_response(rendered_text, npc=npc)
+                # print(llm_response)
+                if context.get("llm_response") is None:
+                    # This is the prompt step
+                    context["llm_response"] = llm_response.get("response", "")
+                else:
+                    # This is a postprocess step; set output
+                    context["output"] = llm_response.get("response", "")
+
+        elif engine == "python":
+            # Execute Python code
+            exec_globals = {
+                "__builtins__": __builtins__,
+                "npc": npc,  # Pass npc to the execution environment
+                "context": context,
+                # Include necessary imports
+                "pd": pd,
+                "plt": plt,
+                "np": np,
+                "os": os,
+                "get_llm_response": get_llm_response,
+                "generate_image": generate_image,
+                "search_web": search_web,
+                "json": json,
+                "sklearn": __import__("sklearn"),
+                "TfidfVectorizer": __import__(
+                    "sklearn.feature_extraction.text"
+                ).feature_extraction.text.TfidfVectorizer,
+                "cosine_similarity": __import__(
+                    "sklearn.metrics.pairwise"
+                ).metrics.pairwise.cosine_similarity,
+                "Path": __import__("pathlib").Path,
+                "fnmatch": fnmatch,
+                "pathlib": pathlib,
+                "subprocess": subprocess,
+            }
+            exec_env = context.copy()
+            exec(code, exec_globals, exec_env)
+            context.update(exec_env)
+            # import pdb
+            # pdb.set_trace()
+        else:
+            raise ValueError(f"Unsupported engine '{engine}'")
+
+        return context
+
+    def to_dict(self):
+        return {
+            "tool_name": self.tool_name,
+            "inputs": self.inputs,
+            "preprocess": [self.step_to_dict(step) for step in self.preprocess],
+            "prompt": self.step_to_dict(self.prompt),
+            "postprocess": [self.step_to_dict(step) for step in self.postprocess],
+        }
+
+    def step_to_dict(self, step):
+        return {
+            "engine": step.get("engine"),
+            "code": step.get("code"),
+        }
+
 
 class NPCCompiler:
     def __init__(self, npc_directory, db_path):
@@ -90,12 +241,11 @@ class NPCCompiler:
 
         # Initialize Jinja environment with multiple loaders
         self.jinja_env = Environment(
-            loader=FileSystemLoader(
-                [self.npc_directory, self.project_npc_directory]
-            ),
-            undefined=SilentUndefined
+            loader=FileSystemLoader([self.npc_directory, self.project_npc_directory]),
+            undefined=SilentUndefined,
         )
-    def generate_tool_script(self, tool):
+
+    def generate_tool_script(self, tool: Tool):
         script_content = f"""
     # Auto-generated script for tool: {tool.tool_name}
 
@@ -126,6 +276,7 @@ class NPCCompiler:
         script_filename = f"{tool.tool_name}_script.py"
         with open(script_filename, "w") as script_file:
             script_file.write(script_content)
+
     def compile(self, npc_file: str):
         self.npc_cache.clear()  # Clear the cache
         self.resolved_npcs.clear()
@@ -153,6 +304,7 @@ class NPCCompiler:
             return parsed_content
         except Exception as e:
             raise e  # Re-raise exception for debugging
+
     def load_tools(self):
         tools = []
         # Load tools from global and project directories
@@ -161,12 +313,16 @@ class NPCCompiler:
         if os.path.exists(self.global_tools_directory):
             for filename in os.listdir(self.global_tools_directory):
                 if filename.endswith(".tool"):
-                    tool_paths.append(os.path.join(self.global_tools_directory, filename))
+                    tool_paths.append(
+                        os.path.join(self.global_tools_directory, filename)
+                    )
 
         if os.path.exists(self.project_tools_directory):
             for filename in os.listdir(self.project_tools_directory):
                 if filename.endswith(".tool"):
-                    tool_paths.append(os.path.join(self.project_tools_directory, filename))
+                    tool_paths.append(
+                        os.path.join(self.project_tools_directory, filename)
+                    )
 
         tool_dict = {}
         for tool_path in tool_paths:
@@ -178,7 +334,7 @@ class NPCCompiler:
 
         return list(tool_dict.values())
 
-    def load_tool_from_file(self, tool_path):
+    def load_tool_from_file(self, tool_path: str) -> Union[dict, None]:
         try:
             with open(tool_path, "r") as f:
                 tool_content = f.read()
@@ -196,7 +352,8 @@ class NPCCompiler:
         except Exception as e:
             print(f"Error loading tool {tool_path}: {e}")
             return None
-    def parse_all_npcs(self):
+
+    def parse_all_npcs(self) -> None:
         directories = [self.npc_directory]
         if os.path.exists(self.project_npc_directory):
             directories.append(self.project_npc_directory)
@@ -205,7 +362,8 @@ class NPCCompiler:
                 if filename.endswith(".npc"):
                     npc_path = os.path.join(directory, filename)
                     self.parse_npc_file(npc_path)
-    def parse_npc_file(self, npc_file_path: str):
+
+    def parse_npc_file(self, npc_file_path: str) -> dict:
         npc_file = os.path.basename(npc_file_path)
         if npc_file in self.npc_cache:
             # Project NPCs override global NPCs
@@ -224,11 +382,12 @@ class NPCCompiler:
             return profile
         except yaml.YAMLError as e:
             raise ValueError(f"Invalid YAML in NPC profile {npc_file}: {str(e)}")
+
     def resolve_all_npcs(self):
         for npc_file in self.npc_cache:
             self.resolve_npc_profile(npc_file)
 
-    def resolve_npc_profile(self, npc_file: str):
+    def resolve_npc_profile(self, npc_file: str) -> dict:
         if npc_file in self.resolved_npcs:
             return self.resolved_npcs[npc_file]
 
@@ -247,7 +406,8 @@ class NPCCompiler:
 
         self.resolved_npcs[npc_file] = profile
         return profile
-    def finalize_npc_profile(self, npc_file: str):
+
+    def finalize_npc_profile(self, npc_file: str) -> dict:
         profile = self.resolved_npcs.get(npc_file)
         if not profile:
             raise ValueError(f"NPC {npc_file} has not been resolved.")
@@ -265,7 +425,7 @@ class NPCCompiler:
 
         return profile
 
-    def compile_pipe(self, pipe_file: str, initial_input=None):
+    def compile_pipe(self, pipe_file: str, initial_input=None) -> list:
         if pipe_file in self.pipe_cache:
             return self.pipe_cache[pipe_file]
 
@@ -321,7 +481,7 @@ class NPCCompiler:
         except Exception as e:
             raise ValueError(f"Error compiling pipeline {pipe_file}: {str(e)}")
 
-    def merge_profiles(self, parent, child):
+    def merge_profiles(self, parent, child) -> dict:
         merged = parent.copy()
         for key, value in child.items():
             if isinstance(value, list) and key in merged:
@@ -332,7 +492,7 @@ class NPCCompiler:
                 merged[key] = value
         return merged
 
-    def update_compiled_npcs_table(self, npc_file, parsed_content):
+    def update_compiled_npcs_table(self, npc_file, parsed_content) -> None:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -350,141 +510,9 @@ class NPCCompiler:
                 f"Error updating compiled_npcs table: {str(e)}"
             )  # Print the full error
 
-class Tool:
-    def __init__(self, tool_data):
-        if not tool_data or not isinstance(tool_data, dict):
-            raise ValueError("Invalid tool data provided.")
-        if "tool_name" not in tool_data:
-            raise KeyError("Missing 'tool_name' in tool definition.")
-        self.tool_name = tool_data.get("tool_name")
-        self.inputs = tool_data.get("inputs", [])
-
-        # Parse steps with engines
-        self.preprocess = self.parse_steps(tool_data.get("preprocess", []))
-        self.prompt = self.parse_step(tool_data.get("prompt", {}))
-        self.postprocess = self.parse_steps(tool_data.get("postprocess", []))
-
-    def parse_step(self, step):
-        if isinstance(step, dict):
-            return {
-                "engine": step.get("engine", "plain_english"),
-                "code": step.get("code", ""),
-            }
-        elif isinstance(step, str):  # For backward compatibility
-            return {"engine": "plain_english", "code": step}
-        else:
-            raise ValueError("Invalid step format")
-
-    def parse_steps(self, steps):
-        return [self.parse_step(step) for step in steps]
-
-
-
-    def execute(self, input_values, tools_dict, jinja_env, command, npc=None):
-        context = npc.shared_context
-        context.update({
-            "inputs": input_values,
-            "tools": tools_dict,
-            "llm_response": None,
-            "output": None, 
-            "command": command
-        })
-        # Process Preprocess Steps
-        for step in self.preprocess:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
-
-        # Process Prompt
-        context = self.execute_step(self.prompt, context, jinja_env, npc=npc)
-
-        # Process Postprocess Steps
-        for step in self.postprocess:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
-
-        # Return the final output
-        if context.get('output') is not None:
-            return context.get('output')
-        elif context.get('llm_response') is not None:
-            return context.get('llm_response')
-            
-
-    def execute_step(self, step, context, jinja_env, npc=None):
-        engine = step.get("engine", "plain_english")
-        code = step.get("code", "")
-
-        if engine == "plain_english":
-            
-            # Create template with debugging
-            from jinja2 import Environment, DebugUndefined
-            debug_env = Environment(undefined=DebugUndefined)
-            template = debug_env.from_string(code)
-            
-
-            rendered_text = template.render(**context)  # Unpack context as kwargs
-            #print(len(rendered_text.strip()))
-            if len(rendered_text.strip()) > 0:
-                llm_response = get_llm_response(rendered_text, npc=npc)
-                #print(llm_response)
-                if context.get("llm_response") is None:
-                    # This is the prompt step
-                    context["llm_response"] = llm_response.get("response", "")
-                else:
-                    # This is a postprocess step; set output
-                    context["output"] = llm_response.get("response", "")                
-
-        
-        elif engine == "python":
-            # Execute Python code
-            exec_globals = {
-                "__builtins__": __builtins__,
-                "npc": npc,  # Pass npc to the execution environment
-                "context": context,
-                # Include necessary imports
-                "pd": pd,
-                "plt":plt, 
-                "np":np,
-                "os": os,
-                "get_llm_response": get_llm_response,
-                "generate_image": generate_image,
-                "render_markdown": render_markdown,
-                "search_web": search_web,
-                "json": json,
-                "sklearn": __import__('sklearn'),
-                "TfidfVectorizer": __import__('sklearn.feature_extraction.text').feature_extraction.text.TfidfVectorizer,
-                "cosine_similarity": __import__('sklearn.metrics.pairwise').metrics.pairwise.cosine_similarity,
-                "Path": __import__('pathlib').Path,
-            
-                
-                "fnmatch": fnmatch,
-                "pathlib": pathlib,
-                "subprocess": subprocess,
-                
-            }
-            exec_env = context.copy()
-            exec(code, exec_globals, exec_env)
-            context.update(exec_env)
-            #import pdb 
-            #pdb.set_trace()
-        else:
-            raise ValueError(f"Unsupported engine '{engine}'")
-
-        return context
-
-    def to_dict(self):
-        return {
-            "tool_name": self.tool_name,
-            "inputs": self.inputs,
-            "preprocess": [self.step_to_dict(step) for step in self.preprocess],
-            "prompt": self.step_to_dict(self.prompt),
-            "postprocess": [self.step_to_dict(step) for step in self.postprocess],
-        }
-
-    def step_to_dict(self, step):
-        return {
-            "engine": step.get("engine"),
-            "code": step.get("code"),
-        }
 
 # npc_compiler.py
+
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
     try:
@@ -543,7 +571,9 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         raise ValueError(f"Missing required key in NPC file {npc_file}: {str(e)}")
     except Exception as e:
         raise ValueError(f"Error loading NPC from file {npc_file}: {str(e)}")
-def load_tools_from_directory(directory):
+
+
+def load_tools_from_directory(directory) -> list:
     tools = []
     if os.path.exists(directory):
         for filename in os.listdir(directory):
@@ -557,12 +587,14 @@ def load_tools_from_directory(directory):
                             continue
                         tool_data = yaml.safe_load(tool_content)
                         if tool_data is None:
-                            print(f"Tool file {filename} is invalid or empty. Skipping.")
+                            print(
+                                f"Tool file {filename} is invalid or empty. Skipping."
+                            )
                             continue
                         tool = Tool(tool_data)
                         tools.append(tool)
                     except yaml.YAMLError as e:
                         print(f"Error parsing tool {filename}: {e}")
-    #else:
-        #print(f"Tools directory not found: {directory}")
+    # else:
+    # print(f"Tools directory not found: {directory}")
     return tools
