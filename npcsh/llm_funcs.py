@@ -159,18 +159,20 @@ def generate_image_ollama(prompt: str, model: str) -> str:
     Returns:
         str: The URL of the generated image.
     """
-    raise NotImplementedError("This function is not yet implemented.")
-    url = f"https://localhost:13434/v1/models/{model}/generate"
-    data = {"prompt": prompt}
-    response = requests.post(url, json=data)
+    return "Image generation is not yet possible with ollama. Please use Stable diffusion or OpenAI using the model override like : '/vixynt <prompt> @dall-e-3'  or '/vixynt <prompt> @dall-e-2'  or  '/vixynt <prompt> @stable-diffusion'"
+    # url = f"https://localhost:13434/v1/models/{model}/generate"
+    # data = {"prompt": prompt}
+    # response = requests.post(url, json=data)
 
-    if response.status_code == 200:
-        return response.json().get("image_url")  # Assume 'image_url'
-    else:
-        raise Exception(f"Error: {response.status_code}, {response.text}")
+    # if response.status_code == 200:
+    ##    return response.json().get("image_url")  # Assume 'image_url'
+    # else:
+    #    raise Exception(f"Error: {response.status_code}, {response.text}")
 
 
-def generate_image_openai(prompt: str, model: str, api_key: str) -> str:
+def generate_image_openai(
+    prompt: str, model: str, api_key: str, size: str = None
+) -> str:
     """
     Function Description:
         This function generates an image using the OpenAI API.
@@ -215,17 +217,16 @@ def generate_image_anthropic(prompt: str, model: str, api_key: str) -> str:
     Returns:
         str: The URL of the generated image.
     """
-    raise NotImplementedError("This function is not yet implemented.")
+    return "Image generation is not yet possible with anthropic. Please use Stable diffusion or OpenAI using the model override like : '/vixynt <prompt> @dall-e-3'  or '/vixynt <prompt> @dall-e-2'  or  '/vixynt <prompt> @stable-diffusion'"
+    # url = "https://api.anthropic.com/v1/images/generate"
+    # headers = {"Authorization": f"Bearer {api_key}"}
+    # data = {"model": model, "prompt": prompt}
+    # response = requests.post(url, headers=headers, json=data)
 
-    url = "https://api.anthropic.com/v1/images/generate"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    data = {"model": model, "prompt": prompt}
-    response = requests.post(url, headers=headers, json=data)
-
-    if response.status_code == 200:
-        return response.json().get("image_url")  # Assume 'image_url'
-    else:
-        raise Exception(f"Error: {response.status_code}, {response.text}")
+    # if response.status_code == 200:
+    #    return response.json().get("image_url")  # Assume 'image_url'
+    # else:
+    #    raise Exception(f"Error: {response.status_code}, {response.text}")
 
 
 def generate_image_openai_like(
@@ -245,18 +246,18 @@ def generate_image_openai_like(
         str: The URL of the generated
     """
 
-    raise NotImplementedError("This function is not yet implemented.")
+    return "Image generation is not well defined for open-ai like apis yet. Please use Stable diffusion or OpenAI using the model override like : '/vixynt <prompt> @dall-e-3'  or '/vixynt <prompt> @dall-e-2'  or  '/vixynt <prompt> @stable-diffusion'"
 
-    url = f"{api_url}/v1/images/generations"
-    headers = {"Authorization": f"Bearer {api_key}"}
-    data = {"model": model, "prompt": prompt, "n": 1, "size": "1024x1024"}
-    response = requests.post(url, headers=headers, json=data)
+    # url = f"{api_url}/v1/images/generations"
+    # headers = {"Authorization": f"Bearer {api_key}"}
+    # data = {"model": model, "prompt": prompt, "n": 1, "size": "1024x1024"}
+    # response = requests.post(url, headers=headers, json=data)
 
-    if response.status_code == 200:
-        return response.json().get("data")[0].get("url")  # Assume the firs
+    # if response.status_code == 200:
+    #    return response.json().get("data")[0].get("url")  # Assume the firs
 
-    else:
-        raise Exception(f"Error: {response.status_code}, {response.text}")
+    # else:
+    #    raise Exception(f"Error: {response.status_code}, {response.text}")
 
 
 def generate_image_stable_diffusion(
