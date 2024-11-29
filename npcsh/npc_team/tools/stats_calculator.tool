@@ -106,7 +106,7 @@ preprocess:
 
               filtered_df = df.copy()
               for col, condition in inputs['filters'].items():
-                  render_markdown(f"\nApplying filter on column: {col}")
+                  print(f"\nApplying filter on column: {col}")
                   op = condition.get('operator')
                   if op not in ops:
                       raise ValueError(f"Unsupported operator: {op}")
@@ -145,10 +145,10 @@ preprocess:
               break
 
           except Exception as e:
-              render_markdown(f"\nERROR CAUGHT: {str(e)}")
+              print(f"\nERROR CAUGHT: {str(e)}")
               attempt += 1
               if attempt >= max_retries:
-                  render_markdown("Maximum retries reached. Exiting.")
+                  print("Maximum retries reached. Exiting.")
                   raise  # Re-raise the exception after max retries
               inputs = fix_inputs(str(e), inputs, df)
 
