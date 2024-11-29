@@ -824,7 +824,9 @@ def execute_slash_command(
         # Get user prompt about the image BY joining the rest of the arguments
         user_prompt = " ".join(command.split()[1:])
 
-        output = generate_image(user_prompt, npc=npc, filename=filename)
+        output = generate_image(
+            user_prompt, npc=npc, filename=filename, model=model, provider=provider
+        )
 
     elif command.startswith("ots"):
         # check if there is a filename
