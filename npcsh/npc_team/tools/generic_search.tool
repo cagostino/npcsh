@@ -4,9 +4,8 @@ inputs:
 preprocess:
   - engine: "python"
     code: |
-      from npcsh.helpers import search_web
+      from npcsh.search import search_web
       query = inputs['query'].strip().title()
-      # Perform the web search
       results = search_web(query, num_results=5)
 prompt:
   engine: "plain_english"

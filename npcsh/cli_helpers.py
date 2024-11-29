@@ -492,14 +492,10 @@ def setup_readline() -> str:
         pass
 
     readline.set_history_length(1000)
-    # Commented out because 'set' commands may not work as intended with parse_and_bind
-    # readline.parse_and_bind("set editing-mode vi")
+    readline.parse_and_bind("set enable-bracketed-paste on")  # Enable paste mode
     readline.parse_and_bind('"\e[A": history-search-backward')
     readline.parse_and_bind('"\e[B": history-search-forward')
     readline.parse_and_bind('"\C-r": reverse-search-history')
-    # Remove or adjust these lines if they cause issues
-    # readline.parse_and_bind("set enable-bracketed-paste on")
-    # readline.parse_and_bind("set mark-modified-lines on")
     readline.parse_and_bind("\C-e: end-of-line")
     readline.parse_and_bind("\C-a: beginning-of-line")
 
@@ -897,7 +893,6 @@ def execute_slash_command(
 /sp [inherit_last=<n>] #Alias for /spool.
 
 /vixynt [filename=<filename>] <prompt> #Captures a screenshot and generates an image with the specified prompt.
-
 /<npc_name> #Enters the specified NPC's mode.
 
 /help #Displays this help message.

@@ -10,7 +10,7 @@ preprocess:
       import sqlite3
       import re
       from tabulate import tabulate
-      from npcsh.llm_funcs import render_markdown
+
 
       query_text = inputs['query_text'].lower()
       

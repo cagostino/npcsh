@@ -19,37 +19,37 @@ preprocess:
         def find_files(file_filter=None):
             default_extensions = ['.py', '.txt', '.md', '.json', '.yml', '.yaml']
             matches = []
-            
+
             # Walk through all directories
             for root, dirnames, filenames in os.walk('.'):
                 # Skip common directories to ignore
                 if any(ignore in root for ignore in ['.git', '__pycache__', 'node_modules', 'venv']):
                     continue
-                    
+
                 for filename in filenames:
                     if not any(filename.endswith(ext) for ext in default_extensions):
                         continue
-                        
+
                     full_path = os.path.join(root, filename)
-                    
+
                     # If no filter specified, include all files
                     if not file_filter:
                         matches.append(full_path)
                         continue
-                        
+
                     # Check if file matches any of the filters
                     if isinstance(file_filter, str):
                         filters = [file_filter]
                     else:
                         filters = file_filter
-                        
+
                     for f in filters:
                         # Check if filter matches filename or any parent directory
-                        if (fnmatch.fnmatch(filename, f) or 
+                        if (fnmatch.fnmatch(filename, f) or
                             fnmatch.fnmatch(full_path, f'*{f}*')):
                             matches.append(full_path)
                             break
-            
+
             return matches
 
         def load_document(file_path):
@@ -92,7 +92,7 @@ preprocess:
         file_filter = inputs.get('file_filter', None)
         files = find_files(file_filter)
 
-        render_markdown(f"Found {len(files)} files to search")
+        print(f"Found {len(files)} files to search")
 
         # Load and chunk documents
         chunks = []
@@ -114,7 +114,7 @@ preprocess:
 
             except Exception as e:
                 print(files)
-                render_markdown(f"Error loading {file_path}: {str(e)}")
+                print(f"Error loading {file_path}: {str(e)}")
 
         # Find relevant chunks
         relevant_chunks = find_relevant_chunks(inputs['query'], chunks)
@@ -130,18 +130,18 @@ prompt:
   engine: plain_english
   code: |
     You are a helpful coding assistant. Please help with this query:
-    
+
     {{ inputs['query']  }}
-    
+
     Here is the relevant context from the codebase:
-    
+
     {{ relevant_context }}
-    
-    Please provide a clear and helpful response to the user's query. 
+
+    Please provide a clear and helpful response to the user's query.
     Explain exactly how it is that you arrived at your answer and how it answers the user's query.
     If you reference specific files or code sections, indicate which file they came from.
     In your response, you must explicitly mention what the users query was.
 
 postprocess:
   - engine: plain_english
-    code: ""      
+    code: ""
