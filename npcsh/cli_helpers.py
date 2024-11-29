@@ -39,9 +39,11 @@ from .llm_funcs import (
     get_conversation,
     get_system_message,
     check_llm_command,
+    generate_image,
 )
 from .helpers import get_valid_npcs, get_npc_path
 from .npc_compiler import NPCCompiler, NPC, load_npc_from_file
+
 from .search import rag_search
 from .audio import calibrate_silence, record_audio, speak_text
 from rich.console import Console
