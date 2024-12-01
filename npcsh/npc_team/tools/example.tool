@@ -5,7 +5,7 @@ preprocess:
   - engine: "python"
     code: "processed_input = inputs['input_param'].strip().lower()"
 prompt:
-  engine: "plain_english"
+  engine: "natural"
   code: "Please process the following input: {{ processed_input }}"
 postprocess:
   - engine: "python"

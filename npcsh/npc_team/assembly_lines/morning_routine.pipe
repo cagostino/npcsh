@@ -1,0 +1,12 @@
+# morning_routine.pipe
+steps:
+  - npc: {{email_assistant}}
+    prompt: "Get me up to speed on my recent emails"
+  
+
+  - npc: {{market_analyst}}
+    prompt: "Give me an update on the latest events in the market."
+    
+    
+  - npc: {{sibiji}}
+    prompt: "Review the outputs from the {{email_assistant}} and {{market_analyst}} and provide me with a summary."

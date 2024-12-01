@@ -14,8 +14,8 @@ preprocess:
       df.to_sql(inputs['table_name'], npc.db_conn, if_exists='replace', index=False)
       output = f"Data from '{inputs['file_path']}' loaded into database table '{inputs['table_name']}'."
 prompt:
-  engine: plain_english
+  engine: natural
   code: ""
 postprocess:
-  - engine: plain_english
+  - engine: natural
     code: ""

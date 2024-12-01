@@ -15,7 +15,7 @@ preprocess:
       else:
           web_content = "Weather information not found."
 prompt:
-  engine: "plain_english"
+  engine: "natural"
   code: |
     Using the following information extracted from the web:
 
@@ -23,5 +23,5 @@ prompt:
 
     Summarize the weather forecast for {{ formatted_location }} in November 2024.
 postprocess:
-  - engine: "plain_english"
+  - engine: "natural"
     code: "The weather in {{ formatted_location }} in November 2024 is: {{ llm_response }}"

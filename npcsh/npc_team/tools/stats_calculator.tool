@@ -153,7 +153,7 @@ preprocess:
               inputs = fix_inputs(str(e), inputs, df)
 
 prompt:
-  engine: plain_english
+  engine: natural
   code: |
 
     A user made this request:
@@ -165,6 +165,6 @@ prompt:
     Please write a response to the user. Make it succinct and clear.
 
 postprocess:
-  - engine: plain_english
+  - engine: natural
     code: ""
       

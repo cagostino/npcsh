@@ -16,11 +16,11 @@ preprocess:
           plt.scatter(df[inputs['columns'][0]], df[inputs['columns'][1]])
       plt.savefig('plot.png')
 prompt:
-  engine: plain_english
+  engine: natural
   code: |
     Generated {{ inputs['plot_type'] }} plot for columns {{ inputs['columns'] }} from table '{{ inputs['table_name'] }}'. The plot is saved as 'plot.png'.
 postprocess:
-  - engine: plain_english
+  - engine: natural
     code: |
       {{ llm_response }}
       ![Plot](plot.png)

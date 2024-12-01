@@ -99,11 +99,11 @@ class Tool:
     def parse_step(self, step: Union[dict, str]) -> dict:
         if isinstance(step, dict):
             return {
-                "engine": step.get("engine", "plain_english"),
+                "engine": step.get("engine", "natural"),
                 "code": step.get("code", ""),
             }
         elif isinstance(step, str):  # For backward compatibility
-            return {"engine": "plain_english", "code": step}
+            return {"engine": "natural", "code": step}
         else:
             raise ValueError("Invalid step format")
 
@@ -118,7 +118,6 @@ class Tool:
         command: str,
         npc=None,
     ):
-
         context = npc.shared_context
         context.update(
             {
@@ -149,12 +148,10 @@ class Tool:
     def execute_step(
         self, step: dict, context: dict, jinja_env: Environment, npc: NPC = None
     ):
-
-        engine = step.get("engine", "plain_english")
+        engine = step.get("engine", "natural")
         code = step.get("code", "")
 
-        if engine == "plain_english":
-
+        if engine == "natural":
             # Create template with debugging
             from jinja2 import Environment, DebugUndefined
 
@@ -444,7 +441,7 @@ class NPCCompiler:
 
             for step in pipeline_data["steps"]:
                 npc_name = step["npc"]
-                prompt_template = step["prompt"]
+                prompt_template = step["task"]
 
                 # Load the NPC
                 npc_path = get_npc_path(npc_name, self.db_path)
@@ -465,7 +462,6 @@ class NPCCompiler:
                 context[npc_name] = response  # Update context with NPC's response
 
                 # Pass information to the next NPC if specified
-                pass_to = step.get("pass_to")
                 if pass_to:
                     context["pass_to"] = pass_to
 

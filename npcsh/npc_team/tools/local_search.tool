@@ -127,7 +127,7 @@ preprocess:
         context['relevant_context'] = context_text
 
 prompt:
-  engine: plain_english
+  engine: natural
   code: |
     You are a helpful coding assistant. Please help with this query:
 
@@ -143,5 +143,5 @@ prompt:
     In your response, you must explicitly mention what the users query was.
 
 postprocess:
-  - engine: plain_english
+  - engine: natural
     code: ""
