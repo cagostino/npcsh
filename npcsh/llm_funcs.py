@@ -12,9 +12,10 @@ from openai import OpenAI
 import anthropic
 import re
 from jinja2 import Environment, FileSystemLoader, Template, Undefined
-
+import PIL
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
+from diffusers import StableDiffusionPipeline
 
 
 # Load environment variables from .env file
@@ -144,6 +145,10 @@ def get_available_models() -> list:
         "claude-instant-1.2",
     ]
     available_models.extend(anthropic_models)
+    diffusers_models = [
+        "runwayml/stable-diffusion-v1-5",
+    ]
+    available_models.extend(diffusers_models)
     return available_models
 
 
@@ -260,24 +265,31 @@ def generate_image_openai_like(
     #    raise Exception(f"Error: {response.status_code}, {response.text}")
 
 
-def generate_image_stable_diffusion(
+def generate_image_hf_diffusion(
     prompt: str,
-    model: str,
-    api_url: str,
+    model: str = "runwayml/stable-diffusion-v1-5",
+    device: str = "cpu",
 ):
     """
     Function Description:
         This function generates an image using the Stable Diffusion API.
     Args:
         prompt (str): The prompt for generating the image.
-        model (str): The model to use for generating the image.
-        api_url (str): The URL of the API endpoint.
-    Keyword Args:
-        None
+        model_id (str): The Hugging Face model ID to use for Stable Diffusion.
+        device (str): The device to run the model on ('cpu' or 'cuda').
     Returns:
-        str: The URL of the generated image.
+        PIL.Image: The generated image.
     """
-    raise NotImplementedError("This function is not yet implemented.")
+    # Load the Stable Diffusion pipeline
+    pipe = StableDiffusionPipeline.from_pretrained(model)
+    pipe = pipe.to(device)
+
+    # Generate the image
+    image = pipe(prompt)
+    image = image.images[0]
+    # ["sample"][0]
+
+    return image
 
 
 def generate_image(
@@ -319,8 +331,15 @@ def generate_image(
         image = generate_image_anthropic(prompt, model, anthropic_api_key)
     elif provider == "openai-like":
         image = generate_image_openai_like(prompt, model, npc.api_url, openai_api_key)
+    elif provider == "diffusers":
+        image = generate_image_hf_diffusion(prompt, model)
     # save image
-    if image is not None:
+    # check if image is a PIL image
+    if isinstance(image, PIL.Image.Image):
+        image.save(filename)
+        return filename
+
+    elif image is not None:
         # image is at a private url
         response = requests.get(image.data[0].url)
         with open(filename, "wb") as file:
@@ -1186,6 +1205,8 @@ def lookup_provider(model: str) -> str:
         return "anthropic"
     if model.startswith("gemini"):
         return "google"
+    if "diffusion" in model:
+        return "diffusers"
     return None
 
 
