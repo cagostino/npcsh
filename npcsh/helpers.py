@@ -11,6 +11,8 @@ import numpy as np
 import filecmp
 
 import shutil
+import tempfile
+import pandas as pd
 
 try:
     from sentence_transformers import util
