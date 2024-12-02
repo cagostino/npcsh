@@ -1,12 +1,13 @@
 # morning_routine.pipe
 steps:
-  - npc: {{email_assistant}}
-    prompt: "Get me up to speed on my recent emails"
-  
+  - step_name: "review_evail"
+    npc: {{email_assistant}}
+    task: "Get me up to speed on my recent emails"  
 
-  - npc: {{market_analyst}}
-    prompt: "Give me an update on the latest events in the market."
+  - step_name: "market_update"
+    npc: {{market_analyst}}
+    task: "Give me an update on the latest events in the market."
     
-    
-  - npc: {{sibiji}}
-    prompt: "Review the outputs from the {{email_assistant}} and {{market_analyst}} and provide me with a summary."
+  - step_name: "summarize"
+    npc: {{sibiji}}
+    task: "Review the outputs from the {{email_assistant}} and {{market_analyst}} and provide me with a summary."

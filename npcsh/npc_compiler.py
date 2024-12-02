@@ -421,61 +421,116 @@ class NPCCompiler:
                 raise ValueError(f"Missing required key in NPC profile: {key}")
 
         return profile
+    def compile_pipe(self, pipe_file: str, initial_input=None) -> dict:                                                                                                                                                                 
+        if pipe_file in self.pipe_cache:                                                                                                                                                                                                
+            return self.pipe_cache[pipe_file]                                                                                                                                                                                           
+                                                                                                                                                                                                                                        
+        if not pipe_file.endswith(".pipe"):                                                                                                                                                                                             
+            raise ValueError("Pipeline file must have .pipe extension")                                                                                                                                                                 
+                                                                                                                                                                                                                                        
+        try:                                                                                                                                                                                                                            
+            with open(os.path.join(self.npc_directory, pipe_file), "r") as f:                                                                                                                                                           
+                pipeline_data = yaml.safe_load(f)                                                                                                                                                                                       
+                                                                                                                                                                                                                                        
+            final_output = {}                                                                                                                                                                                                           
+            jinja_env = Environment(                                                                                                                                                                                                    
+                loader=FileSystemLoader("."), undefined=SilentUndefined                                                                                                                                                                 
+            )                                                                                                                                                                                                                           
+                                                                                                                                                                                                                                        
+            context = {"input": initial_input}                                                                                                                                                                                          
+                                                                                                                                                                                                                                        
+            for stage in pipeline_data["stages"]:                                                                                                                                                                                       
+                stage_results = self.execute_stage(stage, context, jinja_env)                                                                                                                                                           
+                final_output.update(self.aggregate_stage_results(stage_results, stage, jinja_env))                                                                                                                                      
+                                                                                                                                                                                                                                        
+            self.pipe_cache[pipe_file] = final_output  # Cache the results                                                                                                                                                              
+            return final_output                                                                                                                                                                                                         
+                                                                                                                                                                                                                                        
+        except FileNotFoundError:                                                                                                                                                                                                       
+            raise ValueError(f"NPC file not found: {npc_path}")                                                                                                                                                                         
+        except yaml.YAMLError as e:                                                                                                                                                                                                     
+            raise ValueError(                                                                                                                                                                                                           
+                f"Error parsing YAML in pipeline file {pipe_file}: {str(e)}"                                                                                                                                                            
+            )                                                                                                                                                                                                                           
+        except Exception as e:                                                                                                                                                                                                          
+            raise ValueError(f"Error compiling pipeline {pipe_file}: {str(e)}")                                                                                                                                                         
+                                                                                                                                                                                                                                        
+    def aggregate_stage_results(self, stage_results, stage, jinja_env):                                                                                                                                                                 
+        aggregated_results = {}                                                                                                                                                                                                         
+        for step in stage["steps"]:                                                                                                                                                                                                     
+            step_name = step["step_name"]                                                                                                                                                                                               
+            aggregation_strategy = step.get("aggregation_strategy", "concat")                                                                                                                                                           
+            step_result = self.aggregate_step_results(stage_results[step_name], aggregation_strategy)                                                                                                                                   
+                                                                                                                                                                                                                                        
+            if step_name == stage["steps"][-1]["step_name"]:                                                                                                                                                                            
+                # This is the final step, render the result with Jinja                                                                                                                                                                  
+                template = jinja_env.from_string(step_result)                                                                                                                                                                           
+                aggregated_results[f"{{ summary.response }}"] = template.render(stage_results)                                                                                                                                          
+            else:                                                                                                                                                                                                                       
+                aggregated_results[f"{{ {step_name}.response }}"] = step_result                                                                                                                                                         
+                                                                                                                                                                                                                                        
+        return aggregated_results      
+    def execute_stage(self, stage, context, jinja_env):
+        stage_results = {}
 
-    def compile_pipe(self, pipe_file: str, initial_input=None) -> list:
-        if pipe_file in self.pipe_cache:
-            return self.pipe_cache[pipe_file]
+        for step in stage["steps"]:
+            step_name = step["step_name"]
+            npc_name = step["npc"]
+            prompt_template = step["task"]
+            num_samples = step.get("num_samples", 1)
 
-        if not pipe_file.endswith(".pipe"):
-            raise ValueError("Pipeline file must have .pipe extension")
-
-        try:
-            with open(os.path.join(self.npc_directory, pipe_file), "r") as f:
-                pipeline_data = yaml.safe_load(f)
-
-            context = {"input": initial_input}
-            results = []
-            jinja_env = Environment(
-                loader=FileSystemLoader("."), undefined=SilentUndefined
-            )
-
-            for step in pipeline_data["steps"]:
-                npc_name = step["npc"]
-                prompt_template = step["task"]
-
+            step_results = []
+            for sample_index in range(num_samples):
                 # Load the NPC
                 npc_path = get_npc_path(npc_name, self.db_path)
-                npc = load_npc_from_file(
-                    npc_path, sqlite3.connect(self.db_path)
-                )  # Create a new connection for each NPC
+                npc = load_npc_from_file(npc_path, sqlite3.connect(self.db_path))
 
                 # Render the prompt using Jinja2
                 prompt_template = jinja_env.from_string(prompt_template)
-                prompt = prompt_template.render(context)
+                prompt = prompt_template.render(context, sample_index=sample_index)
 
                 response = npc.get_llm_response(prompt)
                 print(response)
-                results.append({"npc": npc_name, "response": response})
+                step_results.append({"npc": npc_name, "response": response})
 
                 # Update context with the response for the next step
-                context["input"] = response
-                context[npc_name] = response  # Update context with NPC's response
+                context[
+                    f"{step_name}_{sample_index}"
+                ] = response  # Update context with step's response
 
-                # Pass information to the next NPC if specified
-                if pass_to:
-                    context["pass_to"] = pass_to
+            stage_results[step_name] = step_results
 
-            self.pipe_cache[pipe_file] = results  # Cache the results
-            return results
-
-        except FileNotFoundError:
-            raise ValueError(f"NPC file not found: {npc_path}")
-        except yaml.YAMLError as e:
-            raise ValueError(
-                f"Error parsing YAML in pipeline file {pipe_file}: {str(e)}"
-            )
-        except Exception as e:
-            raise ValueError(f"Error compiling pipeline {pipe_file}: {str(e)}")
+        return stage_results
+    def aggregate_step_results(self, step_results, aggregation_strategy):                                                                                                                                                               
+        responses = [result["response"] for result in step_results]                                                                                                                                                                     
+        if aggregation_strategy == "concat":                                                                                                                                                                                            
+            return "\n".join(responses)                                                                                                                                                                                                 
+        elif aggregation_strategy == "summary":                                                                                                                                                                                         
+            # Use the LLM to generate a summary of the responses                                                                                                                                                                        
+            summary_prompt = f"Please provide a concise summary of the following responses:\n\n{'\n'.join(responses)}"                                                                                                                  
+            summary = self.get_llm_response(summary_prompt)["response"]                                                                                                                                                                 
+            return summary                                                                                                                                                                                                              
+        elif aggregation_strategy == "pessimistic_critique":                                                                                                                                                                            
+            # Use the LLM to provide a pessimistic critique of the responses                                                                                                                                                            
+            critique_prompt = f"Please provide a pessimistic critique of the following responses:\n\n{'\n'.join(responses)}"                                                                                                            
+            critique = self.get_llm_response(critique_prompt)["response"]                                                                                                                                                               
+            return critique                                                                                                                                                                                                             
+        elif aggregation_strategy == "optimistic_view":                                                                                                                                                                                 
+            # Use the LLM to provide an optimistic view of the responses                                                                                                                                                                
+            optimistic_prompt = f"Please provide an optimistic view of the following responses:\n\n{'\n'.join(responses)}"                                                                                                              
+            optimistic_view = self.get_llm_response(optimistic_prompt)["response"]                                                                                                                                                      
+            return optimistic_view                                                                                                                                                                                                      
+        elif aggregation_strategy == "balanced_analysis":                                                                                                                                                                               
+            # Use the LLM to provide a balanced analysis of the responses                                                                                                                                                               
+            analysis_prompt = f"Please provide a balanced analysis of the following responses:\n\n{'\n'.join(responses)}"                                                                                                               
+            balanced_analysis = self.get_llm_response(analysis_prompt)["response"]                                                                                                                                                      
+            return balanced_analysis                                                                                                                                                                                                    
+        elif aggregation_strategy == "first":                                                                                                                                                                                           
+            return responses[0]                                                                                                                                                                                                         
+        elif aggregation_strategy == "last":                                                                                                                                                                                            
+            return responses[-1]                                                                                                                                                                                                        
+        else:                                                                                                                                                                                                                           
+            raise ValueError(f"Invalid aggregation strategy: {aggregation_strategy}")                                                                                                                                                   
 
     def merge_profiles(self, parent, child) -> dict:
         merged = parent.copy()
