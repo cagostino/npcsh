@@ -45,6 +45,8 @@ from .helpers import get_valid_npcs, get_npc_path
 from .npc_compiler import NPCCompiler, NPC, load_npc_from_file
 
 from .search import rag_search
+from .image import capture_screenshot, analyze_image
+
 from .audio import calibrate_silence, record_audio, speak_text
 from rich.console import Console
 from rich.markdown import Markdown
@@ -768,12 +770,14 @@ def execute_slash_command(
                 for npc_file in args:
                     # differentiate between .npc and .pipe
                     if npc_file.endswith(".pipe"):
+                        # import pdb
+                        # pdb.set_trace()
                         compiled_script = npc_compiler.compile_pipe(npc_file)
-
+                        output = f"Compiled Pipeline: {compiled_script}\n"
                     elif npc_file.endswith(".npc"):
                         compiled_script = npc_compiler.compile(npc_file)
 
-                        output += f"Compiled NPC profile: {compiled_script}\n"
+                        output = f"Compiled NPC profile: {compiled_script}\n"
             elif current_npc:  # Compile current NPC
                 compiled_script = npc_compiler.compile(current_npc)
                 output = f"Compiled NPC profile: {compiled_script}"
@@ -797,7 +801,36 @@ def execute_slash_command(
                 # differentiate between .npc and .pipe
                 compiled_script = npc_compiler.compile_pipe(npc_file)
                 # run through the steps in the pipe
+    elif command_name == "select":
+        query = " ".join([command_name] + args)  # Reconstruct full query
 
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                rows = cursor.fetchall()
+
+                if not rows:
+                    output = "No results found"
+                else:
+                    # Get column names
+                    columns = [description[0] for description in cursor.description]
+
+                    # Format output as table
+                    table_lines = []
+                    table_lines.append(" | ".join(columns))
+                    table_lines.append("-" * len(table_lines[0]))
+
+                    for row in rows:
+                        table_lines.append(" | ".join(str(col) for col in row))
+
+                    output = "\n".join(table_lines)
+
+                return {"messages": messages, "output": output}
+
+        except sqlite3.Error as e:
+            output = f"Database error: {str(e)}"
+            return {"messages": messages, "output": output}
     elif command_name == "list":
         output = list_directory()
     elif command_name == "read":

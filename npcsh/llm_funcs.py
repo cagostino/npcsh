@@ -16,6 +16,7 @@ import PIL
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from diffusers import StableDiffusionPipeline
+import base64
 
 
 # Load environment variables from .env file
@@ -635,7 +636,7 @@ def get_conversation(
         provider = "ollama"
         model = "llava:7b" if images is not None else "llama3.2"
 
-    # print(provider, model)
+    print(provider, model)
     if provider == "ollama":
         return get_ollama_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "openai":
@@ -1255,6 +1256,7 @@ def get_llm_response(
         else:
             model = "llama3.2"
 
+    print(provider, model)
     if provider == "ollama":
         if model is None:
             if images is not None:
@@ -1309,6 +1311,8 @@ def get_llm_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
     else:
+        print(provider)
+        print(model)
         return "Error: Invalid provider specified."
 
 

@@ -6,6 +6,7 @@ import subprocess
 from typing import Dict, Any
 
 from .llm_funcs import get_llm_response
+import os
 
 
 def capture_screenshot(npc: Any = None) -> Dict[str, str]:
@@ -143,7 +144,7 @@ def analyze_image(
                 response = get_llm_response(
                     user_prompt, images=[image_info], npc=npc, **model_kwargs
                 )
-
+                # print(response)
                 # Add to command history *inside* the try block
                 command_history.add(
                     f"screenshot with prompt: {user_prompt}",
@@ -151,6 +152,7 @@ def analyze_image(
                     response,
                     os.getcwd(),
                 )
+                # print(reponse)
                 # import pdb
                 # pdb.set_trace()
                 print(response["response"])  # Print response after adding to history

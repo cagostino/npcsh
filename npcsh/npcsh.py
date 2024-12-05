@@ -118,7 +118,8 @@ def main() -> None:
     # Compile all NPCs in the user's npc_team directory
     for filename in os.listdir(user_npc_directory):
         if filename.endswith(".npc"):
-            npc_compiler.compile(filename)
+            npc_file_path = os.path.join(user_npc_directory, filename)
+            npc_compiler.compile(npc_file_path)
 
     # If project npc_team directory exists, compile NPCs from there as well
     if os.path.exists(project_npc_directory):
@@ -131,13 +132,16 @@ def main() -> None:
     # Define the directory to load text files from
     text_data_directory = os.path.abspath("./")
     # Load all text files from the directory recursively
+
     text_data = load_all_files(text_data_directory)
+
     # embed all the text_data
 
     try:
         # Load the SentenceTransformer model
         embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         # Embed all the text data
+
         text_data_embedded = {
             filename: embedding_model.encode(
                 text_data[filename], convert_to_tensor=True, show_progress_bar=False
@@ -164,6 +168,7 @@ def main() -> None:
     messages = None
     while True:
         try:
+
             if current_npc:
                 prompt = f"{colored(os.getcwd(), 'blue')}:{orange(current_npc.name)}> "
             else:
