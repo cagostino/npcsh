@@ -1,0 +1,4 @@
+name: email_assistant
+primary_directive: Assist with email management and summarization
+model: gpt-4o-mini
+provider: openai

@@ -192,7 +192,7 @@ preprocess:
         }
 
 prompt:
-  engine: plain_english
+  engine: natural
   code: |
     Debug Session Summary:
     Success: {{ debug_results['success'] }}
@@ -213,5 +213,5 @@ prompt:
     {% endfor %}
 
 postprocess:
-  - engine: plain_english
+  - engine: natural
     code: ""

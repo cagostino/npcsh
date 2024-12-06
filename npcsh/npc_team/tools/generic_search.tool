@@ -8,7 +8,7 @@ preprocess:
       query = inputs['query'].strip().title()
       results = search_web(query, num_results=5)
 prompt:
-  engine: "plain_english"
+  engine: "natural"
   code: |
     Using the following information extracted from the web:
 

@@ -61,7 +61,7 @@ preprocess:
 
 
 prompt:
-  engine: plain_english
+  engine: natural
   code: ""
 postprocess:
   - engine: python

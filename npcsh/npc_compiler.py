@@ -12,6 +12,284 @@ import json
 import pathlib
 import fnmatch
 import matplotlib.pyplot as plt
+import re
+
+# plt.ion()
+
+import sklearn.feature_extraction.text
+import sklearn.metrics.pairwise
+import numpy as np
+
+import sklearn
+
+import os
+import re
+import sqlite3
+import pandas as pd
+from typing import Dict, List, Set, Union
+from pathlib import Path
+from collections import defaultdict, deque
+
+
+from .llm_funcs import (
+    get_llm_response,
+    process_data_output,
+    get_data_response,
+    generate_image,
+)
+
+from .helpers import get_npc_path
+
+from .search import search_web, rag_search
+from .image import capture_screenshot
+
+import sqlite3
+import pandas as pd
+
+
+def create_or_replace_table(db_path, table_name, data):
+    """
+    Creates or replaces a table in the SQLite database.
+
+    :param db_path: Path to the SQLite database.
+    :param table_name: Name of the table to create/replace.
+    :param data: Pandas DataFrame containing the data to insert.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        # Replace the table with new data
+        data.to_sql(table_name, conn, if_exists="replace", index=False)
+        print(f"Table '{table_name}' created/replaced successfully.")
+    except Exception as e:
+        print(f"Error creating/replacing table '{table_name}': {e}")
+    finally:
+        conn.close()
+
+
+def init_pipeline_runs():
+    # need to move elsewhere....
+    db_path = "~/npcsh_history.db"
+
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        # Add pipeline_runs table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pipeline_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pipeline_name TEXT,
+                step_name TEXT,
+                output TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        )
+        conn.commit()
+
+
+class SilentUndefined(Undefined):
+    def _fail_with_undefined_error(self, *args, **kwargs):
+        return ""
+
+
+class NPC:
+    def __init__(
+        self,
+        name: str,
+        db_conn: sqlite3.Connection,
+        primary_directive: str = None,
+        suggested_tools_to_use: str = None,
+        restrictions: list = None,
+        model: str = None,
+        provider: str = None,
+        api_url: str = None,
+        tools: list = None,
+    ):
+        self.name = name
+        self.primary_directive = primary_directive
+        self.suggested_tools_to_use = suggested_tools_to_use
+        self.restrictions = restrictions
+        self.model = model
+        self.db_conn = db_conn
+        self.tables = self.db_conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table';"
+        ).fetchall()
+        self.provider = provider
+        self.api_url = api_url
+        self.tools = tools or []
+        self.tools_dict = {tool.tool_name: tool for tool in self.tools}
+        self.shared_context = {
+            "dataframes": {},
+            "current_data": None,
+            "computation_results": {},
+        }
+
+    def __str__(self):
+        return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
+
+    def get_data_response(self, request: str):
+        return get_data_response(request, self.db_conn, self.tables)
+
+    def get_llm_response(self, request: str, **kwargs):
+        # print(self.model, self.provider)
+        return get_llm_response(request, self.model, self.provider, npc=self, **kwargs)
+
+
+class Tool:
+    def __init__(self, tool_data: dict):
+        if not tool_data or not isinstance(tool_data, dict):
+            raise ValueError("Invalid tool data provided.")
+        if "tool_name" not in tool_data:
+            raise KeyError("Missing 'tool_name' in tool definition.")
+        self.tool_name = tool_data.get("tool_name")
+        self.inputs = tool_data.get("inputs", [])
+
+        # Parse steps with engines
+        self.preprocess = self.parse_steps(tool_data.get("preprocess", []))
+        self.prompt = self.parse_step(tool_data.get("prompt", {}))
+        self.postprocess = self.parse_steps(tool_data.get("postprocess", []))
+
+    def parse_step(self, step: Union[dict, str]) -> dict:
+        if isinstance(step, dict):
+            return {
+                "engine": step.get("engine", "natural"),
+                "code": step.get("code", ""),
+            }
+        elif isinstance(step, str):  # For backward compatibility
+            return {"engine": "natural", "code": step}
+        else:
+            raise ValueError("Invalid step format")
+
+    def parse_steps(self, steps: list) -> list:
+        return [self.parse_step(step) for step in steps]
+
+    def execute(
+        self,
+        input_values: dict,
+        tools_dict: dict,
+        jinja_env: Environment,
+        command: str,
+        npc=None,
+    ):
+        context = npc.shared_context
+        context.update(
+            {
+                "inputs": input_values,
+                "tools": tools_dict,
+                "llm_response": None,
+                "output": None,
+                "command": command,
+            }
+        )
+        # Process Preprocess Steps
+        for step in self.preprocess:
+            context = self.execute_step(step, context, jinja_env, npc=npc)
+
+        # Process Prompt
+        context = self.execute_step(self.prompt, context, jinja_env, npc=npc)
+
+        # Process Postprocess Steps
+        for step in self.postprocess:
+            context = self.execute_step(step, context, jinja_env, npc=npc)
+
+        # Return the final output
+        if context.get("output") is not None:
+            return context.get("output")
+        elif context.get("llm_response") is not None:
+            return context.get("llm_response")
+
+    def execute_step(
+        self, step: dict, context: dict, jinja_env: Environment, npc: NPC = None
+    ):
+        engine = step.get("engine", "natural")
+        code = step.get("code", "")
+
+        if engine == "natural":
+            # Create template with debugging
+            from jinja2 import Environment, DebugUndefined
+
+            debug_env = Environment(undefined=DebugUndefined)
+            template = debug_env.from_string(code)
+
+            rendered_text = template.render(**context)  # Unpack context as kwargs
+            # print(len(rendered_text.strip()))
+            if len(rendered_text.strip()) > 0:
+                llm_response = get_llm_response(rendered_text, npc=npc)
+                # print(llm_response)
+                if context.get("llm_response") is None:
+                    # This is the prompt step
+                    context["llm_response"] = llm_response.get("response", "")
+                else:
+                    # This is a postprocess step; set output
+                    context["output"] = llm_response.get("response", "")
+
+        elif engine == "python":
+            # Execute Python code
+            exec_globals = {
+                "__builtins__": __builtins__,
+                "npc": npc,  # Pass npc to the execution environment
+                "context": context,
+                # Include necessary imports
+                "pd": pd,
+                "plt": plt,
+                "np": np,
+                "os": os,
+                "get_llm_response": get_llm_response,
+                "generate_image": generate_image,
+                "search_web": search_web,
+                "json": json,
+                "sklearn": __import__("sklearn"),
+                "TfidfVectorizer": __import__(
+                    "sklearn.feature_extraction.text"
+                ).feature_extraction.text.TfidfVectorizer,
+                "cosine_similarity": __import__(
+                    "sklearn.metrics.pairwise"
+                ).metrics.pairwise.cosine_similarity,
+                "Path": __import__("pathlib").Path,
+                "fnmatch": fnmatch,
+                "pathlib": pathlib,
+                "subprocess": subprocess,
+            }
+            exec_env = context.copy()
+            exec(code, exec_globals, exec_env)
+            context.update(exec_env)
+            # import pdb
+            # pdb.set_trace()
+        else:
+            raise ValueError(f"Unsupported engine '{engine}'")
+
+        return context
+
+    def to_dict(self):
+        return {
+            "tool_name": self.tool_name,
+            "inputs": self.inputs,
+            "preprocess": [self.step_to_dict(step) for step in self.preprocess],
+            "prompt": self.step_to_dict(self.prompt),
+            "postprocess": [self.step_to_dict(step) for step in self.postprocess],
+        }
+
+    def step_to_dict(self, step):
+        return {
+            "engine": step.get("engine"),
+            "code": step.get("code"),
+        }
+
+
+import subprocess
+import sqlite3
+import numpy as np
+import os
+import yaml
+from jinja2 import Environment, FileSystemLoader, Template, Undefined
+import pandas as pd
+import pathlib
+from typing import Dict, Any, Optional, Union
+import matplotlib.pyplot as plt
+import json
+import pathlib
+import fnmatch
+import matplotlib.pyplot as plt
 
 # plt.ion()
 
@@ -78,8 +356,10 @@ class NPC:
         return get_data_response(request, self.db_conn, self.tables)
 
     def get_llm_response(self, request: str, **kwargs):
-        print(self.model, self.provider)
-        return get_llm_response(request, self.model, self.provider, npc=self, **kwargs)
+        # print(self.model, self.provider)
+        return get_llm_response(
+            request, provider=self.provider, model=self.model, npc=self, **kwargs
+        )
 
 
 class Tool:
@@ -99,11 +379,11 @@ class Tool:
     def parse_step(self, step: Union[dict, str]) -> dict:
         if isinstance(step, dict):
             return {
-                "engine": step.get("engine", "plain_english"),
+                "engine": step.get("engine", "natural"),
                 "code": step.get("code", ""),
             }
         elif isinstance(step, str):  # For backward compatibility
-            return {"engine": "plain_english", "code": step}
+            return {"engine": "natural", "code": step}
         else:
             raise ValueError("Invalid step format")
 
@@ -118,7 +398,6 @@ class Tool:
         command: str,
         npc=None,
     ):
-
         context = npc.shared_context
         context.update(
             {
@@ -149,12 +428,10 @@ class Tool:
     def execute_step(
         self, step: dict, context: dict, jinja_env: Environment, npc: NPC = None
     ):
-
-        engine = step.get("engine", "plain_english")
+        engine = step.get("engine", "natural")
         code = step.get("code", "")
 
-        if engine == "plain_english":
-
+        if engine == "natural":
             # Create template with debugging
             from jinja2 import Environment, DebugUndefined
 
@@ -264,7 +541,7 @@ class NPCCompiler:
 
         # Call the LLM (this is simplified)
         llm_response = get_llm_response(prompt)
-        
+
         # Postprocess steps
     """
         for step in tool.postprocess:
@@ -285,6 +562,8 @@ class NPCCompiler:
             npc_file = npc_file.name + ".npc"
         if not npc_file.endswith(".npc"):
             raise ValueError("File must have .npc extension")
+        # get the absolute path
+        npc_file = os.path.abspath(npc_file)
 
         try:
             # Parse NPCs from both global and project directories
@@ -294,6 +573,7 @@ class NPCCompiler:
             self.resolve_all_npcs()
 
             # Finalize NPC profile
+            # print(npc_file)
             parsed_content = self.finalize_npc_profile(npc_file)
 
             # Load tools from both global and project directories
@@ -385,7 +665,8 @@ class NPCCompiler:
 
     def resolve_all_npcs(self):
         for npc_file in self.npc_cache:
-            self.resolve_npc_profile(npc_file)
+            npc = self.resolve_npc_profile(npc_file)
+            # print(npc)
 
     def resolve_npc_profile(self, npc_file: str) -> dict:
         if npc_file in self.resolved_npcs:
@@ -408,11 +689,14 @@ class NPCCompiler:
         return profile
 
     def finalize_npc_profile(self, npc_file: str) -> dict:
-        profile = self.resolved_npcs.get(npc_file)
+        profile = self.resolved_npcs.get(os.path.basename(npc_file))
         if not profile:
             raise ValueError(f"NPC {npc_file} has not been resolved.")
 
         # Resolve any remaining references
+        # Log the profile content before processing
+        # print(f"Initial profile for {npc_file}: {profile}")
+
         for key, value in profile.items():
             if isinstance(value, str):
                 template = self.jinja_env.from_string(value)
@@ -425,61 +709,120 @@ class NPCCompiler:
 
         return profile
 
-    def compile_pipe(self, pipe_file: str, initial_input=None) -> list:
+    def execute_stage(self, stage, context, jinja_env):
+        step_name = stage["step_name"]
+        npc_name = stage["npc"]
+        npc_name = jinja_env.from_string(npc_name).render(context)
+        print("npc name: ", npc_name)
+        npc_path = get_npc_path(npc_name, self.db_path)
+        print("npc path: ", npc_path)
+        prompt_template = stage["task"]
+        num_samples = stage.get("num_samples", 1)
+
+        step_results = []
+        for sample_index in range(num_samples):
+            # Load the NPC
+            npc = load_npc_from_file(npc_path, sqlite3.connect(self.db_path))
+
+            # Render the prompt using Jinja2
+            prompt_template = jinja_env.from_string(prompt_template)
+            prompt = prompt_template.render(context, sample_index=sample_index)
+
+            response = npc.get_llm_response(prompt)
+            # print(response)
+            step_results.append({"npc": npc_name, "response": response["response"]})
+
+            # Update context with the response for the next step
+            context[f"{step_name}_{sample_index}"] = response[
+                "response"
+            ]  # Update context with step's response
+
+        return step_results
+
+    def aggregate_step_results(self, step_results, aggregation_strategy):
+        responses = [result["response"] for result in step_results]
+        if len(responses) == 1:
+            return responses[0]
+        if aggregation_strategy == "concat":
+            return "\n".join(responses)
+        elif aggregation_strategy == "summary":
+            # Use the LLM to generate a summary of the responses
+            response_text = "\n".join(responses)
+            summary_prompt = (
+                f"Please provide a concise summary of the following responses: "
+                + response_text
+            )
+
+            summary = self.get_llm_response(summary_prompt)["response"]
+            return summary
+        elif aggregation_strategy == "pessimistic_critique":
+            # Use the LLM to provide a pessimistic critique of the responses
+            response_text = "\n".join(responses)
+            critique_prompt = f"Please provide a pessimistic critique of the following responses:\n\n{response_text}"
+
+            critique = self.get_llm_response(critique_prompt)["response"]
+            return critique
+        elif aggregation_strategy == "optimistic_view":
+            # Use the LLM to provide an optimistic view of the responses
+            response_text = "\n".join(responses)
+            optimistic_prompt = f"Please provide an optimistic view of the following responses:\n\n{response_text}"
+            optimistic_view = self.get_llm_response(optimistic_prompt)["response"]
+            return optimistic_view
+        elif aggregation_strategy == "balanced_analysis":
+            # Use the LLM to provide a balanced analysis of the responses
+            response = "\n".join(responses)
+            analysis_prompt = f"Please provide a balanced analysis of the following responses:\n\n{response}"
+
+            balanced_analysis = self.get_llm_response(analysis_prompt)["response"]
+            return balanced_analysis
+        elif aggregation_strategy == "first":
+            return responses[0]
+        elif aggregation_strategy == "last":
+            return responses[-1]
+        else:
+            raise ValueError(f"Invalid aggregation strategy: {aggregation_strategy}")
+
+    def compile_pipe(self, pipe_file: str, initial_input=None) -> dict:
         if pipe_file in self.pipe_cache:
             return self.pipe_cache[pipe_file]
 
         if not pipe_file.endswith(".pipe"):
             raise ValueError("Pipeline file must have .pipe extension")
 
-        try:
-            with open(os.path.join(self.npc_directory, pipe_file), "r") as f:
-                pipeline_data = yaml.safe_load(f)
+        print(pipe_file)
 
-            context = {"input": initial_input}
-            results = []
-            jinja_env = Environment(
-                loader=FileSystemLoader("."), undefined=SilentUndefined
-            )
+        with open(pipe_file, "r") as f:
+            pipeline_data = yaml.safe_load(f)
 
-            for step in pipeline_data["steps"]:
-                npc_name = step["npc"]
-                prompt_template = step["prompt"]
+        final_output = {}
+        jinja_env = Environment(loader=FileSystemLoader("."), undefined=SilentUndefined)
 
-                # Load the NPC
-                npc_path = get_npc_path(npc_name, self.db_path)
-                npc = load_npc_from_file(
-                    npc_path, sqlite3.connect(self.db_path)
-                )  # Create a new connection for each NPC
+        context = {"input": initial_input, **self.npc_cache}
 
-                # Render the prompt using Jinja2
-                prompt_template = jinja_env.from_string(prompt_template)
-                prompt = prompt_template.render(context)
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            pipeline_name = os.path.basename(pipe_file).replace(".pipe", "")
 
-                response = npc.get_llm_response(prompt)
-                print(response)
-                results.append({"npc": npc_name, "response": response})
+            for stage in pipeline_data["steps"]:
+                step_results = self.execute_stage(stage, context, jinja_env)
+                aggregated_result = self.aggregate_step_results(
+                    step_results, stage.get("aggregation_strategy", "first")
+                )
 
-                # Update context with the response for the next step
-                context["input"] = response
-                context[npc_name] = response  # Update context with NPC's response
+                # Store in database
+                cursor.execute(
+                    "INSERT INTO pipeline_runs (pipeline_name, step_name, output) VALUES (?, ?, ?)",
+                    (pipeline_name, stage["step_name"], str(aggregated_result)),
+                )
 
-                # Pass information to the next NPC if specified
-                pass_to = step.get("pass_to")
-                if pass_to:
-                    context["pass_to"] = pass_to
+                final_output[stage["step_name"]] = aggregated_result
+                context[stage["step_name"]] = aggregated_result
 
-            self.pipe_cache[pipe_file] = results  # Cache the results
-            return results
+            conn.commit()
 
-        except FileNotFoundError:
-            raise ValueError(f"NPC file not found: {npc_path}")
-        except yaml.YAMLError as e:
-            raise ValueError(
-                f"Error parsing YAML in pipeline file {pipe_file}: {str(e)}"
-            )
-        except Exception as e:
-            raise ValueError(f"Error compiling pipeline {pipe_file}: {str(e)}")
+        self.pipe_cache[pipe_file] = final_output  # Cache the results
+
+        return final_output
 
     def merge_profiles(self, parent, child) -> dict:
         merged = parent.copy()
@@ -497,9 +840,8 @@ class NPCCompiler:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 npc_name = parsed_content["name"]
-                source_path = os.path.join(
-                    self.npc_directory, npc_file
-                )  # Use source_path
+                source_path = npc_file
+
                 cursor.execute(
                     "INSERT OR REPLACE INTO compiled_npcs (name, source_path, compiled_content) VALUES (?, ?, ?)",  # Correct column name
                     (npc_name, source_path, yaml.dump(parsed_content)),
@@ -515,12 +857,21 @@ class NPCCompiler:
 
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
+    print(npc_file)
+    if not npc_file.endswith(".npc"):
+        # append it just incase
+        name += ".npc"
+
     try:
+        if not os.path.isabs(npc_file):
+            npc_file = os.path.join(os.path.abspath(os.path.dir), npc_file)
+
         with open(npc_file, "r") as f:
             npc_data = yaml.safe_load(f)
 
         # Extract fields from YAML
         name = npc_data["name"]
+
         primary_directive = npc_data.get("primary_directive")
         suggested_tools_to_use = npc_data.get("suggested_tools_to_use")
         restrictions = npc_data.get("restrictions", [])
@@ -598,3 +949,598 @@ def load_tools_from_directory(directory) -> list:
     # else:
     # print(f"Tools directory not found: {directory}")
     return tools
+
+
+import pandas as pd
+import yaml
+from typing import List, Dict, Any, Union
+
+
+class NPCSQLOperations(NPCCompiler):
+    def __init__(self, npc_directory, db_path):
+        super().__init__(npc_directory, db_path)
+
+    def _get_context(
+        self, df: pd.DataFrame, context: Union[str, Dict, List[str]]
+    ) -> str:
+        """Resolve context from different sources"""
+        if isinstance(context, str):
+            # Check if it's a column reference
+            if context in df.columns:
+                return df[context].to_string()
+            # Assume it's static text
+            return context
+        elif isinstance(context, list):
+            # List of column names to include
+            return " ".join(df[col].to_string() for col in context if col in df.columns)
+        elif isinstance(context, dict):
+            # YAML-style context
+            return yaml.dump(context)
+        return ""
+
+    # SINGLE PROMPT OPERATIONS
+    def synthesize(
+        self,
+        query,
+        df: pd.DataFrame,
+        columns: List[str],
+        npc: str,
+        context: Union[str, Dict, List[str]],
+        framework: str,
+    ) -> pd.Series:
+        context_text = self._get_context(df, context)
+
+        def apply_synthesis(row):
+            # we have f strings from the query, we want to fill those back in in the request
+            request = query.format(**row[columns])
+            prompt = f"""Framework: {framework}
+                        Context: {context_text}
+                        Text to synthesize: {request}
+                        Synthesize the above text."""
+
+            result = self.execute_stage(
+                {"step_name": "synthesize", "npc": npc, "task": prompt},
+                {},
+                self.jinja_env,
+            )
+
+            return result[0]["response"]
+
+        # columns a list
+        columns_str = "_".join(columns)
+        df_out = df[columns].apply(apply_synthesis, axis=1)
+        return df_out
+
+    # MULTI-PROMPT/PARALLEL OPERATIONS
+    def spread_and_sync(
+        self,
+        df: pd.DataFrame,
+        column: str,
+        npc: str,
+        variations: List[str],
+        sync_strategy: str,
+        context: Union[str, Dict, List[str]],
+    ) -> pd.Series:
+        context_text = self._get_context(df, context)
+
+        def apply_spread_sync(text):
+            results = []
+            for variation in variations:
+                prompt = f"""Variation: {variation}
+                            Context: {context_text}
+                            Text to analyze: {text}
+                            Analyze the above text with {variation} perspective."""
+
+                result = self.execute_stage(
+                    {"step_name": f"spread_{variation}", "npc": npc, "task": prompt},
+                    {},
+                    self.jinja_env,
+                )
+
+                results.append(result[0]["response"])
+
+            # Sync results
+            sync_result = self.aggregate_step_results(
+                [{"response": r} for r in results], sync_strategy
+            )
+
+            return sync_result
+
+        return df[column].apply(apply_spread_sync)
+        # COMPARISON OPERATIONS
+
+    def contrast(
+        self,
+        df: pd.DataFrame,
+        col1: str,
+        col2: str,
+        npc: str,
+        context: Union[str, Dict, List[str]],
+        comparison_framework: str,
+    ) -> pd.Series:
+        context_text = self._get_context(df, context)
+
+        def apply_contrast(row):
+            prompt = f"""Framework: {comparison_framework}
+                        Context: {context_text}
+                        Text 1: {row[col1]}
+                        Text 2: {row[col2]}
+                        Compare and contrast the above texts."""
+
+            result = self.execute_stage(
+                {"step_name": "contrast", "npc": npc, "task": prompt},
+                {},
+                self.jinja_env,
+            )
+
+            return result[0]["response"]
+
+        return df.apply(apply_contrast, axis=1)
+
+    def sql_operations(self, sql: str) -> pd.DataFrame:
+        # Execute the SQL query
+
+        """
+        1. delegate(COLUMN, npc, query, context, tools, reviewers)
+        2. dilate(COLUMN, npc, query, context, scope, reviewers)
+        3. erode(COLUMN, npc, query, context, scope, reviewers)
+        4. strategize(COLUMN, npc, query, context, timeline, constraints)
+        5. validate(COLUMN, npc, query, context, criteria)
+        6. synthesize(COLUMN, npc, query, context, framework)
+        7. decompose(COLUMN, npc, query, context, granularity)
+        8. criticize(COLUMN, npc, query, context, framework)
+        9. summarize(COLUMN, npc, query, context, style)
+        10. advocate(COLUMN, npc, query, context, perspective)
+
+        MULTI-PROMPT/PARALLEL OPERATIONS
+        11. spread_and_sync(COLUMN, npc, query, variations, sync_strategy, context)
+        12. bootstrap(COLUMN, npc, query, sample_params, sync_strategy, context)
+        13. resample(COLUMN, npc, query, variation_strategy, sync_strategy, context)
+
+        COMPARISON OPERATIONS
+        14. mediate(COL1, COL2, npc, query, context, resolution_strategy)
+        15. contrast(COL1, COL2, npc, query, context, comparison_framework)
+        16. reconcile(COL1, COL2, npc, query, context, alignment_strategy)
+
+        MULTI-COLUMN INTEGRATION
+        17. integrate(COLS[], npc, query, context, integration_method)
+        18. harmonize(COLS[], npc, query, context, harmony_rules)
+        19. orchestrate(COLS[], npc, query, context, workflow)
+        """
+
+    # Example usage in SQL-like syntax:
+    """
+    def execute_sql(self, sql: str) -> pd.DataFrame:
+        # This would be implemented to parse and execute SQL with our custom functions
+        # Example SQL:
+        '''
+        SELECT
+            customer_id,
+            synthesize(feedback_text,
+                      npc='analyst',
+                      context=customer_segment,
+                      framework='satisfaction') as analysis,
+            spread_and_sync(price_sensitivity,
+                          npc='pricing_agent',
+                          variations=['conservative', 'aggressive'],
+                          sync_strategy='balanced_analysis',
+                          context=market_context) as price_strategy
+        FROM customer_data
+        '''
+        pass
+    """
+
+
+class NPCDBTAdapter:
+    def __init__(self, npc_sql: NPCSQLOperations):
+        self.npc_sql = npc_sql
+        self.models = {}
+
+    def ref(self, model_name: str) -> pd.DataFrame:
+        # Implementation for model referencing
+        return self.models.get(model_name)
+
+    def parse_model(self, model_sql: str) -> pd.DataFrame:
+        # Parse the SQL model and execute with our custom functions
+        pass
+
+
+class AIFunctionParser:
+    """Handles parsing and extraction of AI function calls from SQL"""
+
+    @staticmethod
+    def extract_function_params(sql: str) -> Dict[str, Dict]:
+        """Extract AI function parameters from SQL"""
+        ai_functions = {}
+
+        pattern = r"(\w+)\s*\(((?:[^()]*|\([^()]*\))*)\)"
+        matches = re.finditer(pattern, sql)
+
+        for match in matches:
+            func_name = match.group(1)
+            if func_name in ["synthesize", "spread_and_sync"]:
+                params = match.group(2).split(",")
+                ai_functions[func_name] = {
+                    "query": params[0].strip().strip("\"'"),
+                    "npc": params[1].strip().strip("\"'"),
+                    "context": params[2].strip().strip("\"'"),
+                }
+
+        return ai_functions
+
+
+class SQLModel:
+    def __init__(self, name: str, content: str, path: str, npc_directory: str):
+        self.name = name
+        self.content = content
+        self.path = path
+        self.npc_directory = npc_directory  # This sets the npc_directory attribute
+
+        self.dependencies = self._extract_dependencies()
+        self.has_ai_function = self._check_ai_functions()
+        self.ai_functions = self._extract_ai_functions()
+        print(f"Initializing SQLModel with NPC directory: {npc_directory}")
+
+    def _extract_dependencies(self) -> Set[str]:
+        """Extract model dependencies using ref() calls"""
+        pattern = r"\{\{\s*ref\(['\"]([^'\"]+)['\"]\)\s*\}\}"
+        return set(re.findall(pattern, self.content))
+
+    def _check_ai_functions(self) -> bool:
+        """Check if the model contains AI function calls"""
+        ai_functions = [
+            "synthesize",
+            "spread_and_sync",
+            "delegate",
+            "dilate",
+            "erode",
+            "strategize",
+            "validate",
+            "decompose",
+            "criticize",
+            "summarize",
+            "advocate",
+            "bootstrap",
+            "resample",
+            "mediate",
+            "contrast",
+            "reconcile",
+            "integrate",
+            "harmonize",
+            "orchestrate",
+        ]
+        return any(func in self.content for func in ai_functions)
+
+    def _extract_ai_functions(self) -> Dict[str, Dict]:
+        """Extract all AI functions and their parameters from the SQL content."""
+        ai_functions = {}
+        pattern = r"(\w+)\s*\(((?:[^()]*|\([^()]*\))*)\)"
+        matches = re.finditer(pattern, self.content)
+
+        for match in matches:
+            func_name = match.group(1)
+            if func_name in [
+                "synthesize",
+                "spread_and_sync",
+                "delegate",
+                "dilate",
+                "erode",
+                "strategize",
+                "validate",
+                "decompose",
+                "criticize",
+                "summarize",
+                "advocate",
+                "bootstrap",
+                "resample",
+                "mediate",
+                "contrast",
+                "reconcile",
+                "integrate",
+                "harmonize",
+                "orchestrate",
+            ]:
+                params = [
+                    param.strip().strip("\"'") for param in match.group(2).split(",")
+                ]
+                npc = params[1]
+                if not npc.endswith(".npc"):
+                    npc = npc.replace(".npc", "")
+                if self.npc_directory in npc:
+                    npc = npc.replace(self.npc_directory, "")
+
+                print(npc)
+                ai_functions[func_name] = {
+                    "column": params[0],
+                    "npc": npc,
+                    "query": params[2],
+                    "context": params[3] if len(params) > 3 else None,
+                }
+        return ai_functions
+
+
+class ModelCompiler:
+    def __init__(self, models_dir: str, db_path: str, npc_directory: str):
+        self.models_dir = Path(models_dir)
+        self.db_path = db_path
+        self.models: Dict[str, SQLModel] = {}
+        self.npc_operations = NPCSQLOperations(npc_directory, db_path)
+        self.npc_directory = npc_directory
+
+    def discover_models(self):
+        """Discover all SQL models in the models directory"""
+        self.models = {}
+        for sql_file in self.models_dir.glob("**/*.sql"):
+            model_name = sql_file.stem
+            with open(sql_file, "r") as f:
+                content = f.read()
+            self.models[model_name] = SQLModel(
+                model_name, content, str(sql_file), self.npc_directory
+            )
+            print(f"Discovered model: {model_name}")
+        return self.models
+
+    def build_dag(self) -> Dict[str, Set[str]]:
+        """Build dependency graph"""
+        dag = {}
+        for model_name, model in self.models.items():
+            dag[model_name] = model.dependencies
+        print(f"Built DAG: {dag}")
+        return dag
+
+    def topological_sort(self) -> List[str]:
+        """Generate execution order using topological sort"""
+        dag = self.build_dag()
+        in_degree = defaultdict(int)
+
+        for node, deps in dag.items():
+            for dep in deps:
+                in_degree[dep] += 1
+                if dep not in dag:
+                    dag[dep] = set()
+
+        queue = deque([node for node in dag.keys() if len(dag[node]) == 0])
+        result = []
+
+        while queue:
+            node = queue.popleft()
+            result.append(node)
+
+            for dependent, deps in dag.items():
+                if node in deps:
+                    deps.remove(node)
+                    if len(deps) == 0:
+                        queue.append(dependent)
+
+        if len(result) != len(dag):
+            raise ValueError("Circular dependency detected")
+
+        print(f"Execution order: {result}")
+        return result
+
+    def _replace_model_references(self, sql: str) -> str:
+        ref_pattern = r"\{\{\s*ref\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}"
+
+        def replace_ref(match):
+            model_name = match.group(1)
+            if model_name not in self.models:
+                raise ValueError(
+                    f"Model '{model_name}' not found during ref replacement."
+                )
+            return model_name
+
+        replaced_sql = re.sub(ref_pattern, replace_ref, sql)
+        return replaced_sql
+
+    def compile_model(self, model_name: str) -> str:
+        """Compile a single model, resolving refs."""
+        model = self.models[model_name]
+        compiled_sql = model.content
+        compiled_sql = self._replace_model_references(compiled_sql)
+        print(f"Compiled SQL for {model_name}:\n{compiled_sql}")
+        return compiled_sql
+
+    def _extract_base_query(self, sql: str) -> str:
+        for dep in self.models[self.current_model].dependencies:
+            sql = sql.replace(f"{{{{ ref('{dep}') }}}}", dep)
+
+        parts = sql.split("FROM", 1)
+        if len(parts) != 2:
+            raise ValueError("Invalid SQL syntax")
+
+        select_part = parts[0].replace("SELECT", "").strip()
+        from_part = "FROM" + parts[1]
+
+        columns = re.split(r",\s*(?![^()]*\))", select_part.strip())
+
+        final_columns = []
+        for col in columns:
+            if "synthesize(" not in col:
+                final_columns.append(col)
+            else:
+                alias_match = re.search(r"as\s+(\w+)\s*$", col, re.IGNORECASE)
+                if alias_match:
+                    final_columns.append(f"NULL as {alias_match.group(1)}")
+
+        final_sql = f"SELECT {', '.join(final_columns)} {from_part}"
+        print(f"Extracted base query:\n{final_sql}")
+
+        return final_sql
+
+    def execute_model(self, model_name: str) -> pd.DataFrame:
+        """Execute a model and materialize it to the database"""
+        self.current_model = model_name
+        model = self.models[model_name]
+        compiled_sql = self.compile_model(model_name)
+
+        try:
+            if model.has_ai_function:
+                df = self._execute_ai_model(compiled_sql, model)
+            else:
+                df = self._execute_standard_sql(compiled_sql)
+
+            self._materialize_to_db(model_name, df)
+            return df
+
+        except Exception as e:
+            print(f"Error executing model {model_name}: {str(e)}")
+            raise
+
+    def _execute_standard_sql(self, sql: str) -> pd.DataFrame:
+        with sqlite3.connect(self.db_path) as conn:
+            try:
+                sql = re.sub(r"--.*?\n", "\n", sql)
+                sql = re.sub(r"\s+", " ", sql).strip()
+                return pd.read_sql(sql, conn)
+            except Exception as e:
+                print(f"Failed to execute SQL: {sql}")
+                print(f"Error: {str(e)}")
+                raise
+
+    def execute_ai_function(self, query, npc, column_value, context):
+        """Execute a specific AI function logic - placeholder"""
+        print(f"Executing AI function on value: {column_value}")
+        synthesized_value = (
+            f"Processed({query}): {column_value} in context {context} with npc {npc}"
+        )
+        return synthesized_value
+
+    def _execute_ai_model(self, sql: str, model: SQLModel) -> pd.DataFrame:
+        try:
+            base_sql = self._extract_base_query(sql)
+            print(f"Executing base SQL:\n{base_sql}")
+            df = self._execute_standard_sql(base_sql)
+
+            # extract the columns they are between {} pairs
+            columns = re.findall(r"\{([^}]+)\}", sql)
+
+            # Handle AI function a
+            for func_name, params in model.ai_functions.items():
+                if func_name == "synthesize":
+                    query_template = params["query"]
+
+                    npc = params["npc"]
+                    # only take the after the split "/"
+                    npc = npc.split("/")[-1]
+                    context = params["context"]
+                    # Call the synthesize method using DataFrame directly
+                    synthesized_df = self.npc_operations.synthesize(
+                        query=query_template,  # The raw query to format
+                        df=df,  # The DataFrame containing the data
+                        columns=columns,  # The column(s) used to format the query
+                        npc=npc,  # NPC parameter
+                        context=context,  # Context parameter
+                        framework="default_framework",  # Adjust this as per your needs
+                    )
+
+                    # Optionally pull the synthesized data into a new column
+                    df[
+                        "ai_analysis"
+                    ] = synthesized_df  # Adjust as per what synthesize returns
+
+            return df
+
+        except Exception as e:
+            print(f"Error in AI model execution: {str(e)}")
+            raise
+
+    def _materialize_to_db(self, model_name: str, df: pd.DataFrame):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(f"DROP TABLE IF EXISTS {model_name}")
+            df.to_sql(model_name, conn, index=False)
+            print(f"Materialized model {model_name} to database")
+
+    def _table_exists(self, table_name: str) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name=?;
+            """,
+                (table_name,),
+            )
+            return cursor.fetchone() is not None
+
+    def run_all_models(self):
+        """Execute all models in dependency order"""
+        self.discover_models()
+        execution_order = self.topological_sort()
+        print(f"Running models in order: {execution_order}")
+
+        results = {}
+        for model_name in execution_order:
+            print(f"\nExecuting model: {model_name}")
+
+            model = self.models[model_name]
+            for dep in model.dependencies:
+                if not self._table_exists(dep):
+                    raise ValueError(
+                        f"Dependency {dep} not found in database for model {model_name}"
+                    )
+
+            results[model_name] = self.execute_model(model_name)
+
+        return results
+
+
+def create_example_models(
+    models_dir: str = os.path.abspath("./npc_team/factory/models/"),
+    db_path: str = "~/npcsh_history.db",
+    npc_directory: str = "./npc_team/",
+):
+    """Create example SQL model files"""
+    os.makedirs(os.path.abspath("./npc_team/factory/"), exist_ok=True)
+    os.makedirs(models_dir, exist_ok=True)
+    db_path = os.path.expanduser(db_path)
+    conn = sqlite3.connect(db_path)
+    df = pd.DataFrame(
+        {
+            "feedback": ["Great product!", "Could be better", "Amazing service"],
+            "customer_id": [1, 2, 3],
+            "timestamp": pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-03"]),
+        }
+    )
+
+    df.to_sql("raw_customer_feedback", conn, index=False, if_exists="replace")
+    print("Created raw_customer_feedback table")
+
+    compiler = ModelCompiler(models_dir, db_path, npc_directory)
+    results = compiler.run_all_models()
+
+    for model_name, df in results.items():
+        print(f"\nResults for {model_name}:")
+        print(df.head())
+
+    customer_feedback = """
+    SELECT
+        feedback,
+        customer_id,
+        timestamp
+    FROM raw_customer_feedback
+    WHERE LENGTH(feedback) > 10;
+    """
+
+    customer_insights = """
+    SELECT
+        customer_id,
+        feedback,
+        timestamp,
+        synthesize(
+            "feedback text: {feedback}",
+            "analyst",
+            "feedback_analysis"
+        ) as ai_analysis
+    FROM {{ ref('customer_feedback') }};
+    """
+
+    models = {
+        "customer_feedback.sql": customer_feedback,
+        "customer_insights.sql": customer_insights,
+    }
+
+    for name, content in models.items():
+        path = os.path.join(models_dir, name)
+        with open(path, "w") as f:
+            f.write(content)
+        print(f"Created model: {name}")

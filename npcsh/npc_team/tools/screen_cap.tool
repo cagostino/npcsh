@@ -26,10 +26,10 @@ preprocess:
 
       llm_output = analyze_image_base(inputs['prompt']+ '\n\n attached is a screenshot of my screen currently.', file_path, filename, npc=npc)
 prompt:
-  engine: "plain_english"
+  engine: "natural"
   code: ""
 postprocess:
-  - engine: "plain_english"
+  - engine: "natural"
     code: |
       Screenshot captured and saved as {{ filename }}.
       Analysis Result: {{ llm_output }}

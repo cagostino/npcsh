@@ -10,13 +10,13 @@ preprocess:
       df = pd.read_sql_query(inputs['sql_query'], npc.db_conn)
       context['df'] = df
 prompt:
-  engine: plain_english
+  engine: natural
   code: |
     The result of your SQL query is:
     ```
     {{ df }}
     ```
 postprocess:
-  - engine: plain_english
+  - engine: natural
     code: |
       {{ llm_response }}

@@ -20,10 +20,10 @@ preprocess:
       else:
           image_generated = False
 prompt:
-  engine: "plain_english"
+  engine: "natural"
   code: ""
 postprocess:
-  - engine: "plain_english"
+  - engine: "natural"
     code: |
       {% if image_generated %}
       The image has been saved as {{ filename }}.

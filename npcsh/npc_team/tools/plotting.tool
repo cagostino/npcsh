@@ -11,11 +11,11 @@ preprocess:
       plt.savefig('plot.png')
       context['plot_path'] = 'plot.png'
 prompt:
-  engine: plain_english
+  engine: natural
   code: |
     Generated plot saved to {{ plot_path }}.
 postprocess:
-  - engine: plain_english
+  - engine: natural
     code: |
       {{ llm_response }}
       ![Plot]({{ plot_path }})

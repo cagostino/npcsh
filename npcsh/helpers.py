@@ -11,6 +11,8 @@ import numpy as np
 import filecmp
 
 import shutil
+import tempfile
+import pandas as pd
 
 try:
     from sentence_transformers import util
@@ -331,32 +333,36 @@ def get_valid_npcs(db_path: str) -> List[str]:
     return npcs
 
 
-def get_npc_path(npc_name: str, db_path: str) -> Optional[str]:
-    """
-    Function Description:
-        This function retrieves the path to the compiled NPC file.
-    Args:
-        npc_name: The name of the NPC.
-        db_path: The path to the database file.
-    Keyword Args:
-        None
-    Returns:
-        The path to the NPC file if found, or None.
-    """
+def get_npc_path(npc_name: str, db_path: str) -> str:
     # First, check in project npc_team directory
     project_npc_team_dir = os.path.abspath("./npc_team")
-    npc_path = os.path.join(project_npc_team_dir, f"{npc_name}.npc")
-    if os.path.exists(npc_path):
-        return npc_path
+    project_npc_path = os.path.join(project_npc_team_dir, f"{npc_name}.npc")
 
     # Then, check in global npc_team directory
     user_npc_team_dir = os.path.expanduser("~/.npcsh/npc_team")
-    npc_path = os.path.join(user_npc_team_dir, f"{npc_name}.npc")
-    if os.path.exists(npc_path):
-        return npc_path
-    else:
-        print(f"NPC file not found: {npc_name}")
-        return None
+    global_npc_path = os.path.join(user_npc_team_dir, f"{npc_name}.npc")
+
+    # Check database for compiled NPCs
+    try:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            query = f"SELECT source_path FROM compiled_npcs WHERE name = '{npc_name}'"
+            cursor.execute(query)
+            result = cursor.fetchone()
+            print(result)
+            if result:
+                return result[0]
+    except Exception as e:
+        print(f"Database query error: {e}")
+
+    # Fallback to file paths
+    if os.path.exists(project_npc_path):
+        return project_npc_path
+
+    if os.path.exists(global_npc_path):
+        return global_npc_path
+
+    raise ValueError(f"NPC file not found: {npc_name}")
 
 
 def initialize_base_npcs_if_needed(db_path: str) -> None:
