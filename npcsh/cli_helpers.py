@@ -936,7 +936,7 @@ def execute_slash_command(
 
 /exit or /quit #Exits the current NPC mode or the npcsh shell.
 
-#Note
+# Note
 Bash commands and other programs can be executed directly."""
 
         return {
@@ -1224,6 +1224,11 @@ def execute_command(
     model_override, provider_override, command = get_model_and_provider(
         command, available_models
     )
+    if model_override is None:
+        model_override = os.getenv("NPCSH_MODEL")
+    if provider_override is None:
+        provider_override = os.getenv("NPCSH_PROVIDER")
+
     # print(command, model_override, provider_override)
     if command.startswith("/"):
 

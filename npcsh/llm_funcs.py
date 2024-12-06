@@ -52,7 +52,9 @@ anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", None)
 openai_api_key = os.getenv("OPENAI_API_KEY", None)
 
 npcsh_model = os.environ.get("NPCSH_MODEL", "llama3.2")
+print("npcsh_model", npcsh_model)
 npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
+print("npcsh_provider", npcsh_provider)
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
@@ -1257,7 +1259,7 @@ def get_llm_response(
         else:
             model = "llama3.2"
 
-    print(provider, model)
+    # print(provider, model)
     if provider == "ollama":
         if model is None:
             if images is not None:
@@ -1312,8 +1314,8 @@ def get_llm_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
     else:
-        print(provider)
-        print(model)
+        #print(provider)
+        #print(model)
         return "Error: Invalid provider specified."
 
 
@@ -1679,8 +1681,8 @@ def execute_llm_command(
 def check_llm_command(
     command: str,
     command_history: Any,
-    model: str = None,
-    provider: str = None,
+    model: str = npcsh_model,
+    provider: str = npcsh_provider,
     npc: Any = None,
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
@@ -1981,6 +1983,7 @@ def execute_llm_question(
     location = os.getcwd()
     if messages is None:
         messages = []
+        messages.append({"role": "user", "content": command})
 
     # Build context from retrieved documents
     if retrieved_docs:
@@ -1995,7 +1998,6 @@ def execute_llm_question(
         # messages.append({"role": "system", "content": context_message})
 
     # Append the user's message to messages
-    messages.append({"role": "user", "content": command})
 
     # Print messages before calling get_conversation for debugging
     # print("Messages before get_conversation:", messages)
