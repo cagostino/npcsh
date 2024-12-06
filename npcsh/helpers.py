@@ -352,8 +352,19 @@ def get_npc_path(npc_name: str, db_path: str) -> str:
             print(result)
             if result:
                 return result[0]
+
     except Exception as e:
-        print(f"Database query error: {e}")
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                query = f"SELECT source_path FROM compiled_npcs WHERE name = {npc_name}"
+                cursor.execute(query)
+                result = cursor.fetchone()
+                print(result)
+                if result:
+                    return result[0]
+        except Exception as e:
+            print(f"Database query error: {e}")
 
     # Fallback to file paths
     if os.path.exists(project_npc_path):
