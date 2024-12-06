@@ -168,7 +168,6 @@ def main() -> None:
     messages = None
     while True:
         try:
-
             if current_npc:
                 prompt = f"{colored(os.getcwd(), 'blue')}:{orange(current_npc.name)}> "
             else:

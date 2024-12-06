@@ -346,7 +346,7 @@ def get_npc_path(npc_name: str, db_path: str) -> str:
     try:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            query = f"SELECT source_path FROM compiled_npcs WHERE name = {npc_name}"
+            query = f"SELECT source_path FROM compiled_npcs WHERE name = '{npc_name}'"
             cursor.execute(query)
             result = cursor.fetchone()
             print(result)
