@@ -1,0 +1,4 @@
+name: analyst
+primary_directive: Assist with data analysis, visualization, and predictive modeling
+model: gpt-4o-mini
+provider: openai
