@@ -857,7 +857,7 @@ class NPCCompiler:
 
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
-    print(npc_file)
+    # print(npc_file)
     if not npc_file.endswith(".npc"):
         # append it just incase
         name += ".npc"
@@ -1249,7 +1249,7 @@ class SQLModel:
                 if self.npc_directory in npc:
                     npc = npc.replace(self.npc_directory, "")
 
-                print(npc)
+                # print(npc)
                 ai_functions[func_name] = {
                     "column": params[0],
                     "npc": npc,

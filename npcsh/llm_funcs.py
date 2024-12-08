@@ -17,6 +17,31 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from diffusers import StableDiffusionPipeline
 import base64
+import subprocess
+import requests
+import os
+import json
+import ollama
+import sqlite3
+import pandas as pd
+import openai
+from dotenv import load_dotenv
+import anthropic
+import re
+from jinja2 import Environment, FileSystemLoader, Template, Undefined
+from datetime import datetime
+from typing import List, Dict, Any, Optional, Union
+
+
+
+def extract_relevant_data(content: str, search_term: str) -> str:
+    """Extract relevant information based on a search term."""
+    # A naive implementation just to illustrate. This should be improved based on your needs.
+    lines = content.split("\n")
+    relevant_data = "\n".join(
+        [line for line in lines if search_term.lower() in line.lower()]
+    )
+    return relevant_data if relevant_data else "No relevant information found."
 
 
 # Load environment variables from .env file
@@ -1314,26 +1339,11 @@ def get_llm_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
     else:
-        #print(provider)
-        #print(model)
+        # print(provider)
+        # print(model)
         return "Error: Invalid provider specified."
 
 
-def load_data(file_path: str, dataframes: Dict[str, pd.DataFrame], name: str):
-    """
-    Function Description:
-        This function loads data from a file.
-    Args:
-        file_path (str): The file path.
-        dataframes (Dict[str, pd.DataFrame]): The dictionary of dataframes.
-        name (str): The name of the dataframe.
-    Keyword Args:
-        None
-    Returns:
-        None
-    """
-    dataframes[name] = pd.read_csv(file_path)
-    print(f"Data loaded as '{name}'")
 
 
 def execute_data_operations(

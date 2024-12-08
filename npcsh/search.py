@@ -4,11 +4,11 @@ import requests
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
 from googlesearch import search
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import numpy as np
 
 try:
-    from sentence_transformers import util
+    from sentence_transformers import util, SentenceTransformer
 except:
     pass
 
@@ -78,10 +78,11 @@ def search_web(
 
 def rag_search(
     query: str,
-    text_data: Dict[str, str],
-    embedding_model: Any,
+    text_data: Union[Dict[str, str], str],
+    embedding_model: Any = None,
     text_data_embedded: Optional[Dict[str, np.ndarray]] = None,
-    similarity_threshold: float = 0.2,
+    similarity_threshold: float = 0.3,
+    device="cpu",
 ) -> List[str]:
     """
     Function Description:
@@ -97,6 +98,8 @@ def rag_search(
         A list of relevant snippets.
 
     """
+    if embedding_model is None:
+        embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
     results = []
 
@@ -104,31 +107,64 @@ def rag_search(
     query_embedding = embedding_model.encode(
         query, convert_to_tensor=True, show_progress_bar=False
     )
-
-    for filename, content in text_data.items():
-        # Split content into lines
-        lines = content.split("\n")
+    if isinstance(text_data, str):
+        # split at the sentence level
+        lines = text_data.split(".")
         if not lines:
-            continue
+            return results
         # Compute embeddings for each line
         if text_data_embedded is None:
             line_embeddings = embedding_model.encode(lines, convert_to_tensor=True)
         else:
-            line_embeddings = text_data_embedded[filename]
+            line_embeddings = text_data_embedded
         # Compute cosine similarities
         cosine_scores = util.cos_sim(query_embedding, line_embeddings)[0].cpu().numpy()
 
         # Find indices of lines above the similarity threshold
-        ##print("most similar", np.max(cosine_scores))
-        ##print("most similar doc", lines[np.argmax(cosine_scores)])
         relevant_line_indices = np.where(cosine_scores >= similarity_threshold)[0]
+        # print("relevant_line_indices", cosine_scores)
+        # print(np.mean(cosine_scores))
+        # print(np.max(cosine_scores))
 
         for idx in relevant_line_indices:
-            idx = int(idx)  # Ensure idx is an integer
+            idx = int(idx)
             # Get context lines (±10 lines)
             start_idx = max(0, idx - 10)
             end_idx = min(len(lines), idx + 11)  # +11 because end index is exclusive
-            snippet = "\n".join(lines[start_idx:end_idx])
-            results.append((filename, snippet))
-    # print("results", results)
+            snippet = ". ".join(lines[start_idx:end_idx])
+            results.append(snippet)
+
+    elif isinstance(text_data, dict):
+        for filename, content in text_data.items():
+            # Split content into lines
+            lines = content.split("\n")
+            if not lines:
+                continue
+            # Compute embeddings for each line
+            if text_data_embedded is None:
+                line_embeddings = embedding_model.encode(lines, convert_to_tensor=True)
+            else:
+                line_embeddings = text_data_embedded[filename]
+            # Compute cosine similarities
+            cosine_scores = (
+                util.cos_sim(query_embedding, line_embeddings)[0].cpu().numpy()
+            )
+
+            # Find indices of lines above the similarity threshold
+            ##print("most similar", np.max(cosine_scores))
+            ##print("most similar doc", lines[np.argmax(cosine_scores)])
+            relevant_line_indices = np.where(cosine_scores >= similarity_threshold)[0]
+            # print("relevant_line_indices", cosine_scores)
+            # print(np.mean(cosine_scores))
+            # print(np.max(cosine_scores))
+            for idx in relevant_line_indices:
+                idx = int(idx)  # Ensure idx is an integer
+                # Get context lines (±10 lines)
+                start_idx = max(0, idx - 10)
+                end_idx = min(
+                    len(lines), idx + 11
+                )  # +11 because end index is exclusive
+                snippet = "\n".join(lines[start_idx:end_idx])
+                results.append((filename, snippet))
+        # print("results", results)
     return results

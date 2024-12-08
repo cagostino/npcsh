@@ -31,6 +31,7 @@ try:
 except:
     print("Could not load the sentence-transformers package.")
 
+from .load_data import load_pdf, load_csv, load_json, load_excel, load_txt, load_image
 from .llm_funcs import (
     get_available_models,
     get_model_and_provider,
@@ -982,6 +983,8 @@ Bash commands and other programs can be executed directly."""
         )
     elif command_name == "spool" or command_name == "sp":
         inherit_last = 0
+        device = "cpu"
+        rag_similarity_threshold = 0.3
         for part in args:
             if part.startswith("inherit_last="):
                 try:
@@ -991,9 +994,30 @@ Bash commands and other programs can be executed directly."""
                         "messages": messages,
                         "output": "Error: inherit_last must be an integer",
                     }
-                break
+            if part.startswith("device="):
+                device = part.split("=")[1]
+            if part.startswith("rag_similarity_threshold="):
+                rag_similarity_threshold = float(part.split("=")[1])
 
-        output = enter_spool_mode(command_history, inherit_last, npc=npc)
+        match = re.search(r"files=\s*\[(.*?)\]", command)
+        files = []
+        if match:
+            # Extract file list from the command
+            files = [
+                file.strip().strip("'").strip('"') for file in match.group(1).split(",")
+            ]
+
+            # Call the enter_spool_mode with the list of files
+        else:
+            files = None
+        output = enter_spool_mode(
+            command_history,
+            inherit_last,
+            files=files,
+            npc=npc,
+            rag_similarity_threshold=rag_similarity_threshold,
+            device=device,
+        )
         return {"messages": output["messages"], "output": output}
 
     else:
@@ -1002,7 +1026,8 @@ Bash commands and other programs can be executed directly."""
     subcommands = [f"/{command}"]
     return {"messages": messages, "output": output, "subcommands": subcommands}
 
-    ## flush  the current shell context
+
+## flush  the current shell context
 
 
 def execute_set_command(command: str, value: str) -> str:
@@ -1231,7 +1256,6 @@ def execute_command(
 
     # print(command, model_override, provider_override)
     if command.startswith("/"):
-
         result = execute_slash_command(
             command,
             command_history,
@@ -1835,32 +1859,58 @@ def enter_data_mode(command_history: Any, npc: Any = None) -> None:
 
 
 def enter_spool_mode(
-    command_history: Any, inherit_last: int = 0, npc: Any = None
+    command_history: Any,
+    inherit_last: int = 0,
+    npc: Any = None,
+    files: List[str] = None,  # New files parameter
+    rag_similarity_threshold: float = 0.3,
+    device: str = "cpu",
 ) -> Dict:
     """
     Function Description:
-        This function is used to enter the spool mode.
+        This function is used to enter the spool mode where files can be loaded into memory.
     Args:
         command_history : Any : The command history object.
         inherit_last : int : The number of last commands to inherit.
-    Keyword Args:
         npc : Any : The NPC object.
+        files : List[str] : List of file paths to load into the context.
     Returns:
         Dict : The messages and output.
 
     """
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
+
     spool_context = []
+    loaded_content = {}  # New dictionary to hold loaded content
+
+    # Load specified files if any
+    if files:
+        for file in files:
+            extension = os.path.splitext(file)[1].lower()
+            try:
+                if extension == ".pdf":
+                    content = load_pdf(file)["texts"].iloc[0]
+                elif extension == ".csv":
+                    content = load_csv(file)
+                else:
+                    print(f"Unsupported file type: {file}")
+                    continue
+                loaded_content[file] = content
+                print(f"Loaded content from: {file}")
+            except Exception as e:
+                print(f"Error loading {file}: {str(e)}")
+
+    # Add system message to context
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
-    # insert at the first position
     spool_context.insert(0, {"role": "assistant", "content": system_message})
+
     # Inherit last n messages if specified
     if inherit_last > 0:
         last_commands = command_history.get_all(limit=inherit_last)
         for cmd in reversed(last_commands):
-            spool_context.append({"role": "user", "content": cmd[2]})  # command
-            spool_context.append({"role": "assistant", "content": cmd[4]})  # output
+            spool_context.append({"role": "user", "content": cmd[2]})
+            spool_context.append({"role": "assistant", "content": cmd[4]})
 
     while True:
         try:
@@ -1868,9 +1918,52 @@ def enter_spool_mode(
             if user_input.lower() == "/sq":
                 print("Exiting spool mode.")
                 break
+            if user_input.startswith("/ots"):
+                if len(user_input) > 1:
+                    command_parts = user_input.split()
+                    filename = command_parts[1]
+                    file_path = os.path.join(os.getcwd(), filename)
+                    # Get user prompt about the image
+                    user_prompt = input(
+                        "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                    )
 
-            # Add user input to spool context
-            spool_context.append({"role": "user", "content": user_input})
+                    output = analyze_image(
+                        command_history,
+                        user_prompt,
+                        file_path,
+                        filename,
+                        npc=npc,
+                    )
+
+                else:
+                    output = capture_screenshot(npc=npc)
+                    user_prompt = input(
+                        "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                    )
+                    output = analyze_image(
+                        command_history,
+                        user_prompt,
+                        output["file_path"],
+                        output["filename"],
+                        npc=npc,
+                        **output["model_kwargs"],
+                    )
+                if output:
+                    if isinstance(output, dict) and "filename" in output:
+                        message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
+                    else:  # This handles both LLM responses and error messages (both strings)
+                        message = output
+                    return {
+                        "messages": messages,
+                        "output": message,
+                    }  # Return the message
+                else:  # Handle the case where capture_screenshot returns None
+                    print("Screenshot capture failed.")
+                    return {
+                        "messages": messages,
+                        "output": None,
+                    }  # Return None to indicate failure
 
             # Prepare kwargs for get_conversation
             kwargs_to_pass = {}
@@ -1881,13 +1974,38 @@ def enter_spool_mode(
                 if npc.provider:
                     kwargs_to_pass["provider"] = npc.provider
 
+            # Incorporate the loaded content into the prompt for conversation
+            if loaded_content:
+                context_content = ""
+                for filename, content in loaded_content.items():
+                    # now do a rag search with the loaded_content
+                    retrieved_docs = rag_search(
+                        user_input,
+                        content,
+                        similarity_threshold=rag_similarity_threshold,
+                        device=device,
+                    )
+                    if retrieved_docs:
+                        context_content += (
+                            f"\n\nLoaded content from: {filename}\n{content}\n\n"
+                        )
+                if len(context_content) > 0:
+                    user_input += f"""
+                    Here is the loaded content that may be relevant to your query:
+                        {context_content}
+                    Please reference it explicitly in your response and use it for answering.
+                    """
+
+            # Add user input to spool context
+            spool_context.append({"role": "user", "content": user_input})
+
             # Get the conversation
             conversation_result = get_conversation(spool_context, **kwargs_to_pass)
 
             # Handle potential errors in conversation_result
             if isinstance(conversation_result, str) and "Error" in conversation_result:
                 print(conversation_result)  # Print the error message
-                continue  # Skip to the next iteration of the loop
+                continue  # Skip to the next loop iteration
             elif (
                 not isinstance(conversation_result, list)
                 or len(conversation_result) == 0
@@ -1899,8 +2017,6 @@ def enter_spool_mode(
 
             # Extract assistant's reply, handling potential KeyError
             try:
-                # import pdb ; pdb.set_trace()
-
                 assistant_reply = spool_context[-1]["content"]
             except (KeyError, IndexError) as e:
                 print(f"Error extracting assistant's reply: {e}")

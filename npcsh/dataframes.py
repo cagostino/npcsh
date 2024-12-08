@@ -6,12 +6,13 @@ import pandas as pd
 import numpy as np
 import io
 from PIL import Image
-import fitz  # PyMuPDF
 from typing import Optional
 
 from .llm_funcs import get_llm_response
 from .audio import process_audio
 from .video import process_video
+
+from .load_data import load_pdf, load_csv, load_json, load_excel, load_txt, load_image
 
 
 def load_data_into_table(
@@ -38,81 +39,16 @@ def load_data_into_table(
         if file_path.endswith(".csv"):
             df = pd.read_csv(file_path)
         elif file_path.endswith(".pdf"):
-            # Extract text and images
-            pdf_document = fitz.open(file_path)
-            texts = []
-            images = []
-
-            for page_num in range(len(pdf_document)):
-                page = pdf_document[page_num]
-
-                # Extract text
-                text = page.get_text()
-                texts.append({"page": page_num + 1, "content": text})
-
-                # Extract images
-                image_list = page.get_images(full=True)
-                for img_index, img in enumerate(image_list):
-                    xref = img[0]
-                    base_image = pdf_document.extract_image(xref)
-                    image_bytes = base_image["image"]
-
-                    # Convert image to numpy array
-                    image = Image.open(io.BytesIO(image_bytes))
-                    img_array = np.array(image)
-
-                    images.append(
-                        {
-                            "page": page_num + 1,
-                            "index": img_index + 1,
-                            "array": img_array.tobytes(),
-                            "shape": img_array.shape,
-                            "dtype": str(img_array.dtype),
-                        }
-                    )
-
-            # Create DataFrame
-            df = pd.DataFrame(
-                {"texts": json.dumps(texts), "images": json.dumps(images)}, index=[0]
-            )
-
-            # Optionally create embeddings
-            try:
-                text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=1000, chunk_overlap=0
-                )
-                split_texts = text_splitter.split_text(
-                    "\n\n".join([t["content"] for t in texts])
-                )
-                embeddings = OpenAIEmbeddings()
-                db = Chroma.from_texts(
-                    split_texts, embeddings, collection_name=table_name
-                )
-                df["embeddings_collection"] = table_name
-            except Exception as e:
-                print(f"Warning: Could not create embeddings. Error: {e}")
-
+            df = load_pdf(file_path)
         elif file_path.endswith((".txt", ".log", ".md")):
-            with open(file_path, "r") as f:
-                text = f.read()
-            df = pd.DataFrame({"text": [text]})
+            df = load_txt(file_path)
         elif file_path.endswith((".xls", ".xlsx")):
-            df = pd.read_excel(file_path)
+            df = load_excel(file_path)
         elif file_path.lower().endswith(
             (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff")
         ):
             # Handle images as NumPy arrays
-            img = Image.open(file_path)
-            img_array = np.array(img)
-            # Store image shape for reconstruction
-            df = pd.DataFrame(
-                {
-                    "image_array": [img_array.tobytes()],
-                    "shape": [img_array.shape],
-                    "dtype": [img_array.dtype.str],
-                }
-            )
-
+            df = load_image(file_path)
         elif file_path.lower().endswith(
             (".mp4", ".avi", ".mov", ".mkv")
         ):  # Video files
@@ -141,9 +77,7 @@ def load_data_into_table(
         else:
             # Attempt to load as text if no other type matches
             try:
-                with open(file_path, "r") as file:
-                    content = file.read()
-                df = pd.DataFrame({"text": [content]})
+                df = load_txt(file_path)
             except Exception as e:
                 print(f"Could not load file: {e}")
                 return
