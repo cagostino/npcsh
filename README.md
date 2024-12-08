@@ -1,12 +1,12 @@
 <p align="center">
   <img src="https://raw.githubusercontent.com/cagostino/npcsh/main/npcsh/npcsh.png" alt="npcsh logo with sibiji the spider">
-</p>                                      
+</p>
 
 
 # npcsh
 
 
-`npcsh` is a command-line tool designed to integrate Large Language Models (LLMs) into your daily workflow. It leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web.
+`npcsh` is a command-line tool designed to integrate Large Language Models (LLMs) into your daily workflow by making them available through . It leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web.
 
 `npcsh` allows users to coordinate agents to form assembly lines of NPCs that can reliably accomplish complicated multi-step procedures.
 
@@ -119,8 +119,7 @@ The provider must be one of ['ollama', 'openai', 'anthropic'] and the model must
 
 Each NPC can be compiled to accomplish their primary directive and then any issues faced will be recorded and associated with the NPC so that it can reference it later through vector search. In any of the modes where a user requests input from an NPC, the NPC will include RAG search results before carrying out the request.
 
-
-## Examples
+## npcsh Examples
 
 Simple Bash Command: `ls -l`
 LLM-Generated Command: `list all files in the current directory`
@@ -128,6 +127,92 @@ NPC Compilation and use: `/com foreman.npc \n /foreman \n what is the status of 
 Image Generation: `/vixynt a cat wearing a hat`
 Screenshot Analysis: /ots What do you see in this screenshot?
 Data Interaction: /data load from data.csv as my_data followed by /data pd.my_data.head()
+
+
+
+
+
+## Python Examples
+Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
+
+### Example 1: Creating and Using an NPC
+This example shows how to create and initialize an NPC and use it to answer a question.
+```bash
+import sqlite3
+from npcsh import NPC, load_npc_from_file
+
+# Set up database connection
+db_path = '~/npcsh_history.db'
+conn = sqlite3.connect(db_path)
+
+# Load NPC from a file
+npc = load_npc_from_file('path/to/npc_file.npc', conn)
+
+# Ask a question to the NPC
+question = "What are the project updates?"
+llm_response = npc.get_llm_response(question)
+
+# Output the NPC's response
+print(f"{npc.name}: {llm_response['response']}")
+```
+### Using an NPC to Analyze Data
+This example shows how to use an NPC to perform data analysis on a DataFrame using LLM commands.
+
+
+```bash
+import pandas as pd
+from npcsh import NPC
+
+# Create dummy data for analysis
+data = {
+    'feedback': ["Great product!", "Could be better", "Amazing service"],
+    'customer_id': [1, 2, 3],
+}
+df = pd.DataFrame(data)
+
+# Initialize the NPC
+npc = NPC(name='Sibiji', db_conn=sqlite3.connect('~/npcsh_history.db'))
+
+# Formulate a command for analysis
+command = "Analyze customer feedback for sentiment."
+
+# Use the NPC to process the analysis
+output = npc.get_data_response(command)
+
+# Output the results
+print(f"Analysis Results: {output}")
+```
+
+Example 3: Creating and Using a Tool
+You can define a tool and execute it from within your Python script.
+```bash
+
+from npcsh import Tool, NPC
+# Create a tool from a dictionary
+tool_data = {
+    "tool_name": "my_tool",
+    "inputs": ["input_text"],
+    "preprocess": [{"engine": "natural", "code": "Preprocessing: {{ inputs.input_text }}"}],
+    "prompt": {"engine": "natural", "code": "Here is the output: {{ llm_response }}"},
+    "postprocess": []
+}
+
+# Instantiate the tool
+tool = Tool(tool_data)
+
+# Create an NPC instance
+npc = NPC(name='Sibiji', db_conn=sqlite3.connect('/path/to/npcsh_database.db'))
+
+# Define input values dictionary
+input_values = {
+    "input_text": "User input goes here"
+}
+
+# Execute the tool
+output = tool.execute(input_values, npc.tools_dict, None, 'Sample Command', npc)
+
+print('Tool Output:', output)
+```
 
 
 

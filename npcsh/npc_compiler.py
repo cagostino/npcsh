@@ -789,7 +789,7 @@ class NPCCompiler:
         if not pipe_file.endswith(".pipe"):
             raise ValueError("Pipeline file must have .pipe extension")
 
-        print(pipe_file)
+        # print(pipe_file)
 
         with open(pipe_file, "r") as f:
             pipeline_data = yaml.safe_load(f)
