@@ -6,18 +6,19 @@
 # npcsh
 
 
-`npcsh` is a command-line tool designed to integrate Large Language Models (LLMs) into your daily workflow by making them available through . It leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web.
+`npcsh` is a python-based command-line tool designed to integrate Large Language Models (LLMs) into your daily workflow by making them available through the command line shell.
+It leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web. Users can also leverage powerful macros to accomplish common tasks with LLMs like voice control, image generation, data analysis, screenshot capture and analysis, and more.
 
 `npcsh` allows users to coordinate agents to form assembly lines of NPCs that can reliably accomplish complicated multi-step procedures.
 
 ## Key Features
 
-* **Natural Language Interface:** Interact with your system using plain English.  `npcsh` translates your requests into executable commands or provides direct answers.
+* **Natural Language Interface:** Interact with your system using natural language.  `npcsh` translates your requests into executable commands or provides direct answers.
 * **NPC-Driven Interactions:** Define custom "NPCs" (Non-Player Characters) with specific personalities, directives, and tools. This allows for tailored interactions based on the task at hand.
 * **Local File Integration:** Seamlessly access and query information from your local files using Retrieval Augmented Generation (RAG). `npcsh` understands the context of your project.
 * **Web Search Capabilities:**  Don't have the answer locally? `npcsh` can search the web for you and integrate the findings into its responses.
 * **Tool Use:** Define custom tools for your NPCs to use, expanding their capabilities beyond simple commands and questions. Tools can be anything from image generation to web searches.
-* **Multiple LLM Providers:** Supports multiple LLM providers, including Ollama, OpenAI, and Anthropic, giving you flexibility in choosing the best model for your needs.
+* **Multiple LLM Providers:** Supports multiple LLM providers, including Ollama, OpenAI, OpenAI-like APIs, and Anthropic, giving you flexibility in choosing the best model for your needs.
 * **Interactive Modes:** Specialized modes for different interaction styles:
     * **Whisper Mode:**  Use your voice to interact with the LLM.
     * **Notes Mode:** Quickly jot down notes and store them within the `npcsh` database.
@@ -26,16 +27,10 @@
 * **Extensible with Python:**  Write your own tools and extend `npcsh`'s functionality using Python.
 
 
-## Dependencies
+## Installation
+`npcsh` is available on PyPI and can be installed using pip. Before installing, make sure you have the necessary dependencies installed on your system. Below are the instructions for installing such dependencies on Linux, Mac, and (soon-to-be) Windows. If you find any other dependencies that are needed, please let us know so we can update the installation instructions to be more accommodating.
 
-- ollama
-- python >3.10
-
-
-
-
-
-## Linux install
+### Linux install
 ```bash
 
 sudo apt-get install espeak
@@ -53,7 +48,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 
 
-## Mac install
+### Mac install
 ```bash
 brew install portaudio
 brew install ffmpeg
@@ -62,39 +57,18 @@ brew services start ollama
 brew install pygobject3
 pip install npcsh
 ```
+### Widows Install
 
-## Usage
+Coming soon!
+
+
+
+## Startup Configuration and Project Structure
 After it has been pip installed, npcsh can be used as a command line tool. Start it by typing:
 ```bash
 npcsh
 ```
-
-Once in the npcsh, you can use bash commands or write natural language queries or commands. You can also switch between different modes defined below and you can compile a network of NPCs or use the macro tools we have developed.
-
-
-
-## Basic Commands
-```npcsh
-/compile <npc_file>: Compiles the specified NPC profile.
-/com <npc_file>: Alias for /compile. If no NPC file is specified, compiles all NPCs in the npc_team directory.
-/<npc_name>: Switch to the specified NPC.
-/whisper: Enter whisper mode.
-/notes: Enter notes mode.
-/data: Enter data mode to interact with data.
-/spool: Enter spool mode for continuous conversation.
-/ots: Take a screenshot and optionally analyze it with a prompt.
-/vixynt <prompt>: Generate an image using the specified prompt.
-/set <setting> <value>: Set configuration options (e.g., model, provider).
-/help: Show the help message.
-/exit or /quit: Exit npcsh.
-```
-## Executing Bash Commands
-You can execute bash commands directly within npcsh. The LLM can also generate and execute bash commands based on your natural language requests.
-
-
-## Configuration
-
-The .npcshrc file in your home directory stores your npcsh settings. You can set your preferred LLM provider, model, and database path. The installer will automatically add this file to your shell config, but if it does not you can add the following to your .bashrc or .zshrc:
+npcsh will generate a .npcshrc file in your home directory that stores your npcsh settings. You can set your preferred LLM provider, model, and database path. The installer will automatically add this file to your shell config, but if it does not do so successfully for whatever reason you can add the following to your .bashrc or .zshrc:
 
 ```bash
 # Source NPCSH configuration
@@ -103,7 +77,7 @@ if [ -f ~/.npcshrc ]; then
 fi
 ```
 
-We support inference via openai and anthropic. To use them, set an ".env" file up in the folder where you are working and set the API keys there or set the environment variables in your ~/.npcshrc
+We support inference via openai, anthropic, ollama, and other openai-like APIs. To use tools that require API keys, create an ".env" file up in the folder where you are working or place relevant API keys as env variables in your ~/.npcshrc.
 
 ```bash
 export OPENAI_API_KEY="your_openai_key"
@@ -112,28 +86,187 @@ export ANTHROPIC_API_KEY="your_anthropic_key"
 
 The user can change the default model by setting the environment variable `NPCSH_MODEL` in their ~/.npcshrc to the desired model name and to change the provider by setting the environment variable `NPCSH_PROVIDER` to the desired provider name.
 
-The provider must be one of ['ollama', 'openai', 'anthropic'] and the model must be one available from those providers. Individual npcs can also be set to use different models and providers by setting the `model` and `provider` keys in the npc files.
+The provider must be one of ['ollama', 'openai', 'anthropic', 'openai-like'] and the model must be one available from those providers. Individual npcs can also be set to use different models and providers by setting the `model` and `provider` keys in the npc files.
+```bash
+~/.npcsh/
+├── npc_team/           # Global NPCs
+│   ├── tools/          # Global tools
+│   └── assembly_lines/ # Workflow pipelines
+./npc_team/            # Project-specific NPCs
+├── tools/             # Project tools
+└── assembly_lines/    # Project workflows
+```
 
 
-## compilation
+## npcsh usage
+npcsh is a command-line tool that allows you to interact with Large Language Models (LLMs) using natural language commands. It provides a variety of modes and features to help you accomplish tasks, answer questions, and integrate LLMs into your workflow. Through npcsh, users can have LLMs make use of tools that have become common in popular LLM applications, such as image generation, data analysis, web searches, and more.
 
-Each NPC can be compiled to accomplish their primary directive and then any issues faced will be recorded and associated with the NPC so that it can reference it later through vector search. In any of the modes where a user requests input from an NPC, the NPC will include RAG search results before carrying out the request.
+Here are some examples of how you can use npcsh
+```npcsh
+Who was Simon Bolivar?
+```
 
-## npcsh Examples
+```npcsh
+What is the capital of France?
+```
 
-Simple Bash Command: `ls -l`
-LLM-Generated Command: `list all files in the current directory`
-NPC Compilation and use: `/com foreman.npc \n /foreman \n what is the status of the project?`
-Image Generation: `/vixynt a cat wearing a hat`
-Screenshot Analysis: /ots What do you see in this screenshot?
-Data Interaction: /data load from data.csv as my_data followed by /data pd.my_data.head()
+```npcsh
+What's the weather in Tokyo?
+```
+
+```npcsh
+Why is the code in my VS code not working?
+```
+
+```npcsh
+What is the biggest file in my current folder?
+```
+
+```npcsh
+What is the best way to implement a linked list in Python?
+```
+
+```npcsh
+In which of the files in the current directory is "Simon Bolivar" mentioned?
+```
+
+
+```npcsh
+list all files in the current directory
+```
 
 
 
+## Macros
+
+While npcsh can decide the best tool to use based on the user's input, the user can also specify certain tools to use by using a macro. Macros are commands that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros.
+To learn about them from within the shell, type:
+```npcsh
+/help
+```
+To exit the shell:
+```npcsh
+/exit
+```
+
+Otherwise, here are some more detailed examples of macros that can be used in npcsh:
+
+### Spool
+Spool mode allows one to enter into a conversation with a specific LLM or a specific NPC. This is used for having distinct interactions from those in the base shell and these will be separately contained .
+Start the spool mode:
+```npcsh
+/spool
+```
+Start the spool mode with a specific npc
+
+Start the spool mode with a specific LLM model
+
+
+Start the spool mode with specific files in context
+```npcsh
+/spool files=[*.py,*.md] # Load specific files for context
+```
+
+
+
+
+### Over-the-shoulder: Screenshots and image analysis
+
+Use the /ots macro to take a screenshot and write a prompt for an LLM to answer about the screenshot.
+```npcsh
+/ots
+```
+
+Alternatively, pass an existing image in like :
+```npcsh
+/ots /path/to/image.png
+```
+
+
+
+
+### Image Generation
+Image generation can be done with the /vixynt macro or through a general prompt that decides to make use of the relevant tool.
+Use /vixynt like so
+```npcsh
+/vixynt A futuristic cityscape @dall-e-3
+/vixynt A peaceful landscape @stable-diffusion
+```
+Alternatively:
+```npcsh
+Generate an image of a futuristic cityscape
+```
+should result in the llm deciding to make use of the image generation tool that it has available.
+
+
+### Voice Control
+Enter into a voice-controlled mode to interact with the LLM. This mode can executet commands and use tools just like the basic npcsh shell.
+```npcsh
+/whisper
+```
+
+
+### Executing Bash Commands
+You can execute bash commands directly within npcsh. The LLM can also generate and execute bash commands based on your natural language requests.
+For example:
+```npcsh
+ls -l
+cp file1.txt file2.txt
+mv file1.txt file2.txt
+mkdir new_directory
+```
+
+
+### Compilation and NPC Interaction
+Compile a specified NPC profile. This will make it available for use in npcsh interactions.
+```npcsh
+/compile <npc_file>
+```
+You can also use `/com` as an alias for `/compile`. If no NPC file is specified, all NPCs in the npc_team directory will be compiled.
+
+Begin a conversations with a specified NPC by referencing their name
+```npcsh
+/<npc_name>:
+```
+
+### Data Interaction and analysis
+Enter into data mode to load, manipulate, and query data from various file formats.
+```npcsh
+/data
+load data.csv as df
+df.describe()
+```
+
+### Notes
+Jot down notes and store them within the npcsh database and in the current directory as a text file.
+```npcsh
+/notes
+```
+
+### Changing defaults from within npcsh
+Users can change the default model and provider from within npcsh by using the following commands:
+```npcsh
+/set model ollama
+/set provider llama3.2
+```
+
+
+## Creating NPCs
+NPCs are defined in YAML files within the npc_team directory. Each NPC has a name, primary directive, and optionally, a list of tools. See the examples in the npc_profiles directory for guidance.
+
+
+
+
+
+## Creating Tools
+Tools are defined in YAML files within the npc_team/tools directory. Each tool has a name, inputs, a prompt, and pre/post-processing steps. Tools can be implemented in Python or other languages supported by npcsh.
 
 
 ## Python Examples
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
+
+
+
 
 ### Example 1: Creating and Using an NPC
 This example shows how to create and initialize an NPC and use it to answer a question.
@@ -146,7 +279,7 @@ db_path = '~/npcsh_history.db'
 conn = sqlite3.connect(db_path)
 
 # Load NPC from a file
-npc = load_npc_from_file('path/to/npc_file.npc', conn)
+npc = NPC(name='Simon Bolivar', db_conn=conn)
 
 # Ask a question to the NPC
 question = "What are the project updates?"
@@ -155,10 +288,8 @@ llm_response = npc.get_llm_response(question)
 # Output the NPC's response
 print(f"{npc.name}: {llm_response['response']}")
 ```
-### Using an NPC to Analyze Data
+### Example 2: Using an NPC to Analyze Data
 This example shows how to use an NPC to perform data analysis on a DataFrame using LLM commands.
-
-
 ```bash
 import pandas as pd
 from npcsh import NPC
@@ -175,15 +306,10 @@ npc = NPC(name='Sibiji', db_conn=sqlite3.connect('~/npcsh_history.db'))
 
 # Formulate a command for analysis
 command = "Analyze customer feedback for sentiment."
-
-# Use the NPC to process the analysis
-output = npc.get_data_response(command)
-
-# Output the results
-print(f"Analysis Results: {output}")
 ```
 
-Example 3: Creating and Using a Tool
+
+### Example 3: Creating and Using a Tool
 You can define a tool and execute it from within your Python script.
 ```bash
 
@@ -215,13 +341,6 @@ print('Tool Output:', output)
 ```
 
 
-
-
-## Creating NPCs
-NPCs are defined in YAML files within the npc_team directory. Each NPC has a name, primary directive, and optionally, a list of tools. See the examples in the npc_profiles directory for guidance.
-
-## Creating Tools
-Tools are defined in YAML files within the npc_team/tools directory. Each tool has a name, inputs, a prompt, and pre/post-processing steps. Tools can be implemented in Python or other languages supported by npcsh.
 
 ## Contributing
 Contributions are welcome! Please submit issues and pull requests on the GitHub repository.
