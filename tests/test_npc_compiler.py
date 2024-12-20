@@ -3,7 +3,7 @@ import os
 import tempfile
 import sqlite3
 from unittest.mock import patch, MagicMock
-from npcsh.npc_compiler import NPCCompiler, NPC
+from npcsh.npc_compiler import NPCCompiler, NPC, Tool
 
 @pytest.fixture
 def temp_npc_directory():
@@ -21,19 +21,19 @@ def create_npc_file(directory, filename, content):
         f.write(content)
 
 def test_npc_compiler_init(temp_npc_directory):
-    compiler = NPCCompiler(temp_npc_directory)
+    compiler = NPCCompiler(temp_npc_directory, ":memory:")
     assert compiler.npc_directory == temp_npc_directory
     assert isinstance(compiler.jinja_env, Environment)
     assert compiler.npc_cache == {}
     assert compiler.resolved_npcs == {}
 
 def test_npc_compiler_compile_invalid_extension(temp_npc_directory):
-    compiler = NPCCompiler(temp_npc_directory)
+    compiler = NPCCompiler(temp_npc_directory, ":memory:")
     with pytest.raises(ValueError, match="File must have .npc extension"):
         compiler.compile("invalid.txt")
 
 def test_npc_compiler_compile_valid(temp_npc_directory):
-    compiler = NPCCompiler(temp_npc_directory)
+    compiler = NPCCompiler(temp_npc_directory, ":memory:")
     npc_content = """
     name: Test NPC
     primary_directive: Test directive
@@ -50,7 +50,7 @@ def test_npc_compiler_compile_valid(temp_npc_directory):
     assert result['model'] == "gpt-3.5-turbo"
 
 def test_npc_compiler_compile_with_inheritance(temp_npc_directory):
-    compiler = NPCCompiler(temp_npc_directory)
+    compiler = NPCCompiler(temp_npc_directory, ":memory:")
     parent_content = """
     name: Parent NPC
     primary_directive: Parent directive
@@ -73,7 +73,7 @@ def test_npc_compiler_compile_with_inheritance(temp_npc_directory):
     assert result['model'] == "gpt-3.5-turbo"
 
 def test_npc_compiler_compile_missing_required_key(temp_npc_directory):
-    compiler = NPCCompiler(temp_npc_directory)
+    compiler = NPCCompiler(temp_npc_directory, ":memory:")
     npc_content = """
     name: Test NPC
     primary_directive: Test directive
@@ -115,7 +115,7 @@ def test_npc_str(mock_db_conn):
     )
     assert str(npc) == "NPC: Test NPC\nDirective: Test directive\nModel: gpt-3.5-turbo"
 
-@patch('npc_compiler.get_data_response')
+@patch('npcsh.npc_compiler.get_data_response')
 def test_npc_get_data_response(mock_get_data_response, mock_db_conn):
     npc = NPC(
         name="Test NPC",
@@ -131,7 +131,7 @@ def test_npc_get_data_response(mock_get_data_response, mock_db_conn):
     assert result == "Data response"
     mock_get_data_response.assert_called_once_with("Test request", mock_db_conn, [('table1',), ('table2',)])
 
-@patch('npc_compiler.get_llm_response')
+@patch('npcsh.npc_compiler.get_llm_response')
 def test_npc_get_llm_response(mock_get_llm_response, mock_db_conn):
     npc = NPC(
         name="Test NPC",
@@ -145,4 +145,55 @@ def test_npc_get_llm_response(mock_get_llm_response, mock_db_conn):
     mock_get_llm_response.return_value = "LLM response"
     result = npc.get_llm_response("Test request", temperature=0.7)
     assert result == "LLM response"
-    mock_get_llm_response.assert_called_once_with("Test request", "gpt-3.5-turbo", "openai", temperature=0.7)
+    mock_get_llm_response.assert_called_once_with("Test request", provider="openai", model="gpt-3.5-turbo", npc=npc, temperature=0.7)
+
+def test_npc_compiler_load_tools(temp_npc_directory):
+    compiler = NPCCompiler(temp_npc_directory, ":memory:")
+    tool_content = """
+    tool_name: test_tool
+    inputs: []
+    preprocess: []
+    prompt: {}
+    postprocess: []
+    """
+    create_npc_file(temp_npc_directory, "test_tool.tool", tool_content)
+    tools = compiler.load_tools()
+    assert len(tools) == 1
+    assert tools[0].tool_name == "test_tool"
+
+def test_npc_compiler_resolve_npc_profile(temp_npc_directory):
+    compiler = NPCCompiler(temp_npc_directory, ":memory:")
+    npc_content = """
+    name: Test NPC
+    primary_directive: Test directive
+    suggested_tools_to_use: [tool1, tool2]
+    restrictions: []
+    model: gpt-3.5-turbo
+    """
+    create_npc_file(temp_npc_directory, "test.npc", npc_content)
+    compiler.parse_all_npcs()
+    resolved_profile = compiler.resolve_npc_profile("test.npc")
+    assert resolved_profile['name'] == "Test NPC"
+    assert resolved_profile['primary_directive'] == "Test directive"
+    assert resolved_profile['suggested_tools_to_use'] == ['tool1', 'tool2']
+    assert resolved_profile['restrictions'] == []
+    assert resolved_profile['model'] == "gpt-3.5-turbo"
+
+def test_npc_compiler_finalize_npc_profile(temp_npc_directory):
+    compiler = NPCCompiler(temp_npc_directory, ":memory:")
+    npc_content = """
+    name: Test NPC
+    primary_directive: Test directive
+    suggested_tools_to_use: [tool1, tool2]
+    restrictions: []
+    model: gpt-3.5-turbo
+    """
+    create_npc_file(temp_npc_directory, "test.npc", npc_content)
+    compiler.parse_all_npcs()
+    compiler.resolve_all_npcs()
+    finalized_profile = compiler.finalize_npc_profile("test.npc")
+    assert finalized_profile['name'] == "Test NPC"
+    assert finalized_profile['primary_directive'] == "Test directive"
+    assert finalized_profile['suggested_tools_to_use'] == ['tool1', 'tool2']
+    assert finalized_profile['restrictions'] == []
+    assert finalized_profile['model'] == "gpt-3.5-turbo"
