@@ -11,6 +11,8 @@ from npcsh.helpers import (
     is_valid_npc,
     get_npc_path,
     initialize_base_npcs_if_needed,
+    setup_npcsh_config,
+    load_all_files,
 )
 
 @pytest.fixture
@@ -130,3 +132,25 @@ def test_initialize_base_npcs_if_needed(temp_db_path):
     conn.close()
 
     assert new_count == count  # Should not have added any new NPCs
+
+def test_setup_npcsh_config(temp_home_dir):
+    setup_npcsh_config()
+    npcshrc_path = os.path.expanduser("~/.npcshrc")
+    assert os.path.exists(npcshrc_path)
+    with open(npcshrc_path, 'r') as f:
+        content = f.read()
+        assert "export NPCSH_INITIALIZED=0" in content
+        assert "export NPCSH_PROVIDER='ollama'" in content
+        assert "export NPCSH_MODEL='llama3.2'" in content
+        assert "export NPCSH_DB_PATH='~/npcsh_history.db'" in content
+
+def test_load_all_files(temp_home_dir):
+    test_dir = os.path.join(temp_home_dir, "test_dir")
+    os.makedirs(test_dir)
+    test_file_path = os.path.join(test_dir, "test_file.txt")
+    with open(test_file_path, 'w') as f:
+        f.write("This is a test file.")
+
+    result = load_all_files(test_dir)
+    assert test_file_path in result
+    assert result[test_file_path] == "This is a test file."
