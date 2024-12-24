@@ -486,9 +486,15 @@ postprocess:
 ```
 
 
+## NPC Pipelines (UNDER CONSTRUCTION)
+
+
+
+- to be filled in soon
+
+
 ## Python Examples (UNDER CONSTRUCTION)
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
-
 
 
 
@@ -564,6 +570,9 @@ output = tool.execute(input_values, npc.tools_dict, None, 'Sample Command', npc)
 print('Tool Output:', output)
 ```
 
+## npcsql: SQL Integration and pipelines (UNDER CONSTRUCTION)
+
+- to be filled in soon
 
 
 ## Contributing
