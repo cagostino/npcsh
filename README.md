@@ -6,10 +6,13 @@
 # npcsh
 
 
-`npcsh` is a python-based command-line tool designed to integrate Large Language Models (LLMs) into your daily workflow by making them available through the command line shell.
-It leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web. Users can also leverage powerful macros to accomplish common tasks with LLMs like voice control, image generation, data analysis, screenshot capture and analysis, and more.
+- `npcsh` is a python-based command-line tool designed to integrate Large Language Models (LLMs) into one's daily workflow by making them available through the command line shell.
 
-`npcsh` allows users to coordinate agents to form assembly lines of NPCs that can reliably accomplish complicated multi-step procedures.
+- `npcsh` leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web.
+
+- `npcsh` provides macros to accomplish common tasks with LLMs like voice control (`/whisper`), image generation (`/vixynt`), screenshot capture and analysis (`/ots`), one-shot questions (`/sample`), and more.
+
+- `npcsh` allows users to coordinate agents (i.e. NPCs) to form assembly lines that can reliably accomplish complicated multi-step procedures.
 
 ## Key Features
 
