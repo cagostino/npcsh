@@ -365,7 +365,6 @@ npcsh> /vixynt A futuristic cityscape @dall-e-3
 ![futuristic cityscape](test_data/futuristic_cityscape.PNG)
 
 ```npcsh
-
 npcsh> /vixynt A peaceful landscape @runwayml/stable-diffusion-v1-5
 ```
 ![peaceful landscape](test_data/peaceful_landscape_stable_diff.png)
@@ -486,9 +485,15 @@ postprocess:
 ```
 
 
+## NPC Pipelines (UNDER CONSTRUCTION)
+
+
+
+- to be filled in soon
+
+
 ## Python Examples (UNDER CONSTRUCTION)
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
-
 
 
 
@@ -564,6 +569,9 @@ output = tool.execute(input_values, npc.tools_dict, None, 'Sample Command', npc)
 print('Tool Output:', output)
 ```
 
+## npcsql: SQL Integration and pipelines (UNDER CONSTRUCTION)
+
+- to be filled in soon
 
 
 ## Contributing
