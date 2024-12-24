@@ -365,7 +365,6 @@ npcsh> /vixynt A futuristic cityscape @dall-e-3
 ![futuristic cityscape](test_data/futuristic_cityscape.PNG)
 
 ```npcsh
-
 npcsh> /vixynt A peaceful landscape @runwayml/stable-diffusion-v1-5
 ```
 ![peaceful landscape](test_data/peaceful_landscape_stable_diff.png)
