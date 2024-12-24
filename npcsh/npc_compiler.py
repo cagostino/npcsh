@@ -41,7 +41,7 @@ from .llm_funcs import (
 from .helpers import get_npc_path
 
 from .search import search_web, rag_search
-from .image import capture_screenshot
+from .image import capture_screenshot, analyze_image_base
 
 import sqlite3
 import pandas as pd
@@ -789,7 +789,7 @@ class NPCCompiler:
         if not pipe_file.endswith(".pipe"):
             raise ValueError("Pipeline file must have .pipe extension")
 
-        print(pipe_file)
+        # print(pipe_file)
 
         with open(pipe_file, "r") as f:
             pipeline_data = yaml.safe_load(f)
@@ -1434,9 +1434,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df[
-                        "ai_analysis"
-                    ] = synthesized_df  # Adjust as per what synthesize returns
+                    df["ai_analysis"] = (
+                        synthesized_df  # Adjust as per what synthesize returns
+                    )
 
             return df
 

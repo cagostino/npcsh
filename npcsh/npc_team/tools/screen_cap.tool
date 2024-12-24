@@ -9,7 +9,7 @@ preprocess:
       import datetime
       import os
       from PIL import Image
-      from npcsh.helpers import analyze_image_base
+      from npcsh.image import analyze_image_base
 
       # Generate filename
       filename = f"screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
@@ -19,7 +19,7 @@ preprocess:
 
       # Load image
       image = Image.open(filename)
-      
+
       # Full file path
       file_path = os.path.abspath('./'+filename)
       # Analyze the image
