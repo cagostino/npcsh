@@ -340,7 +340,11 @@ def generate_image(
     Returns:
         str: The filename of the saved image.
     """
-    if npc is not None:
+    if model is not None and provider is not None:
+        pass
+    elif model is not None and provider is None:
+        provider = lookup_provider(model)
+    elif npc is not None:
         if npc.provider is not None:
             provider = npc.provider
         if npc.model is not None:

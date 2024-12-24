@@ -297,11 +297,11 @@ handle_tool_call invoked with tool_name: image_generation_tool
 While npcsh can decide the best tool to use based on the user's input, the user can also specify certain tools to use with a macro. Macros are commands that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros.
 To learn about them from within the shell, type:
 ```npcsh
-/help
+npcsh> /help
 ```
 To exit the shell:
 ```npcsh
-/exit
+npcsh> /exit
 ```
 
 Otherwise, here are some more detailed examples of macros that can be used in npcsh:
@@ -310,64 +310,72 @@ Otherwise, here are some more detailed examples of macros that can be used in np
 Spool mode allows one to enter into a conversation with a specific LLM or a specific NPC. This is used for having distinct interactions from those in the base shell and these will be separately contained .
 Start the spool mode:
 ```npcsh
-/spool
+npcsh> /spool
 ```
 Start the spool mode with a specific npc
 
 ```npcsh
-/spool npc=foreman
+npcsh> /spool npc=foreman
 ```
 
 Start the spool mode with specific files in context that will be referenced through rag searches when relevant.
 
 ```npcsh
-/spool files=[*.py,*.md] # Load specific files for context
+npcsh> /spool files=[*.py,*.md] # Load specific files for context
 ```
 
 
 Start the spool with a specific llm model:
 ```npcsh
 #note this is not yet implemented
-/spool model=llama3.3
+npcsh> /spool model=llama3.3
 ```
-
-
-
-
 
 ### Over-the-shoulder: Screenshots and image analysis
 
 Use the /ots macro to take a screenshot and write a prompt for an LLM to answer about the screenshot.
 ```npcsh
-/ots
+npcsh> /ots
+
+Screenshot saved to: /home/caug/.npcsh/screenshots/screenshot_1735015011.png
+
+Enter a prompt for the LLM about this image (or press Enter to skip): describe whats in this image
+
+The image displays a source control graph, likely from a version control system like Git. It features a series of commits represented by colored dots connected by lines, illustrating the project's development history. Each commit message provides a brief description of the changes made, including tasks like fixing issues, merging pull requests, updating README files, and adjusting code or documentation. Notably, several commits mention specific users, particularly "Chris Agostino," indicating collaboration and contributions to the project. The graph visually represents the branching and merging of code changes.
 ```
 
 Alternatively, pass an existing image in like :
 ```npcsh
-/ots /path/to/image.png
+npcsh> /ots test_data/catfight.PNG
+Enter a prompt for the LLM about this image (or press Enter to skip): whats in this ?
+
+The image features two cats, one calico and one orange tabby, playing with traditional Japanese-style toys. They are each holding sticks attached to colorful pom-pom balls, which resemble birds. The background includes stylized waves and a red sun, accentuating a vibrant, artistic style reminiscent of classic Japanese art. The playful interaction between the cats evokes a lively, whimsical scene.
 ```
 
 
 
 
-### Image Generation
-Image generation can be done with the /vixynt macro or through a general prompt that decides to make use of the relevant tool.
-Use /vixynt like so
+### Vixynt: Image Generation
+Image generation can be done with the /vixynt macro.
+Use /vixynt like so where you can also specify the model to use with an @ reference. This @ reference will override the default model in ~/.npcshrc.
+
 ```npcsh
-/vixynt A futuristic cityscape @dall-e-3
-/vixynt A peaceful landscape @stable-diffusion
+npcsh> /vixynt A futuristic cityscape @dall-e-3
 ```
-Alternatively:
+![futuristic cityscape]](test_data/futuristic_cityscape.PNG)
+
 ```npcsh
-Generate an image of a futuristic cityscape
+
+npcsh> /vixynt A peaceful landscape @runwayml/stable-diffusion-v1-5
 ```
-should result in the llm deciding to make use of the image generation tool that it has available.
+![peaceful landscape](test_data/peaceful_landscape_stable_diff.png)
+
 
 
 ### Voice Control
 Enter into a voice-controlled mode to interact with the LLM. This mode can executet commands and use tools just like the basic npcsh shell.
 ```npcsh
-/whisper
+npcsh> /whisper
 ```
 
 
@@ -375,44 +383,48 @@ Enter into a voice-controlled mode to interact with the LLM. This mode can execu
 You can execute bash commands directly within npcsh. The LLM can also generate and execute bash commands based on your natural language requests.
 For example:
 ```npcsh
-ls -l
-cp file1.txt file2.txt
-mv file1.txt file2.txt
-mkdir new_directory
+npcsh> ls -l
+
+npcsh> cp file1.txt file2.txt
+npcsh> mv file1.txt file2.txt
+npcsh> mkdir new_directory
+npcsh> git status
+npcsh> vim file.txt
+
 ```
 
 
 ### Compilation and NPC Interaction
 Compile a specified NPC profile. This will make it available for use in npcsh interactions.
 ```npcsh
-/compile <npc_file>
+npcsh> /compile <npc_file>
 ```
 You can also use `/com` as an alias for `/compile`. If no NPC file is specified, all NPCs in the npc_team directory will be compiled.
 
 Begin a conversations with a specified NPC by referencing their name
 ```npcsh
-/<npc_name>:
+npcsh> /<npc_name>:
 ```
 
 ### Data Interaction and analysis
 Enter into data mode to load, manipulate, and query data from various file formats.
 ```npcsh
-/data
-load data.csv as df
-df.describe()
+npcsh> /data
+data> load data.csv as df
+data> df.describe()
 ```
 
 ### Notes
 Jot down notes and store them within the npcsh database and in the current directory as a text file.
 ```npcsh
-/notes
+npcsh> /notes
 ```
 
 ### Changing defaults from within npcsh
 Users can change the default model and provider from within npcsh by using the following commands:
 ```npcsh
-/set model ollama
-/set provider llama3.2
+npcsh> /set model ollama
+npcsh> /set provider llama3.2
 ```
 
 
@@ -420,14 +432,61 @@ Users can change the default model and provider from within npcsh by using the f
 NPCs are defined in YAML files within the npc_team directory. Each NPC has a name, primary directive, and optionally, a list of tools. See the examples in the npc_profiles directory for guidance.
 
 
-
+Here is a typical NPC file:
+```yaml
+name: sibiji
+primary_directive: You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately.
+suggested_tools_to_use:
+  - simple data retrieval
+model: llama3.2
+provider: ollama
+```
 
 
 ## Creating Tools
-Tools are defined in YAML files within the npc_team/tools directory. Each tool has a name, inputs, a prompt, and pre/post-processing steps. Tools can be implemented in Python or other languages supported by npcsh.
+Tools are defined as YAMLs with `.tool` extension within the npc_team/tools directory. Each tool has a name, inputs, and consists of three distinct steps: preprocess, prompt, and postprocess. The idea here is that a tool consists of a stage where information is preprocessed and then passed to a prompt for some kind of analysis and then can be passed to another stage for postprocessing. In each of these three cases, the engine must be specified. The engine can be either "natural" for natural language processing or "python" for Python code. The code is the actual code that will be executed.
+
+Here is an example of a tool file:
+```yaml
+tool_name: "screen_capture_analysis_tool"
+inputs:
+  - "prompt"
+preprocess:
+  - engine: "python"
+    code: |
+      # Capture the screen
+      import pyautogui
+      import datetime
+      import os
+      from PIL import Image
+      from npcsh.image import analyze_image_base
+
+      # Generate filename
+      filename = f"screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+      screenshot = pyautogui.screenshot()
+      screenshot.save(filename)
+      print(f"Screenshot saved as {filename}")
+
+      # Load image
+      image = Image.open(filename)
+
+      # Full file path
+      file_path = os.path.abspath('./'+filename)
+      # Analyze the image
+
+      llm_output = analyze_image_base(inputs['prompt']+ '\n\n attached is a screenshot of my screen currently.', file_path, filename, npc=npc)
+prompt:
+  engine: "natural"
+  code: ""
+postprocess:
+  - engine: "natural"
+    code: |
+      Screenshot captured and saved as {{ filename }}.
+      Analysis Result: {{ llm_output }}
+```
 
 
-## Python Examples
+## Python Examples (UNDER CONSTRUCTION)
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
 
 
