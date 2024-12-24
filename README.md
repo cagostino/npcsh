@@ -21,6 +21,7 @@
 * **Bash Wrapper:** Execute bash commands directly without leaving the shell. Use your favorite command-line tools like VIM, Emacs, ipython, sqlite3, git, and more without leaving the shell!
 
 
+
 ## Installation
 `npcsh` is available on PyPI and can be installed using pip. Before installing, make sure you have the necessary dependencies installed on your system. Below are the instructions for installing such dependencies on Linux, Mac, and (soon-to-be) Windows. If you find any other dependencies that are needed, please let us know so we can update the installation instructions to be more accommodating.
 
@@ -110,47 +111,190 @@ For cases where you wish to set up a project specific set of NPCs, tools, and as
 
 
 ## npcsh usage
-`npcsh` is a command-line tool that allows you to interact with Large Language Models (LLMs) using natural language commands. It provides a variety of modes and features to help you accomplish tasks, answer questions, and integrate LLMs into your workflow. Through npcsh, users can have LLMs make use of tools that have become common in popular LLM applications, such as image generation, data analysis, web searches, and more.
+In the `npcsh` shell, users can ask LLMs questions, have LLMLs execute commands or use tools, or utilize macros that provide additional functionality. When a user does not invoke a specific macro, the shell will automatically decide which tool to use based on the user's input. Here are some examples of things one might ask the npcsh shell.
 
 Here are some examples of how you can use npcsh
 ```npcsh
-Who was Simon Bolivar?
+npcsh>Who was Simon Bolivar?
+
+Simón Bolívar, often referred to as "El Libertador," was a Venezuelan military and political leader who played a key role in the Latin American wars of independence against Spanish
+colonial rule in the early 19th century. He was born on July 24, 1783, in Caracas, Venezuela, into a wealthy Creole family.
+Bolívar's vision extended beyond merely liberating territories; he aspired to unify the newly independent nations of South America into a single federation, which he called "Gran
+Colombia," consisting of present-day Colombia, Venezuela, Ecuador, and Panama. He was known for his exceptional military strategies and leadership, which led to successful campaigns in
+various regions, including the battles of Boyacá, Carabobo, and Ayacucho.
+He faced numerous challenges, including political fragmentation, regional rivalries, and personal betrayals. Despite his initial successes, the unity he sought for Latin America proved
+difficult to achieve, and Gran Colombia eventually disintegrated in the early 1830s.
+Bolívar's influence and legacy extend far beyond his lifetime. He is celebrated in various countries across Latin America as a national hero and symbol of independence. His thoughts on
+liberty, governance, and social issues continue to inspire movements for democracy and social justice in the region. Simón Bolívar died on December 17, 1830, but remains a pivotal figure
+in the history of Latin America.
 ```
 
 ```npcsh
-What is the capital of France?
+npcsh> What is the capital of France?
+The capital of France is Paris. It is the largest city in the country and is known for its rich history, art, culture, and architecture, including famous landmarks such as the Eiffel Tower, Notre-Dame Cathedral, and the Louvre Museum.
 ```
 
 ```npcsh
-What's the weather in Tokyo?
+npcsh> What's the weather in Tokyo?
+
+handle_tool_call invoked with tool_name: generic_search_tool
+
+The weather in Tokyo, Japan, is expected to be mixed with sun and clouds. Here are some details from the recent forecasts:
+
+ • Highs: Around 53°F to 58°F with a few variations depending on the day.
+
+ • Lows: Approximately 35°F to 40°F.
+
+ • Winds: Generally from the northwest at 5 to 10 mph.
+
+ • Condition: Mainly sunny, but there may be periods of clouds and some overcast conditions throughout the week.
+For more detailed information, you can refer to sources like The Weather Channel or AccuWeather.
+/home/caug/npcww/npcsh:npcsh>
+
+```
+In the below example, the code that was open was the screen capture analysis tool itself.
+```npcsh
+npcsh>  Can you explain what the code does in the currently open VS code window?
+
+handle_tool_call invoked with tool_name: screen_capture_analysis_tool
+
+Screenshot saved as screenshot_20241223_225815.png
+
+The code in the visible section of your VS Code window appears to be a script for capturing and analyzing screenshots. Here's a breakdown of what the code does:
+
+ 1 Import Necessary Libraries: It imports required libraries like system, datetime, and pyautogui, which are essential for capturing screenshots and handling date-time operations.
+
+ 2 Capture the Screen: The code captures the current screen using pyautogui.screenshot(), taking a screenshot of the entire screen.
+
+ 3 File Management: It generates a unique filename for the screenshot using the current date and time. This ensures that each screenshot file is distinct.
+
+ 4 Save the Screenshot: The captured screenshot is saved to a file with the generated filename.
+
+ 5 Image Analysis: It likely imports a functionality (analyze_image_base) to analyze the screenshot for specific content or information.
+
+ 6 Run the Analysis: While not explicitly shown, it appears to call this analysis function to process the saved screenshot.
+In summary, this code automates the process of capturing a screenshot, saving it with a unique filename, and analyzing that image for specific content or patterns.
+
+
 ```
 
 ```npcsh
-Why is the code in my VS code not working?
+npcsh> What is the biggest file in my current folder?
+
+LLM suggests the following bash command: ls -S | head -n 1
+
+Running command: ls -S | head -n 1
+
+Command executed with output: image_20241111_000033.png
+
+I ran the command ls -S | head -n 1 in your current folder. This command sorts all files by size in descending order and then selects the first entry, which represents the largest file. The result of this operation shows that the biggest file in your current folder is image_20241111_000033.png.
+
 ```
 
 ```npcsh
-What is the biggest file in my current folder?
+npcsh>What is the best way to implement a linked list in Python?
+
+The best way to implement a linked list in Python is to define a Node class for the individual elements and a LinkedList class to manage the nodes. Here's a basic implementation:
+class Node:
+    def __init__(self, data):
+        self.data = data  # Store the data
+        self.next = None  # Initialize the next node as None
+
+class LinkedList:
+    def __init__(self):
+        self.head = None  # Initialize the head of the list
+
+    def insert(self, data):
+        """Inserts a new node at the end of the linked list."""
+        new_node = Node(data)
+        if not self.head:  # If list is empty, set new node as head
+            self.head = new_node
+            return
+        last_node = self.head
+        while last_node.next:  # Traverse to the last node
+            last_node = last_node.next
+        last_node.next = new_node  # Link the new node
+
+    def display(self):
+        """Prints the linked list."""
+        current = self.head
+        while current:
+            print(current.data, end=" -> ")
+            current = current.next
+        print("None")
+
+# Example usage:
+llist = LinkedList()
+llist.insert(1)
+llist.insert(2)
+llist.insert(3)
+llist.display()  # Output: 1 -> 2 -> 3 -> None
+                                                                                            Explanation:
+
+ 1 Node Class: Represents each node in the linked list. It has two attributes: data (to store the value) and next (to point to the next node).
+
+ 2 LinkedList Class: Manages the linked list. It has a head attribute pointing to the first node.
+
+ 3 Insert Method: Adds a new node to the end of the list.
+
+ 4 Display Method: Prints the elements of the list in order.
+This implementation is simple and can be extended with more methods (e.g., deletion, searching, etc.) as needed.
+
 ```
 
 ```npcsh
-What is the best way to implement a linked list in Python?
+npcsh> In which of the files in the current directory is "Simon Bolivar" mentioned?
+
+The user's query was about "Simon Bolivar." Based on the relevant context from the codebase, I found specific mentions and relevant information regarding Simon Bolívar in the documentation provided
+in the README.md file.
+From the relevant context, specifically in the section of README.md, it shared a code example that demonstrates how to load an NPC (Non-Player Character) named "Simon Bolivar" using SQLite and
+answer a question about project updates. This code snippet indicates that "Simon Bolivar" is represented in the NPC system, allowing for interaction through questions to retrieve information.
+Additionally, there is another passage that directly answers the query. It reads:
+
+▌ "Simón Bolívar, often referred to as 'El Libertador,' was a Venezuelan military and political leader who played a key role in the Latin American wars of independence against Spanish colonial
+▌ rule in the early 19th century."
+This information highlights Bolívar's significant historical role and achievements, answering the query regarding who Simon Bolivar was, thus making it clear that he was a prominent leader in Latin
+America's fight for independence.
+To summarize, I arrived at this answer by examining the provided context in the README.md file that includes both the coding example that initializes an NPC named "Simon Bolivar" and a historical
+overview of his contributions, which directly addresses the user's inquiry.
+
+
+```
+
+
+```npcsh
+npcsh>what process is using the most ram on my computer right now?
+
+LLM suggests the following bash command: ps aux --sort=-%mem | head -n 10
+Running command: ps aux --sort=-%mem | head -n 10
+Command executed with output: USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+caug     1040046  1.1  2.7 1226193464 1598980 ?  SNl  Dec22  23:30 /opt/vivaldi/vivaldi-bin --type=renderer --crashpad-handler-pid=4529 --enable-crash-reporter=,stable --change-stack-guard-on-fork=
+caug      683148  0.0  1.9 2047464 1137232 ?     SNl  Dec13  10:11 io.elementary.appcenter
+ollama      1884  0.0  1.8 3683920 1051020 ?     SNsl Dec02   0:30 /usr/local/bin/ollama serve
+caug     1191836  5.3  1.6 7346052 964988 pts/17 Sl+  22:57   0:22 /home/caug/.pyenv/versions/npcsh/bin/python /home/caug/.pyenv/versions/3.11.0/envs/npcsh/bin/npcsh
+caug     1145749  0.0  1.5 7068128 892500 pts/13 Sl+  Dec22   0:15 /home/caug/.pyenv/versions/3.11.0/bin/python3.11 /home/caug/.pyenv/versions/3.11.0/bin/npcsh
+caug      493912  0.0  1.5 7050968 890012 pts/11 Sl+  Dec10   0:14 /home/caug/.pyenv/versions/npcsh/bin/python /home/caug/.pyenv/versions/npcsh/bin/npcsh
+caug        4522  0.9  1.5 34391236 874756 ?     SNLl Dec02 295:06 /opt/vivaldi/vivaldi-bin
+caug        3995  0.7  1.1 6051812 683916 ?      R<sl Dec02 221:19 /usr/bin/gnome-shell
+caug      501721  0.3  1.0 1212584660 626248 ?   SNl  Dec10  60:22 /opt/vivaldi/vivaldi-bin --type=renderer --crashpad-handler-pid=4529 --enable-crash-reporter=,stable --change-stack-guard-on-fork=
+
+To determine which processes are using the most RAM on your computer, I executed the command ps aux --sort=-%mem | head -n 10.
+This command lists all running processes (ps aux), sorts them by memory usage in descending order (--sort=-%mem), and then retrieves the top 10 entries (head -n 10).
+The output shows the processes currently consuming the most memory. In the results, the process using the most RAM is Vivaldi's renderer, followed by other applications such as the Elementary App Center, Ollama server, and several instances of Python related to your NPC shell.
 ```
 
 ```npcsh
-In which of the files in the current directory is "Simon Bolivar" mentioned?
-```
+npcsh> can you generate an image of a calico cat and an orange tabby cat in the style of a japanese woodblock print where the two cats are engaged in a samurai battle but instead of samurai swords they are holding cat toys that are like wands with felt birds on the ends of them on strings
 
-
-```npcsh
-list all files in the current directory
+handle_tool_call invoked with tool_name: image_generation_tool
 ```
+![catfight](test_data/catfight.PNG)
 
 
 
 ## Macros
 
-While npcsh can decide the best tool to use based on the user's input, the user can also specify certain tools to use by using a macro. Macros are commands that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros.
+While npcsh can decide the best tool to use based on the user's input, the user can also specify certain tools to use with a macro. Macros are commands that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros.
 To learn about them from within the shell, type:
 ```npcsh
 /help
@@ -170,13 +314,23 @@ Start the spool mode:
 ```
 Start the spool mode with a specific npc
 
-Start the spool mode with a specific LLM model
+```npcsh
+/spool npc=foreman
+```
 
+Start the spool mode with specific files in context that will be referenced through rag searches when relevant.
 
-Start the spool mode with specific files in context
 ```npcsh
 /spool files=[*.py,*.md] # Load specific files for context
 ```
+
+
+Start the spool with a specific llm model:
+```npcsh
+#note this is not yet implemented
+/spool model=llama3.3
+```
+
 
 
 

@@ -33,7 +33,6 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 
 
-
 def extract_relevant_data(content: str, search_term: str) -> str:
     """Extract relevant information based on a search term."""
     # A naive implementation just to illustrate. This should be improved based on your needs.
@@ -1344,8 +1343,6 @@ def get_llm_response(
         return "Error: Invalid provider specified."
 
 
-
-
 def execute_data_operations(
     query: str,
     command_history: Any,
@@ -1727,7 +1724,7 @@ def check_llm_command(
         for filename, content in retrieved_docs[:n_docs]:
             context += f"Document: {filename}\n{content}\n\n"
         context = f"Refer to the following documents for context:\n{context}\n\n"
-
+    # print(npc, "sdfasdfa")
     # Update the prompt to include tool consideration
     prompt = f"""
     A user submitted this query: {command}
@@ -1765,7 +1762,7 @@ def check_llm_command(
         "tool_name": "<tool_name_if_applicable>",
         "explanation": "<your_explanation>"
     }}
-    
+
     Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING.
     """
 
@@ -1827,6 +1824,7 @@ def check_llm_command(
 
         elif action == "invoke_tool":
             tool_name = response_content_parsed.get("tool_name")
+            # print(npc)
             result = handle_tool_call(
                 command,
                 tool_name,
@@ -1896,6 +1894,7 @@ def handle_tool_call(
 
     """
     print(f"handle_tool_call invoked with tool_name: {tool_name}")
+    # print(npc)
     if not npc or not npc.tools_dict:
         print("not available")
         available_tools = npc.tools_dict if npc else None
