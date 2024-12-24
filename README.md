@@ -362,7 +362,7 @@ Use /vixynt like so where you can also specify the model to use with an @ refere
 ```npcsh
 npcsh> /vixynt A futuristic cityscape @dall-e-3
 ```
-![futuristic cityscape]](test_data/futuristic_cityscape.PNG)
+![futuristic cityscape](test_data/futuristic_cityscape.PNG)
 
 ```npcsh
 
