@@ -1765,6 +1765,8 @@ def check_llm_command(
         "tool_name": "<tool_name_if_applicable>",
         "explanation": "<your_explanation>"
     }}
+    
+    Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING.
     """
 
     if context:
