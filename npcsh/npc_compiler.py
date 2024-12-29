@@ -41,10 +41,46 @@ from .llm_funcs import (
 from .helpers import get_npc_path
 
 from .search import search_web, rag_search
-from .image import capture_screenshot
+from .image import capture_screenshot, analyze_image_base
 
 import sqlite3
 import pandas as pd
+
+
+import subprocess
+import sqlite3
+import numpy as np
+import os
+import yaml
+from jinja2 import Environment, FileSystemLoader, Template, Undefined
+import pandas as pd
+import pathlib
+from typing import Dict, Any, Optional, Union
+import matplotlib.pyplot as plt
+import json
+import pathlib
+import fnmatch
+import matplotlib.pyplot as plt
+
+# plt.ion()
+
+import sklearn.feature_extraction.text
+import sklearn.metrics.pairwise
+import numpy as np
+
+import sklearn
+
+
+from .llm_funcs import (
+    get_llm_response,
+    process_data_output,
+    get_data_response,
+    generate_image,
+)
+
+from .helpers import get_npc_path
+
+from .search import search_web, rag_search
 
 
 def create_or_replace_table(db_path, table_name, data):
@@ -114,6 +150,7 @@ class NPC:
         self.tables = self.db_conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table';"
         ).fetchall()
+        # print(self.tables)
         self.provider = provider
         self.api_url = api_url
         self.tools = tools or []
@@ -127,189 +164,21 @@ class NPC:
     def __str__(self):
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
 
-    def get_data_response(self, request: str):
-        return get_data_response(request, self.db_conn, self.tables)
+    def analyze_db_data(self, request: str):
+        # print("npc")
+        # print(self.db_conn, self.tables, self.model, self.provider)
+        return get_data_response(
+            request,
+            self.db_conn,
+            self.tables,
+            model=self.model,
+            provider=self.provider,
+            npc=self,
+        )
 
     def get_llm_response(self, request: str, **kwargs):
         # print(self.model, self.provider)
         return get_llm_response(request, self.model, self.provider, npc=self, **kwargs)
-
-
-class Tool:
-    def __init__(self, tool_data: dict):
-        if not tool_data or not isinstance(tool_data, dict):
-            raise ValueError("Invalid tool data provided.")
-        if "tool_name" not in tool_data:
-            raise KeyError("Missing 'tool_name' in tool definition.")
-        self.tool_name = tool_data.get("tool_name")
-        self.inputs = tool_data.get("inputs", [])
-
-        # Parse steps with engines
-        self.preprocess = self.parse_steps(tool_data.get("preprocess", []))
-        self.prompt = self.parse_step(tool_data.get("prompt", {}))
-        self.postprocess = self.parse_steps(tool_data.get("postprocess", []))
-
-    def parse_step(self, step: Union[dict, str]) -> dict:
-        if isinstance(step, dict):
-            return {
-                "engine": step.get("engine", "natural"),
-                "code": step.get("code", ""),
-            }
-        elif isinstance(step, str):  # For backward compatibility
-            return {"engine": "natural", "code": step}
-        else:
-            raise ValueError("Invalid step format")
-
-    def parse_steps(self, steps: list) -> list:
-        return [self.parse_step(step) for step in steps]
-
-    def execute(
-        self,
-        input_values: dict,
-        tools_dict: dict,
-        jinja_env: Environment,
-        command: str,
-        npc=None,
-    ):
-        context = npc.shared_context
-        context.update(
-            {
-                "inputs": input_values,
-                "tools": tools_dict,
-                "llm_response": None,
-                "output": None,
-                "command": command,
-            }
-        )
-        # Process Preprocess Steps
-        for step in self.preprocess:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
-
-        # Process Prompt
-        context = self.execute_step(self.prompt, context, jinja_env, npc=npc)
-
-        # Process Postprocess Steps
-        for step in self.postprocess:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
-
-        # Return the final output
-        if context.get("output") is not None:
-            return context.get("output")
-        elif context.get("llm_response") is not None:
-            return context.get("llm_response")
-
-    def execute_step(
-        self, step: dict, context: dict, jinja_env: Environment, npc: NPC = None
-    ):
-        engine = step.get("engine", "natural")
-        code = step.get("code", "")
-
-        if engine == "natural":
-            # Create template with debugging
-            from jinja2 import Environment, DebugUndefined
-
-            debug_env = Environment(undefined=DebugUndefined)
-            template = debug_env.from_string(code)
-
-            rendered_text = template.render(**context)  # Unpack context as kwargs
-            # print(len(rendered_text.strip()))
-            if len(rendered_text.strip()) > 0:
-                llm_response = get_llm_response(rendered_text, npc=npc)
-                # print(llm_response)
-                if context.get("llm_response") is None:
-                    # This is the prompt step
-                    context["llm_response"] = llm_response.get("response", "")
-                else:
-                    # This is a postprocess step; set output
-                    context["output"] = llm_response.get("response", "")
-
-        elif engine == "python":
-            # Execute Python code
-            exec_globals = {
-                "__builtins__": __builtins__,
-                "npc": npc,  # Pass npc to the execution environment
-                "context": context,
-                # Include necessary imports
-                "pd": pd,
-                "plt": plt,
-                "np": np,
-                "os": os,
-                "get_llm_response": get_llm_response,
-                "generate_image": generate_image,
-                "search_web": search_web,
-                "json": json,
-                "sklearn": __import__("sklearn"),
-                "TfidfVectorizer": __import__(
-                    "sklearn.feature_extraction.text"
-                ).feature_extraction.text.TfidfVectorizer,
-                "cosine_similarity": __import__(
-                    "sklearn.metrics.pairwise"
-                ).metrics.pairwise.cosine_similarity,
-                "Path": __import__("pathlib").Path,
-                "fnmatch": fnmatch,
-                "pathlib": pathlib,
-                "subprocess": subprocess,
-            }
-            exec_env = context.copy()
-            exec(code, exec_globals, exec_env)
-            context.update(exec_env)
-            # import pdb
-            # pdb.set_trace()
-        else:
-            raise ValueError(f"Unsupported engine '{engine}'")
-
-        return context
-
-    def to_dict(self):
-        return {
-            "tool_name": self.tool_name,
-            "inputs": self.inputs,
-            "preprocess": [self.step_to_dict(step) for step in self.preprocess],
-            "prompt": self.step_to_dict(self.prompt),
-            "postprocess": [self.step_to_dict(step) for step in self.postprocess],
-        }
-
-    def step_to_dict(self, step):
-        return {
-            "engine": step.get("engine"),
-            "code": step.get("code"),
-        }
-
-
-import subprocess
-import sqlite3
-import numpy as np
-import os
-import yaml
-from jinja2 import Environment, FileSystemLoader, Template, Undefined
-import pandas as pd
-import pathlib
-from typing import Dict, Any, Optional, Union
-import matplotlib.pyplot as plt
-import json
-import pathlib
-import fnmatch
-import matplotlib.pyplot as plt
-
-# plt.ion()
-
-import sklearn.feature_extraction.text
-import sklearn.metrics.pairwise
-import numpy as np
-
-import sklearn
-
-
-from .llm_funcs import (
-    get_llm_response,
-    process_data_output,
-    get_data_response,
-    generate_image,
-)
-
-from .helpers import get_npc_path
-
-from .search import search_web, rag_search
 
 
 class SilentUndefined(Undefined):
@@ -317,51 +186,6 @@ class SilentUndefined(Undefined):
         return ""
 
 
-class NPC:
-    def __init__(
-        self,
-        name: str,
-        db_conn: sqlite3.Connection,
-        primary_directive: str = None,
-        suggested_tools_to_use: str = None,
-        restrictions: list = None,
-        model: str = None,
-        provider: str = None,
-        api_url: str = None,
-        tools: list = None,
-    ):
-        self.name = name
-        self.primary_directive = primary_directive
-        self.suggested_tools_to_use = suggested_tools_to_use
-        self.restrictions = restrictions
-        self.model = model
-        self.db_conn = db_conn
-        self.tables = self.db_conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table';"
-        ).fetchall()
-        self.provider = provider
-        self.api_url = api_url
-        self.tools = tools or []
-        self.tools_dict = {tool.tool_name: tool for tool in self.tools}
-        self.shared_context = {
-            "dataframes": {},
-            "current_data": None,
-            "computation_results": {},
-        }
-
-    def __str__(self):
-        return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
-
-    def get_data_response(self, request: str):
-        return get_data_response(request, self.db_conn, self.tables)
-
-    def get_llm_response(self, request: str, **kwargs):
-        # print(self.model, self.provider)
-        return get_llm_response(
-            request, provider=self.provider, model=self.model, npc=self, **kwargs
-        )
-
-
 class Tool:
     def __init__(self, tool_data: dict):
         if not tool_data or not isinstance(tool_data, dict):
@@ -408,6 +232,7 @@ class Tool:
                 "command": command,
             }
         )
+        # print(tools_dict)
         # Process Preprocess Steps
         for step in self.preprocess:
             context = self.execute_step(step, context, jinja_env, npc=npc)
@@ -430,6 +255,7 @@ class Tool:
     ):
         engine = step.get("engine", "natural")
         code = step.get("code", "")
+        # print(step)
 
         if engine == "natural":
             # Create template with debugging
@@ -713,9 +539,9 @@ class NPCCompiler:
         step_name = stage["step_name"]
         npc_name = stage["npc"]
         npc_name = jinja_env.from_string(npc_name).render(context)
-        print("npc name: ", npc_name)
+        # print("npc name: ", npc_name)
         npc_path = get_npc_path(npc_name, self.db_path)
-        print("npc path: ", npc_path)
+        # print("npc path: ", npc_path)
         prompt_template = stage["task"]
         num_samples = stage.get("num_samples", 1)
 
@@ -789,7 +615,7 @@ class NPCCompiler:
         if not pipe_file.endswith(".pipe"):
             raise ValueError("Pipeline file must have .pipe extension")
 
-        print(pipe_file)
+        # print(pipe_file)
 
         with open(pipe_file, "r") as f:
             pipeline_data = yaml.safe_load(f)

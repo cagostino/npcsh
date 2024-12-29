@@ -9,7 +9,7 @@ preprocess:
       import datetime
       import os
       from PIL import Image
-      from npcsh.helpers import analyze_image_base
+      from npcsh.image import analyze_image_base
 
       # Generate filename
       filename = f"screenshot_{int(time.time())}.png"

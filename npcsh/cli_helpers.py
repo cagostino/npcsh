@@ -1254,7 +1254,7 @@ def execute_command(
     if provider_override is None:
         provider_override = os.getenv("NPCSH_PROVIDER")
 
-    # print(command, model_override, provider_override)
+    print(model_override, provider_override)
     if command.startswith("/"):
         result = execute_slash_command(
             command,
@@ -1264,7 +1264,7 @@ def execute_command(
             npc_compiler,
             valid_npcs,
             embedding_model=embedding_model,
-            npc=current_npc,
+            npc=npc,
             retrieved_docs=retrieved_docs,
             text_data=text_data,
             text_data_embedded=text_data_embedded,
@@ -1332,7 +1332,7 @@ def execute_command(
                     output = check_llm_command(
                         command,
                         command_history,
-                        npc=current_npc,
+                        npc=npc,
                         retrieved_docs=retrieved_docs,
                         messages=messages,
                         model=model_override,
@@ -1396,10 +1396,11 @@ def execute_command(
 
         else:
             # print(model_override, provider_override)
+            #print(npc)
             output = check_llm_command(
                 command,
                 command_history,
-                npc=current_npc,
+                npc=npc,
                 retrieved_docs=retrieved_docs,
                 messages=messages,
                 model=model_override,
