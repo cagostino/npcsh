@@ -76,9 +76,9 @@ anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", None)
 openai_api_key = os.getenv("OPENAI_API_KEY", None)
 
 npcsh_model = os.environ.get("NPCSH_MODEL", "llama3.2")
-print("npcsh_model", npcsh_model)
+# print("npcsh_model", npcsh_model)
 npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
-print("npcsh_provider", npcsh_provider)
+# print("npcsh_provider", npcsh_provider)
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
@@ -667,7 +667,7 @@ def get_conversation(
         provider = "ollama"
         model = "llava:7b" if images is not None else "llama3.2"
 
-    print(provider, model)
+    # print(provider, model)
     if provider == "ollama":
         return get_ollama_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "openai":
@@ -1259,7 +1259,7 @@ def get_llm_response(
         else:
             model = "llama3.2"
 
-    print(provider, model)
+    # print(provider, model)
     if provider == "ollama":
         if model is None:
             if images is not None:

@@ -150,7 +150,7 @@ class NPC:
         self.tables = self.db_conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table';"
         ).fetchall()
-        print(self.tables)
+        # print(self.tables)
         self.provider = provider
         self.api_url = api_url
         self.tools = tools or []
@@ -165,8 +165,8 @@ class NPC:
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
 
     def analyze_db_data(self, request: str):
-        print("npc")
-        print(self.db_conn, self.tables, self.model, self.provider)
+        # print("npc")
+        # print(self.db_conn, self.tables, self.model, self.provider)
         return get_data_response(
             request,
             self.db_conn,
@@ -232,7 +232,7 @@ class Tool:
                 "command": command,
             }
         )
-        print(tools_dict)
+        # print(tools_dict)
         # Process Preprocess Steps
         for step in self.preprocess:
             context = self.execute_step(step, context, jinja_env, npc=npc)
@@ -255,7 +255,7 @@ class Tool:
     ):
         engine = step.get("engine", "natural")
         code = step.get("code", "")
-        print(step)
+        # print(step)
 
         if engine == "natural":
             # Create template with debugging
@@ -539,9 +539,9 @@ class NPCCompiler:
         step_name = stage["step_name"]
         npc_name = stage["npc"]
         npc_name = jinja_env.from_string(npc_name).render(context)
-        print("npc name: ", npc_name)
+        # print("npc name: ", npc_name)
         npc_path = get_npc_path(npc_name, self.db_path)
-        print("npc path: ", npc_path)
+        # print("npc path: ", npc_path)
         prompt_template = stage["task"]
         num_samples = stage.get("num_samples", 1)
 
@@ -1260,9 +1260,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df["ai_analysis"] = (
-                        synthesized_df  # Adjust as per what synthesize returns
-                    )
+                    df[
+                        "ai_analysis"
+                    ] = synthesized_df  # Adjust as per what synthesize returns
 
             return df
 
