@@ -707,147 +707,133 @@ def get_data_response(
     n_try_freq: int = 5,
     extra_context: str = None,
     history: str = None,
+    model: str = None,
+    provider: str = None,
     npc: Any = None,
-):
+    max_retries: int = 3,
+) -> Dict[str, Any]:
     """
-    Function Description:
-        This function generates a response to a data request.
-    Args:
-        request (str): The data request.
-        db_conn (sqlite3.Connection): The database connection.
-    Keyword Args:
-        tables (str): The tables available in the database.
-        n_try_freq (int): The frequency of attempts.
-        extra_context (str): Additional context for the request.
-        history (str): The history of the queries.
-        npc (Any): The NPC object.
-    Returns:
-        Any: The response to the data request.
-
+    Generate a response to a data request, with retries for failed attempts.
     """
     prompt = f"""
-            Here is a request from a user:
+    User request: {request}
+    Available tables: {tables or 'Not specified'}
+    {extra_context or ''}
+    {f'Query history: {history}' if history else ''}
 
-            ```
-            {request}
-            ```
+    Provide either:
+    1) An SQL query to directly answer the request
+    2) An exploratory query to gather more information
 
-            You need to satisfy their request.
+    Return JSON with:
+    {{
+        "query": <sql query string>,
+        "choice": <1 or 2>,
+        "explanation": <reason for choice>
+    }}
+    DO NOT include markdown formatting or ```json tags.
+    """
 
-            """
-
-    if tables is not None:
-        prompt += f"""
-        Here are the tables you have access to:
-        {tables}
-        """
-    if extra_context is not None:
-        prompt += f"""
-        {extra_context}
-        """
-    if history:
-        prompt += f"""
-        The history of the queries that have been run so far is:
-        {history}
-        """
-
-    prompt += f"""
-
-            Please either write :
-            1) an SQL query that will return the requested data.
-            or
-            2) a query that will provide you more information so that you can answer the request.
-
-            Return the query and the choice you made, i.e. whether you chose 1 or 2.
-            Please return a json with the following keys: "query" and "choice".
-
-            This is a description of the types and requirements for the outputs.
-            {{
-                "query": {"type": "string",
-                          "description": "a valid SQL query that will accomplish the task"},
-                "choice": {"type":"int",
-                           "enum":[1,2]}
-                "choice_explanation": {"type": "string",
-                                        "description": "a brief explanation of why you chose 1 or 2"}
-            }}
-            Do not return any extra information. Respond only with the json.
-            """
-    llm_response = get_llm_response(prompt, format="json", npc=npc)
-
-    list_failures = []
-    success = False
-    n_tries = 0
-    while not success:
-        response_json = process_data_output(
-            llm_response,
-            db_conn,
-            request,
-            tables=tables,
-            history=list_failures,
-            npc=npc,
-        )
-        if response_json["code"] == 200:
-            return response_json["response"]
-
-        else:
-            list_failures.append(response_json["response"])
-        n_tries += 1
-        if n_tries % n_try_freq == 0:
-            print(
-                f"The attempt to obtain the data has failed {n_tries} times. Do you want to continue?"
+    failures = []
+    for attempt in range(max_retries):
+        try:
+            llm_response = get_llm_response(
+                prompt, npc=npc, format="json", model=model, provider=provider
             )
-            user_input = input('Press enter to continue or enter "n" to stop: ')
-            if user_input.lower() == "n":
-                return list_failures
 
-    return llm_response
+            # Clean response if it's a string
+            response_data = llm_response.get("response", {})
+            if isinstance(response_data, str):
+                response_data = (
+                    response_data.replace("```json", "").replace("```", "").strip()
+                )
+                try:
+                    response_data = json.loads(response_data)
+                except json.JSONDecodeError:
+                    failures.append("Invalid JSON response")
+                    continue
+
+            result = process_data_output(
+                response_data,
+                db_conn,
+                request,
+                tables=tables,
+                history=failures,
+                npc=npc,
+                model=model,
+                provider=provider,
+            )
+
+            if result["code"] == 200:
+                return result
+
+            failures.append(result["response"])
+
+            if attempt == max_retries - 1:
+                return {
+                    "response": f"Failed after {max_retries} attempts. Errors: {'; '.join(failures)}",
+                    "code": 400,
+                }
+
+        except Exception as e:
+            failures.append(str(e))
+
+    return {"response": "Max retries exceeded", "code": 400}
 
 
 def check_output_sufficient(
     request: str,
-    response: pd.DataFrame,
+    data: pd.DataFrame,
     query: str,
     model: str = None,
     provider: str = None,
     npc: Any = None,
-):
+) -> Dict[str, Any]:
+    """
+    Check if the query results are sufficient to answer the user's request.
+    """
     prompt = f"""
+    Given:
+    - User request: {request}
+    - Query executed: {query}
+    - Results:
+      Summary: {data.describe()}
+      data schema: {data.dtypes}
+      Sample: {data.head()}
 
-            A user made this request:
-                            ```
-                {request}
-                    ```
-            You have extracted a result from the database using the following query:
-                            ```
-                {query}
-                    ```
-            Here is the result:
-                            ```
-                {response.head(),
-                    response.describe()}
-                    ```
-            Is this result sufficient to answer the user's request?
+    Is this result sufficient to answer the user's request?
+    Return JSON with:
+    {{
+        "IS_SUFFICIENT": <boolean>,
+        "EXPLANATION": <string : If the answer is not sufficient specify what else is necessary.
+                                IFF the answer is sufficient, provide a response that can be returned to the user as an explanation that answers their question.
+                                The explanation should use the results to answer their question as long as they wouold be useful to the user.
+                                    For example, it is not useful to report on the "average/min/max/std ID" or the "min/max/std/average of a string column".
 
-            Return a json with the following
-            key: 'IS_SUFFICIENT'
-            Here is a description of the types and requirements for the output.
-                            ```
-                {{
-                    "IS_SUFFICIENT": {"type": "bool",
-                                        "description": "whether the result is sufficient to answer the user's request"}
-                }}
-                            ```
+                                Be smart about what you report.
+                                It should not be a conceptual or abstract summary of the data.
+                                It should not unnecessarily bring up a need for more data.
+                                You should write it in a tone that answers the user request. Do not spout unnecessary self-referential fluff like "This information gives a clear overview of the x landscape".
+                                >
+    }}
+    DO NOT include markdown formatting or ```json tags.
 
+    """
 
-
-            """
-    llm_response = get_llm_response(
+    response = get_llm_response(
         prompt, format="json", model=model, provider=provider, npc=npc
     )
-    if llm_response["IS_SUFFICIENT"] == True:
-        return response
-    else:
-        return False
+
+    # Clean response if it's a string
+    result = response.get("response", {})
+    if isinstance(result, str):
+        result = result.replace("```json", "").replace("```", "").strip()
+        try:
+            result = json.loads(result)
+        except json.JSONDecodeError:
+            return {"IS_SUFFICIENT": False, "EXPLANATION": "Failed to parse response"}
+
+    return result
 
 
 def process_data_output(
@@ -855,89 +841,66 @@ def process_data_output(
     db_conn: sqlite3.Connection,
     request: str,
     tables: str = None,
-    n_try_freq: int = 5,
     history: str = None,
     npc: Any = None,
-):
+    model: str = None,
+    provider: str = None,
+) -> Dict[str, Any]:
     """
-    Function Description:
-        This function processes the output of a data request.
-    Args:
-        llm_response (Dict[str, Any]): The response from the LLM.
-        db_conn (sqlite3.Connection): The database connection.
-        request (str): The data request.
-    Keyword Args:
-        tables (str): The tables available in the database.
-        n_try_freq (int): The frequency of attempts.
-        history (str): The history of the queries.
-        npc (Any): The NPC object.
-    Returns:
-        Any: The processed output of the data request.
+    Process the LLM's response to a data request and execute the appropriate query.
     """
+    try:
+        choice = llm_response.get("choice")
+        query = llm_response.get("query")
 
-    if llm_response["choice"] == 1:
-        query = llm_response["query"]
-        try:
-            response = db_conn.execute(query).fetchall()
-            # make into pandas
-            response = pd.DataFrame(response)
-            result = check_output_sufficient(request, response, query)
-            if result:
-                return {"response": response, "code": 200}
-            else:
-                output = {
-                    "response": f"""The result in the response : ```{response.head()} ```
-                        was not sufficient to answer the user's request. """,
+        if not query:
+            return {"response": "No query provided", "code": 400}
+
+        if choice == 1:  # Direct answer query
+            try:
+                df = pd.read_sql_query(query, db_conn)
+                result = check_output_sufficient(
+                    request, df, query, model=model, provider=provider, npc=npc
+                )
+
+                if result.get("IS_SUFFICIENT"):
+                    return {"response": result["EXPLANATION"], "data": df, "code": 200}
+                return {
+                    "response": f"Results insufficient: {result.get('EXPLANATION')}",
                     "code": 400,
                 }
-                return output
 
-            return response
-        except Exception as e:
-            return {"response": f"Error executing query: {str(e)}", "code": 400}
-    elif llm_response["choice"] == 2:
-        if "query" in llm_response:
-            query = llm_response["query"]
+            except Exception as e:
+                return {"response": f"Query execution failed: {str(e)}", "code": 400}
+
+        elif choice == 2:  # Exploratory query
             try:
-                response = db_conn.execute(query).fetchall()
-                # make into pandas
-                response = pd.DataFrame(response)
+                df = pd.read_sql_query(query, db_conn)
                 extra_context = f"""
-
-
-                You indicated that you would need to run
-                the following query to provide a more complete response:
-                        ```
-                    {query}
-                        ```
-                Here is the result:
-                                ```
-                    {response.head(),
-                        response.describe()}
-                        ```
-
+                Exploratory query results:
+                Query: {query}
+                Results summary: {df.describe()}
+                Sample data: {df.head()}
                 """
-                if history is not None:
-                    extra_context += f"""
-                    The history of the queries that have been run so far is:
-                    {history}
-                    """
 
-                llm_response = get_data_response(
+                return get_data_response(
                     request,
                     db_conn,
                     tables=tables,
                     extra_context=extra_context,
-                    n_try_freq=n_try_freq,
                     history=history,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
                 )
-                return {"response": llm_response, "code": 200}
+
             except Exception as e:
-                return {"response": f"Error executing query: {str(e)}", "code": 400}
-        else:
-            return {"response": "Error: Missing query in response", "code": 400}
-    else:
-        return {"response": "Error: Invalid choice in response", "code": 400}
+                return {"response": f"Exploratory query failed: {str(e)}", "code": 400}
+
+        return {"response": "Invalid choice specified", "code": 400}
+
+    except Exception as e:
+        return {"response": f"Processing error: {str(e)}", "code": 400}
 
 
 def get_ollama_response(
@@ -976,8 +939,7 @@ def get_ollama_response(
             # print(model)
             # print(messages)
 
-            # Call the ollama API
-            res = ollama.chat(model=model, messages=[message])
+            res = ollama.chat(model=model, messages=[message], format=format)
             # print(res)
             # Extract the response content
             response_content = res["message"]["content"]
@@ -997,8 +959,7 @@ def get_ollama_response(
             message = {"role": "user", "content": prompt}
 
             # Call the ollama API
-            res = ollama.chat(model=model, messages=[message])
-
+            res = ollama.chat(model=model, messages=[message], format=format)
             # Extract the response content
             response_content = res["message"]["content"]
 
@@ -1010,6 +971,15 @@ def get_ollama_response(
                 messages.append({"role": "assistant", "content": response_content})
                 items_to_return["messages"] = messages
 
+            if format == "json":
+                try:
+                    items_to_return["response"] = json.loads(response_content)
+                    return items_to_return
+                except json.JSONDecodeError:
+                    print(
+                        f"Warning: Expected JSON response, but received: {response_content}"
+                    )
+                    return {"error": "Invalid JSON response"}
             return items_to_return
 
     except Exception as e:
@@ -1076,6 +1046,7 @@ def get_openai_response(
         items_to_return = {"response": llm_response}
 
         items_to_return["messages"] = messages
+        print(format)
         if format == "json":
             try:
                 items_to_return["response"] = json.loads(llm_response)
@@ -1185,6 +1156,7 @@ def get_anthropic_response(
         llm_response = message.content[0].text
         items_to_return = {"response": llm_response}
 
+        print(format)
         # Update messages if they were provided
         if messages is None:
             messages = []
@@ -1287,7 +1259,7 @@ def get_llm_response(
         else:
             model = "llama3.2"
 
-    # print(provider, model)
+    print(provider, model)
     if provider == "ollama":
         if model is None:
             if images is not None:
