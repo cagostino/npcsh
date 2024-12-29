@@ -501,67 +501,148 @@ Integrate npcsh into your Python projects for additional flexibility. Below are 
 This example shows how to create and initialize an NPC and use it to answer a question.
 ```bash
 import sqlite3
-from npcsh import NPC, load_npc_from_file
+from npcsh.npc_compiler import NPC
 
 # Set up database connection
 db_path = '~/npcsh_history.db'
 conn = sqlite3.connect(db_path)
 
 # Load NPC from a file
-npc = NPC(name='Simon Bolivar', db_conn=conn)
+npc = NPC(name='Simon Bolivar',
+          primary_directive='Liberate South America from the Spanish Royalists.',
+          model='gpt-4o-mini',
+          provider='openai',
+          db_conn=conn)
 
-# Ask a question to the NPC
-question = "What are the project updates?"
-llm_response = npc.get_llm_response(question)
-
-# Output the NPC's response
-print(f"{npc.name}: {llm_response['response']}")
+response = npc.get_llm_response("What is the most important territory to retain in the Andes mountains?")
+print(response['response'])
+```
+```bash
+'The most important territory to retain in the Andes mountains for the cause of liberation in South America would be the region of Quito in present-day Ecuador. This area is strategically significant due to its location and access to key trade routes. It also acts as a vital link between the northern and southern parts of the continent, influencing both military movements and the morale of the independence struggle. Retaining control over Quito would bolster efforts to unite various factions in the fight against Spanish colonial rule across the Andean states.'
 ```
 ### Example 2: Using an NPC to Analyze Data
 This example shows how to use an NPC to perform data analysis on a DataFrame using LLM commands.
 ```bash
+from npcsh.npc_compiler import NPC
+import sqlite3
+import os
+# Set up database connection
+db_path = '~/npcsh_history.db'
+conn = sqlite3.connect(os.path.expanduser(db_path))
+
+# make a table to put into npcsh_history.db or change this example to use an existing table in a database you have
 import pandas as pd
-from npcsh import NPC
-
-# Create dummy data for analysis
 data = {
-    'feedback': ["Great product!", "Could be better", "Amazing service"],
-    'customer_id': [1, 2, 3],
-}
+        'customer_feedback': ['The product is great!', 'The service was terrible.', 'I love the new feature.'],
+        'customer_id': [1, 2, 3],
+        'customer_rating': [5, 1, 3],
+        'timestamp': ['2022-01-01', '2022-01-02', '2022-01-03']
+        }
+
+
 df = pd.DataFrame(data)
+df.to_sql('customer_feedback', conn, if_exists='replace', index=False)
 
-# Initialize the NPC
-npc = NPC(name='Sibiji', db_conn=sqlite3.connect('~/npcsh_history.db'))
 
-# Formulate a command for analysis
-command = "Analyze customer feedback for sentiment."
+npc = NPC(name='Felix',
+          primary_directive='Analyze customer feedback for sentiment.',
+          model='llama3.2',
+          provider='ollama',
+          db_conn=conn)
+response = npc.analyze_db_data('Provide a detailed report on the data contained in the `customer_feedback` table?')
+
+
 ```
 
 
 ### Example 3: Creating and Using a Tool
 You can define a tool and execute it from within your Python script.
-```bash
+Here we'll create a tool that will take in a pdf file, extract the text, and then answer a user request about the text.
 
-from npcsh import Tool, NPC
-# Create a tool from a dictionary
+```bash
+from npcsh.npc_compiler import Tool, NPC
+import sqlite3
+import os
+
 tool_data = {
-    "tool_name": "my_tool",
-    "inputs": ["input_text"],
-    "preprocess": [{"engine": "natural", "code": "Preprocessing: {{ inputs.input_text }}"}],
-    "prompt": {"engine": "natural", "code": "Here is the output: {{ llm_response }}"},
-    "postprocess": []
+    "tool_name": "pdf_analyzer",
+    "inputs": ["request", "file"],
+    "preprocess": [{  # Make this a list with one dict inside
+        "engine": "python",
+        "code": """
+try:
+    import fitz  # PyMuPDF
+
+    shared_context = {}
+    shared_context['inputs'] = inputs
+
+    pdf_path = inputs['file']
+    print(f"Processing PDF file: {pdf_path}")
+
+    # Open the PDF
+    doc = fitz.open(pdf_path)
+    text = ""
+
+    # Extract text from each page
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        text += page.get_text()
+
+    # Close the document
+    doc.close()
+
+    print(f"Extracted text length: {len(text)}")
+    if len(text) > 100:
+        print(f"First 100 characters: {text[:100]}...")
+
+    shared_context['extracted_text'] = text
+    print("Text extraction completed successfully")
+
+except Exception as e:
+    error_msg = f"Error processing PDF: {str(e)}"
+    print(error_msg)
+    shared_context['extracted_text'] = f"Error: {error_msg}"
+"""
+    }],
+    "prompt": {
+        "engine": "natural",
+        "code": """
+{% if shared_context and shared_context.extracted_text %}
+{% if shared_context.extracted_text.startswith('Error:') %}
+{{ shared_context.extracted_text }}
+{% else %}
+Here is the text extracted from the PDF:
+
+{{ shared_context.extracted_text }}
+
+Please provide a response to user request: {{ inputs.request }} using the information extracted above.
+{% endif %}
+{% else %}
+Error: No text was extracted from the PDF.
+{% endif %}
+"""
+    },
+    "postprocess": []  # Empty list instead of empty dict
 }
 
 # Instantiate the tool
 tool = Tool(tool_data)
 
 # Create an NPC instance
-npc = NPC(name='Sibiji', db_conn=sqlite3.connect('/path/to/npcsh_database.db'))
+npc = NPC(
+    name='starlana',
+    primary_directive='Analyze text from Astrophysics papers with a keen attention to theoretical machinations and mechanisms.',
+    db_conn=sqlite3.connect(os.path.expanduser('~/npcsh_database.db'))
+)
 
 # Define input values dictionary
 input_values = {
-    "input_text": "User input goes here"
+    "request": "what is the point of the yuan and narayanan work?",
+    "file": os.path.abspath("test_data/yuan2004.pdf")
 }
+
+print(f"Attempting to read file: {input_values['file']}")
+print(f"File exists: {os.path.exists(input_values['file'])}")
 
 # Execute the tool
 output = tool.execute(input_values, npc.tools_dict, None, 'Sample Command', npc)
