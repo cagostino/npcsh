@@ -492,7 +492,7 @@ postprocess:
 - to be filled in soon
 
 
-## Python Examples (UNDER CONSTRUCTION)
+## Python Examples
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
 
 
