@@ -9,7 +9,7 @@ from .llm_funcs import get_llm_response
 import os
 
 
-def capture_screenshot(npc: Any = None) -> Dict[str, str]:
+def capture_screenshot(npc: Any = None, full=False) -> Dict[str, str]:
     """
     Function Description:
         This function captures a screenshot of the current screen and saves it to a file.
@@ -37,42 +37,73 @@ def capture_screenshot(npc: Any = None) -> Dict[str, str]:
 
         if npc.model is not None:
             model_kwargs["model"] = npc.model
-
-    if system == "Darwin":  # macOS
-        subprocess.run(["screencapture", "-i", file_path])  # This waits on macOS
-    elif system == "Linux":
-        # Use a loop to check for the file's existence
-        if (
-            subprocess.run(
-                ["which", "gnome-screenshot"], capture_output=True
-            ).returncode
-            == 0
-        ):
-            subprocess.Popen(
-                ["gnome-screenshot", "-a", "-f", file_path]
-            )  # Use Popen for non-blocking
-            while not os.path.exists(file_path):  # Wait for file to exist
-                time.sleep(0.1)  # Check every 100ms
-        elif subprocess.run(["which", "scrot"], capture_output=True).returncode == 0:
-            subprocess.Popen(["scrot", "-s", file_path])  # Use Popen for non-blocking
-            while not os.path.exists(file_path):  # Wait for file to exist
-                time.sleep(0.1)  # Check every 100ms
-
+    if full:
+        if system == "Darwin":
+            subprocess.run(["screencapture", file_path])
+        elif system == "Linux":
+            if (
+                subprocess.run(
+                    ["which", "gnome-screenshot"], capture_output=True
+                ).returncode
+                == 0
+            ):
+                subprocess.Popen(["gnome-screenshot", "-f", file_path])
+                while not os.path.exists(file_path):
+                    time.sleep(0.5)
+            elif (
+                subprocess.run(["which", "scrot"], capture_output=True).returncode == 0
+            ):
+                subprocess.Popen(["scrot", file_path])
+                while not os.path.exists(file_path):
+                    time.sleep(0.5)
+            else:
+                print(
+                    "No supported screenshot tool found. Please install gnome-screenshot or scrot."
+                )
+                return None
         else:
-            print(
-                "No supported screenshot tool found. Please install gnome-screenshot or scrot."
-            )
+            print(f"Unsupported operating system: {system}")
             return None
     else:
-        print(f"Unsupported operating system: {system}")
-        return None
+        if system == "Darwin":  # macOS
+            subprocess.run(["screencapture", "-i", file_path])  # This waits on macOS
+        elif system == "Linux":
+            # Use a loop to check for the file's existence
+            if (
+                subprocess.run(
+                    ["which", "gnome-screenshot"], capture_output=True
+                ).returncode
+                == 0
+            ):
+                subprocess.Popen(
+                    ["gnome-screenshot", "-a", "-f", file_path]
+                )  # Use Popen for non-blocking
+                while not os.path.exists(file_path):  # Wait for file to exist
+                    time.sleep(0.5)  # Check every 100ms
+            elif (
+                subprocess.run(["which", "scrot"], capture_output=True).returncode == 0
+            ):
+                subprocess.Popen(
+                    ["scrot", "-s", file_path]
+                )  # Use Popen for non-blocking
+                while not os.path.exists(file_path):  # Wait for file to exist
+                    time.sleep(0.5)  # Check every 100ms
+
+            else:
+                print(
+                    "No supported screenshot tool found. Please install gnome-screenshot or scrot."
+                )
+                return None
+        else:
+            print(f"Unsupported operating system: {system}")
+            return None
 
     print(f"Screenshot saved to: {file_path}")
     return {"filename": filename, "file_path": file_path, "model_kwargs": model_kwargs}
 
 
 def analyze_image_base(
-    user_prompt: str, file_path: str, filename: str, npc: Any = None
+    user_prompt: str, file_path: str, filename: str, npc: Any = None, **model_kwargs
 ) -> Dict[str, str]:
     """
     Function Description:
@@ -92,25 +123,21 @@ def analyze_image_base(
         image_info = {"filename": filename, "file_path": file_path}
 
         if user_prompt:
-            # try:
-            response = get_llm_response(user_prompt, images=[image_info], npc=npc)
-
-            # Add to command history *inside* the try block
-
-            # print(response["response"])  # Print response after adding to history
-            return response
-
-            # except Exception as e:
-            # error_message = f"Error during LLM processing: {e}"
-            # print(error_message)
-            # return error_message
-
-        else:  # This part needs to be inside the outer 'if os.path.exists...' block
+            try:
+                response = get_llm_response(
+                    user_prompt, images=[image_info], npc=npc, **model_kwargs
+                )
+                return response
+            except Exception as e:
+                error_message = f"Error during LLM processing: {e}"
+                print(error_message)
+                return {"response": error_message}
+        else:
             print("Skipping LLM processing.")
-            return image_info  # Return image info if no prompt is given
-    else:  # This else also needs to be part of the outer 'if os.path.exists...' block
+            return {"response": str(image_info)}
+    else:
         print("Screenshot capture failed or was cancelled.")
-        return None
+        return {"response": "Screenshot capture failed or was cancelled."}
 
 
 def analyze_image(
