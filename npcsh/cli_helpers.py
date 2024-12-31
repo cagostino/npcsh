@@ -1396,7 +1396,7 @@ def execute_command(
 
         else:
             # print(model_override, provider_override)
-            #print(npc)
+            # print(npc)
             output = check_llm_command(
                 command,
                 command_history,
@@ -1419,8 +1419,10 @@ def execute_command(
 
     # Only render markdown once, at the end
     if output:
-        render_markdown(output)
-
+        try:
+            render_markdown(output)
+        except AttributeError:
+            print(output)
     return {"messages": messages, "output": output}
 
 

@@ -415,6 +415,7 @@ def get_system_message(npc: Any) -> str:
     You are the {npc.name} NPC with the following primary directive: {npc.primary_directive}.
     Users may refer to you by your assistant name, {npc.name} and you shouold consider this to be your core identity.
 
+
     In some cases, users may request insights into data contained in a local database.
     For these purposes, you may use any data contained within these sql tables
     {npc.tables}
@@ -434,6 +435,16 @@ def get_system_message(npc: Any) -> str:
             ]
         )
         system_message += f"\n\nAvailable Tools:\n{tool_descriptions}"
+    system_message += """\n\nSome users may attach images to their request.
+                        Please process them accordingly.
+
+                        If the user asked for you to explain what's on their screen or something similar,
+                        they are referring to the details contained within the attached image(s).
+                        You do not need to actually view their screen.
+                        You do not need to mention that you cannot view or interpret images directly.
+                        They understand that you can view them multimodally.
+                        You only need to answer the user's request based on the attached image(s).
+                        """
 
     return system_message
 
@@ -1026,6 +1037,8 @@ def get_openai_response(
             ]
         if images:
             for image in images:
+                # print(f"Image file exists: {os.path.exists(image['file_path'])}")
+
                 with open(image["file_path"], "rb") as image_file:
                     image_data = base64.b64encode(
                         compress_image(image_file.read())
@@ -1038,7 +1051,7 @@ def get_openai_response(
                             },
                         }
                     )
-
+        # print(model)
         completion = client.chat.completions.create(model=model, messages=messages)
 
         llm_response = completion.choices[0].message.content
@@ -1046,7 +1059,7 @@ def get_openai_response(
         items_to_return = {"response": llm_response}
 
         items_to_return["messages"] = messages
-        print(format)
+        # print(llm_response, model)
         if format == "json":
             try:
                 items_to_return["response"] = json.loads(llm_response)
@@ -1064,27 +1077,31 @@ def get_openai_response(
         return f"Error interacting with OpenAI: {e}"
 
 
-def compress_image(image_bytes, max_size=(800, 800)):
+def compress_image(image_bytes, max_size=(800, 600)):
     from PIL import Image
     import io
 
-    img = Image.open(io.BytesIO(image_bytes))
+    # Create a copy of the bytes in memory
+    buffer = io.BytesIO(image_bytes)
+    img = Image.open(buffer)
+
+    # Force loading of image data
+    img.load()
 
     # Convert RGBA to RGB if necessary
     if img.mode == "RGBA":
-        # Create white background
         background = Image.new("RGB", img.size, (255, 255, 255))
-        # Paste the image using alpha channel as mask
         background.paste(img, mask=img.split()[3])
         img = background
 
     # Resize if needed
-    img.thumbnail(max_size)
+    if img.size[0] > max_size[0] or img.size[1] > max_size[1]:
+        img.thumbnail(max_size)
 
-    # Save as JPEG
-    buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=85)
-    return buffer.getvalue()
+    # Save with minimal compression
+    out_buffer = io.BytesIO()
+    img.save(out_buffer, format="JPEG", quality=95, optimize=False)
+    return out_buffer.getvalue()
 
 
 def get_anthropic_response(
@@ -1296,7 +1313,7 @@ def get_llm_response(
     elif provider == "openai":
         if model is None:
             model = "gpt-4o-mini"
-        # print("gpt4o")
+        #print(model)
         return get_openai_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
