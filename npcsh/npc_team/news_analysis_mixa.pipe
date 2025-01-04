@@ -1,0 +1,18 @@
+steps:
+  - step_name: "classify_news"
+    npc: "news_assistant"
+    mixa: true
+    mixa_agents:
+      - "{{ ref('news_assistant') }}"
+      - "{{ ref('journalist_npc') }}"
+      - "{{ ref('data_scientist_npc') }}"
+    mixa_voters:
+      - "{{ ref('critic_npc') }}"
+      - "{{ ref('editor_npc') }}"
+      - "{{ ref('researcher_npc') }}"
+    mixa_voter_count: 5
+    mixa_turns: 3
+    mixa_strategy: "vote"
+    task: |
+      Classify the following news articles...
+      {{ source('news_articles') }}

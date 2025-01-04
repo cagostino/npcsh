@@ -1,0 +1,17 @@
+# news_analysis.pipe
+steps:
+  - step_name: "classify_news"
+    npc: "{{ ref('news_assistant') }}"
+    task: |
+      Classify the following news articles into one of the categories:
+      ["Politics", "Economy", "Technology", "Sports", "Health"].
+      {{ source('news_articles') }}
+
+  - step_name: "analyze_news"
+    npc: "{{ ref('news_assistant') }}"
+    batch_mode: true  # Process articles with knowledge of their tags
+    task: |
+      Based on the category assigned in {{classify_news}}, provide an in-depth
+      analysis and perspectives on the article. Consider these aspects:
+      ["Impacts", "Market Reaction", "Cultural Significance", "Predictions"].
+      {{ source('news_articles') }}
