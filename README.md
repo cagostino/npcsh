@@ -485,7 +485,7 @@ postprocess:
 ```
 
 
-## NPC Pipelines (UNDER CONSTRUCTION)
+## NPC Pipelines
 
 
 
@@ -637,6 +637,7 @@ npcsh> /compile morning_routine.pipe
 ```
 
 
+
 Alternatively we can run a pipeline like so in Python:
 
 ```bash
@@ -650,6 +651,128 @@ pipeline_runner = PipelineRunner(
 )
 pipeline_runner.execute_pipeline(inputs)
 ```
+
+What if you wanted to run operations on each row and some operations on all the data at once? We can do this with the pipelines as well. Here we will build a pipeline for news article analysis.
+First we make the data for the pipeline that well use:
+```python
+import pandas as pd
+from sqlalchemy import create_engine
+import os
+
+# Sample data generation for news articles
+news_articles_data = {
+    "news_article_id": list(range(1, 21)),
+    "headline": [
+        "Economy sees unexpected growth in Q4",
+        "New tech gadget takes the world by storm",
+        "Political debate heats up over new policy",
+        "Health concerns rise amid new disease outbreak",
+        "Sports team secures victory in last minute",
+        "New economic policy introduced by government",
+        "Breakthrough in AI technology announced",
+        "Political leader delivers speech on reforms",
+        "Healthcare systems pushed to limits",
+        "Celebrated athlete breaks world record",
+        "Controversial economic measures spark debate",
+        "Innovative tech startup gains traction",
+        "Political scandal shakes administration",
+        "Healthcare workers protest for better pay",
+        "Major sports event postponed due to weather",
+        "Trade tensions impact global economy",
+        "Tech company accused of data breach",
+        "Election results lead to political upheaval",
+        "Vaccine developments offer hope amid pandemic",
+        "Sports league announces return to action",
+    ],
+    "content": ["Article content here..." for _ in range(20)],
+    "publication_date": pd.date_range(start="1/1/2023", periods=20, freq="D"),
+}
+```
+
+Then we will create the pipeline file:
+```yaml
+# news_analysis.pipe
+steps:
+  - step_name: "classify_news"
+    npc: "{{ ref('news_assistant') }}"
+    task: |
+      Classify the following news articles into one of the categories:
+      ["Politics", "Economy", "Technology", "Sports", "Health"].
+      {{ source('news_articles') }}
+
+  - step_name: "analyze_news"
+    npc: "{{ ref('news_assistant') }}"
+    batch_mode: true  # Process articles with knowledge of their tags
+    task: |
+      Based on the category assigned in {{classify_news}}, provide an in-depth
+      analysis and perspectives on the article. Consider these aspects:
+      ["Impacts", "Market Reaction", "Cultural Significance", "Predictions"].
+      {{ source('news_articles') }}
+```
+
+Then we can run the pipeline like so:
+```bash
+/compile ./npc_team/news_analysis.pipe
+```
+or in python like:
+
+```bash
+
+from npcsh.npc_compiler import PipelineRunner
+import os
+runner = PipelineRunner(
+    "./news_analysis.pipe",
+    db_path=os.path.expanduser("~/npcsh_history.db"),
+    npc_root_dir=os.path.abspath("."),
+)
+results = runner.execute_pipeline()
+```
+
+Alternatively, if youd like to use a mixture of agents in your pipeline, set one up like this:
+```yaml
+steps:
+  - step_name: "classify_news"
+    npc: "news_assistant"
+    mixa: true
+    mixa_agents:
+      - "{{ ref('news_assistant') }}"
+      - "{{ ref('journalist_npc') }}"
+      - "{{ ref('data_scientist_npc') }}"
+    mixa_voters:
+      - "{{ ref('critic_npc') }}"
+      - "{{ ref('editor_npc') }}"
+      - "{{ ref('researcher_npc') }}"
+    mixa_voter_count: 5
+    mixa_turns: 3
+    mixa_strategy: "vote"
+    task: |
+      Classify the following news articles...
+      {{ source('news_articles') }}
+```
+You'll have to make npcs for these references to work, here are versions that should work with the above:
+```yaml
+name: news_assistant
+```
+Then, we can run the mixture of agents method like:
+
+```bash
+/compile ./npc_team/news_analysis_mixa.pipe
+```
+or in python like:
+
+```bash
+
+from npcsh.npc_compiler import PipelineRunner
+import os
+
+runner = PipelineRunner(
+    "./news_analysis_mixa.pipe",
+    db_path=os.path.expanduser("~/npcsh_history.db"),
+    npc_root_dir=os.path.abspath("."),
+)
+results = runner.execute_pipeline()
+```
+
 
 
 Note, in the future we will aim to separate compilation and running so that we will have a compilation step that is more like a jinja rendering of the relevant information so that it can be more easily audited.
