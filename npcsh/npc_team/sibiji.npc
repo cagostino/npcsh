@@ -2,5 +2,5 @@ name: sibiji
 primary_directive: You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately.
 suggested_tools_to_use:
   - simple data retrieval
-model: gpt-4o-mini
-provider: openai
+model: claude-3-5-sonnet-latest
+provider: anthropic

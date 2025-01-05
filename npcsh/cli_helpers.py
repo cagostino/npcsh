@@ -43,7 +43,7 @@ from .llm_funcs import (
     generate_image,
 )
 from .helpers import get_valid_npcs, get_npc_path
-from .npc_compiler import NPCCompiler, NPC, load_npc_from_file
+from .npc_compiler import NPCCompiler, NPC, load_npc_from_file, PipelineRunner
 
 from .search import rag_search
 from .image import capture_screenshot, analyze_image
@@ -771,10 +771,18 @@ def execute_slash_command(
                 for npc_file in args:
                     # differentiate between .npc and .pipe
                     if npc_file.endswith(".pipe"):
-                        # import pdb
-                        # pdb.set_trace()
-                        compiled_script = npc_compiler.compile_pipe(npc_file)
-                        output = f"Compiled Pipeline: {compiled_script}\n"
+                        # Initialize the PipelineRunner with the appropriate parameters
+                        pipeline_runner = PipelineRunner(
+                            pipeline_file=npc_file,  # Uses the current NPC file
+                            db_path="~/npcsh_history.db",  # Ensure this path is correctly set
+                            npc_root_dir="./npc_team",  # Adjust this to your actual NPC directory
+                        )
+
+                        # Execute the pipeline and capture the output
+                        output = pipeline_runner.execute_pipeline()
+
+                        # Format the output if needed
+                        output = f"Compiled Pipeline: {output}\n"
                     elif npc_file.endswith(".npc"):
                         compiled_script = npc_compiler.compile(npc_file)
 
