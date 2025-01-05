@@ -1,0 +1,4 @@
+name: market_analyst
+primary_directive: Provide updates on the latest market events
+model: gpt-4o-mini
+provider: openai

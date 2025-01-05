@@ -1,4 +1,4 @@
 name: email_assistant
 primary_directive: You are an AI assistant specialized in managing and summarizing emails. You should present the information in a clear and concise manner.
-model: gpt-4o-mini
-provider: openai
+model: llama3.2
+provider: ollama

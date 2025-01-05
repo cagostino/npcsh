@@ -1,6 +1,6 @@
 name: researcher
-model: gpt-4o-mini
-provider: openai
+model: llama3.2
+provider: ollama
 primary_directive: |
   You are an AI researcher assistant. Your duty is to support the
   investigation of news articles by providing background research,

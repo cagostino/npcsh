@@ -1,7 +1,7 @@
 name: data_analyst
 primary_directive: Assist users with data analysis tasks, including data loading, plotting, and statistical computations.
-model: gpt-4o-mini
-provider: openai
+model: llama3.2
+provider: ollama
 suggested_tools_to_use:
   - data_loader
   - data_plotter

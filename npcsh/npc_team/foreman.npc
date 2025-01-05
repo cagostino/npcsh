@@ -1,4 +1,4 @@
 name: foreman
 primary_directive: "You are the foreman of an NPC team."
-model: gpt-4o-mini
-provider: openai
+model: llama3.2
+provider: ollama

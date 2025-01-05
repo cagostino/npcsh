@@ -1,6 +1,6 @@
 name: journalist
-model: gpt-4o-mini
-provider: openai
+model: llama3.2
+provider: ollama
 primary_directive: |
   You are a skilled AI journalist assistant. Your responsibilities include
   collecting insights from news articles, identifying key themes, and

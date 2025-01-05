@@ -1,6 +1,6 @@
 name: editor
-model: gpt-4o-mini
-provider: openai
+model: llama3.2
+provider: ollama
 primary_directive: |
   You are an intelligent editing assistant. Your role is to refine and
   polish news articles, ensuring clarity, coherence, and adherence to
