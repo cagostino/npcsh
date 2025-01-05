@@ -353,7 +353,11 @@ def generate_image(
             api_url = npc.api_url
     if filename is None:
         # Generate a filename based on the prompt and the date time
-        filename = f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        os.makedirs(os.path.expanduser("~/.npcsh/images/"), exist_ok=True)
+        filename = (
+            os.path.expanduser("~/.npcsh/images/")
+            + f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        )
 
     if provider == "ollama":
         image = generate_image_ollama(prompt, model)
@@ -1313,7 +1317,7 @@ def get_llm_response(
     elif provider == "openai":
         if model is None:
             model = "gpt-4o-mini"
-        #print(model)
+        # print(model)
         return get_openai_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
