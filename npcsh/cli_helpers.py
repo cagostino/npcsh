@@ -795,11 +795,28 @@ def execute_slash_command(
 
             output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
             print(output)
+    if command_name == "flush":
+        n = float("inf")  # Default to infinite
+        for arg in args:
+            if arg.startswith("n="):
+                try:
+                    n = int(arg.split("=")[1])
+                except ValueError:
+                    return {"messages": messages, "output": "Error: 'n' must be an integer."
+
+        flush_result = flush_messages(n, messages)
+        return flush_result  # Return the result of flushing messages
+
+    # Handle /rehash command
+    elif command_name == "rehash":
+        rehash_result = rehash_last_message(messages)
+        return rehash_result  # Return the result of rehashing last message
+
     elif command_name == "pipe":
         if len(args) > 0:  # Specific NPC file(s) provided
             for npc_file in args:
                 # differentiate between .npc and .pipe
-                compiled_script = npc_compiler.compile_pipe(npc_file)
+
                 # run through the steps in the pipe
     elif command_name == "select":
         query = " ".join([command_name] + args)  # Reconstruct full query
@@ -1055,6 +1072,39 @@ def execute_set_command(command: str, value: str) -> str:
         f.writelines(lines)
 
     return f"{command.capitalize()} has been set to: {value}"
+
+def flush_messages(n: int, messages: list) -> dict:
+    if n <= 0:
+        return {"messages": messages, "output": "Error: 'n' must be a positive integer."}
+
+    removed_count = min(n, len(messages))  # Calculate how many to remove
+    del messages[-removed_count:]  # Remove the last n messages
+
+    return {
+        "messages": messages,
+        "output": f"Flushed {removed_count} message(s). Context count is now {len(messages)}
+    }
+def rehash_last_message(messages: list) -> dict:
+    if not messages:
+        return {"messages": messages, "output": "No messages to rehash."}
+
+    # Find the last user message
+    last_user_message = None
+    for msg in reversed(messages):
+        if msg["role"] == "user":
+            last_user_message = msg["content"]
+            break
+
+    if last_user_message is None:
+        return {"messages": messages, "output": "No last user message found."}
+
+    # Execute the last user message as a command
+    output = check_llm_command(last_user_message, command_history, npc=npc)
+
+    return {
+        "messages": messages,
+        "output": f"Rehashed message: {last_user_message}\nResponse: {output}",
+    }
 
 
 def execute_hash_command(
