@@ -9,27 +9,25 @@ preprocess:
       import datetime
       import os
       from PIL import Image
-      from npcsh.helpers import analyze_image_base
+      import time
+      from npcsh.image import analyze_image_base, capture_screenshot
 
-      # Generate filename
-      filename = f"screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-      screenshot = pyautogui.screenshot()
-      screenshot.save(filename)
-      print(f"Screenshot saved as {filename}")
+      out = capture_screenshot(npc = npc, full = True)
 
-      # Load image
-      image = Image.open(filename)
-      
-      # Full file path
-      file_path = os.path.abspath('./'+filename)
-      # Analyze the image
+      llm_response = analyze_image_base(    inputs['prompt'] + "\n\nAttached is a screenshot of my screen currently. Please use this to evaluate the situation. If the user asked for you to explain what's on their screen or something similar, they are referring to the details contained within the attached image. You do not need to actually view their screen. You do not need to mention that you cannot view or interpret images directly. You only need to answer the user's request based on the attached screenshot!",
+                                        out['file_path'],
+                                        out['filename'],
+                                        npc=npc,
+                                        **out['model_kwargs'])
+      # To this:
+      if isinstance(llm_response, dict):
+          llm_response = llm_response.get('response', 'No response from image analysis')
+      else:
+          llm_response = 'No response from image analysis'
 
-      llm_output = analyze_image_base(inputs['prompt']+ '\n\n attached is a screenshot of my screen currently.', file_path, filename, npc=npc)
 prompt:
   engine: "natural"
   code: ""
 postprocess:
   - engine: "natural"
-    code: |
-      Screenshot captured and saved as {{ filename }}.
-      Analysis Result: {{ llm_output }}
+    code: ""

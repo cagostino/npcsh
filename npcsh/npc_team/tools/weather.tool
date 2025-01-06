@@ -4,7 +4,7 @@ inputs:
 preprocess:
   - engine: "python"
     code: |
-      from npcsh.helpers import search_web
+      from npcsh.search import search_web
       formatted_location = inputs['location'].strip().title()
       search_query = f"temperature in {formatted_location} in November 2024"
       # Perform the web search

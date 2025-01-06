@@ -14,7 +14,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.2.10",
+    version="0.2.15",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
@@ -58,8 +58,8 @@ setup(
         ],
     },
     author="Christopher Agostino",
-    author_email="cjp.agostino@example.com",
-    description="npcsh is a command line tool for integrating LLMs into everyday workflows",
+    author_email="info@npcworldwi.de",
+    description="npcsh is a command line tool for integrating LLMs into everyday workflows and for orchestrating teams of NPCs.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/cagostino/npcsh",

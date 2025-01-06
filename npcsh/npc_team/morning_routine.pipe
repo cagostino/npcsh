@@ -1,0 +1,15 @@
+steps:
+  - step_name: "review_email"
+    npc: "{{ ref('email_assistant') }}"
+    task: "Get me up to speed on my recent emails: {{source('emails')}}."
+
+
+  - step_name: "market_update"
+    npc: "{{ ref('market_analyst') }}"
+    task: "Give me an update on the latest events in the market: {{source('market_events')}}."
+
+  - step_name: "summarize"
+    npc: "{{ ref('sibiji') }}"
+    model: llama3.2
+    provider: ollama
+    task: "Review the outputs from the {{review_email}} and {{market_update}} and provide me with a summary."

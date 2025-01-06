@@ -13,8 +13,12 @@ import pathlib
 import fnmatch
 import matplotlib.pyplot as plt
 import re
+import random
 
 # plt.ion()
+from datetime import datetime
+import json
+import hashlib
 
 import sklearn.feature_extraction.text
 import sklearn.metrics.pairwise
@@ -41,10 +45,46 @@ from .llm_funcs import (
 from .helpers import get_npc_path
 
 from .search import search_web, rag_search
-from .image import capture_screenshot
+from .image import capture_screenshot, analyze_image_base
 
 import sqlite3
 import pandas as pd
+
+
+import subprocess
+import sqlite3
+import numpy as np
+import os
+import yaml
+from jinja2 import Environment, FileSystemLoader, Template, Undefined
+import pandas as pd
+import pathlib
+from typing import Dict, Any, Optional, Union
+import matplotlib.pyplot as plt
+import json
+import pathlib
+import fnmatch
+import matplotlib.pyplot as plt
+
+# plt.ion()
+
+import sklearn.feature_extraction.text
+import sklearn.metrics.pairwise
+import numpy as np
+
+import sklearn
+
+
+from .llm_funcs import (
+    get_llm_response,
+    process_data_output,
+    get_data_response,
+    generate_image,
+)
+
+from .helpers import get_npc_path
+
+from .search import search_web, rag_search
 
 
 def create_or_replace_table(db_path, table_name, data):
@@ -114,6 +154,7 @@ class NPC:
         self.tables = self.db_conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table';"
         ).fetchall()
+        # print(self.tables)
         self.provider = provider
         self.api_url = api_url
         self.tools = tools or []
@@ -127,189 +168,23 @@ class NPC:
     def __str__(self):
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
 
-    def get_data_response(self, request: str):
-        return get_data_response(request, self.db_conn, self.tables)
+    def analyze_db_data(self, request: str):
+        # print("npc")
+        # print(self.db_conn, self.tables, self.model, self.provider)
+        return get_data_response(
+            request,
+            self.db_conn,
+            self.tables,
+            model=self.model,
+            provider=self.provider,
+            npc=self,
+        )
 
     def get_llm_response(self, request: str, **kwargs):
         # print(self.model, self.provider)
-        return get_llm_response(request, self.model, self.provider, npc=self, **kwargs)
-
-
-class Tool:
-    def __init__(self, tool_data: dict):
-        if not tool_data or not isinstance(tool_data, dict):
-            raise ValueError("Invalid tool data provided.")
-        if "tool_name" not in tool_data:
-            raise KeyError("Missing 'tool_name' in tool definition.")
-        self.tool_name = tool_data.get("tool_name")
-        self.inputs = tool_data.get("inputs", [])
-
-        # Parse steps with engines
-        self.preprocess = self.parse_steps(tool_data.get("preprocess", []))
-        self.prompt = self.parse_step(tool_data.get("prompt", {}))
-        self.postprocess = self.parse_steps(tool_data.get("postprocess", []))
-
-    def parse_step(self, step: Union[dict, str]) -> dict:
-        if isinstance(step, dict):
-            return {
-                "engine": step.get("engine", "natural"),
-                "code": step.get("code", ""),
-            }
-        elif isinstance(step, str):  # For backward compatibility
-            return {"engine": "natural", "code": step}
-        else:
-            raise ValueError("Invalid step format")
-
-    def parse_steps(self, steps: list) -> list:
-        return [self.parse_step(step) for step in steps]
-
-    def execute(
-        self,
-        input_values: dict,
-        tools_dict: dict,
-        jinja_env: Environment,
-        command: str,
-        npc=None,
-    ):
-        context = npc.shared_context
-        context.update(
-            {
-                "inputs": input_values,
-                "tools": tools_dict,
-                "llm_response": None,
-                "output": None,
-                "command": command,
-            }
+        return get_llm_response(
+            request, model=self.model, provider=self.provider, npc=self, **kwargs
         )
-        # Process Preprocess Steps
-        for step in self.preprocess:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
-
-        # Process Prompt
-        context = self.execute_step(self.prompt, context, jinja_env, npc=npc)
-
-        # Process Postprocess Steps
-        for step in self.postprocess:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
-
-        # Return the final output
-        if context.get("output") is not None:
-            return context.get("output")
-        elif context.get("llm_response") is not None:
-            return context.get("llm_response")
-
-    def execute_step(
-        self, step: dict, context: dict, jinja_env: Environment, npc: NPC = None
-    ):
-        engine = step.get("engine", "natural")
-        code = step.get("code", "")
-
-        if engine == "natural":
-            # Create template with debugging
-            from jinja2 import Environment, DebugUndefined
-
-            debug_env = Environment(undefined=DebugUndefined)
-            template = debug_env.from_string(code)
-
-            rendered_text = template.render(**context)  # Unpack context as kwargs
-            # print(len(rendered_text.strip()))
-            if len(rendered_text.strip()) > 0:
-                llm_response = get_llm_response(rendered_text, npc=npc)
-                # print(llm_response)
-                if context.get("llm_response") is None:
-                    # This is the prompt step
-                    context["llm_response"] = llm_response.get("response", "")
-                else:
-                    # This is a postprocess step; set output
-                    context["output"] = llm_response.get("response", "")
-
-        elif engine == "python":
-            # Execute Python code
-            exec_globals = {
-                "__builtins__": __builtins__,
-                "npc": npc,  # Pass npc to the execution environment
-                "context": context,
-                # Include necessary imports
-                "pd": pd,
-                "plt": plt,
-                "np": np,
-                "os": os,
-                "get_llm_response": get_llm_response,
-                "generate_image": generate_image,
-                "search_web": search_web,
-                "json": json,
-                "sklearn": __import__("sklearn"),
-                "TfidfVectorizer": __import__(
-                    "sklearn.feature_extraction.text"
-                ).feature_extraction.text.TfidfVectorizer,
-                "cosine_similarity": __import__(
-                    "sklearn.metrics.pairwise"
-                ).metrics.pairwise.cosine_similarity,
-                "Path": __import__("pathlib").Path,
-                "fnmatch": fnmatch,
-                "pathlib": pathlib,
-                "subprocess": subprocess,
-            }
-            exec_env = context.copy()
-            exec(code, exec_globals, exec_env)
-            context.update(exec_env)
-            # import pdb
-            # pdb.set_trace()
-        else:
-            raise ValueError(f"Unsupported engine '{engine}'")
-
-        return context
-
-    def to_dict(self):
-        return {
-            "tool_name": self.tool_name,
-            "inputs": self.inputs,
-            "preprocess": [self.step_to_dict(step) for step in self.preprocess],
-            "prompt": self.step_to_dict(self.prompt),
-            "postprocess": [self.step_to_dict(step) for step in self.postprocess],
-        }
-
-    def step_to_dict(self, step):
-        return {
-            "engine": step.get("engine"),
-            "code": step.get("code"),
-        }
-
-
-import subprocess
-import sqlite3
-import numpy as np
-import os
-import yaml
-from jinja2 import Environment, FileSystemLoader, Template, Undefined
-import pandas as pd
-import pathlib
-from typing import Dict, Any, Optional, Union
-import matplotlib.pyplot as plt
-import json
-import pathlib
-import fnmatch
-import matplotlib.pyplot as plt
-
-# plt.ion()
-
-import sklearn.feature_extraction.text
-import sklearn.metrics.pairwise
-import numpy as np
-
-import sklearn
-
-
-from .llm_funcs import (
-    get_llm_response,
-    process_data_output,
-    get_data_response,
-    generate_image,
-)
-
-from .helpers import get_npc_path
-
-from .search import search_web, rag_search
 
 
 class SilentUndefined(Undefined):
@@ -317,51 +192,6 @@ class SilentUndefined(Undefined):
         return ""
 
 
-class NPC:
-    def __init__(
-        self,
-        name: str,
-        db_conn: sqlite3.Connection,
-        primary_directive: str = None,
-        suggested_tools_to_use: str = None,
-        restrictions: list = None,
-        model: str = None,
-        provider: str = None,
-        api_url: str = None,
-        tools: list = None,
-    ):
-        self.name = name
-        self.primary_directive = primary_directive
-        self.suggested_tools_to_use = suggested_tools_to_use
-        self.restrictions = restrictions
-        self.model = model
-        self.db_conn = db_conn
-        self.tables = self.db_conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table';"
-        ).fetchall()
-        self.provider = provider
-        self.api_url = api_url
-        self.tools = tools or []
-        self.tools_dict = {tool.tool_name: tool for tool in self.tools}
-        self.shared_context = {
-            "dataframes": {},
-            "current_data": None,
-            "computation_results": {},
-        }
-
-    def __str__(self):
-        return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
-
-    def get_data_response(self, request: str):
-        return get_data_response(request, self.db_conn, self.tables)
-
-    def get_llm_response(self, request: str, **kwargs):
-        # print(self.model, self.provider)
-        return get_llm_response(
-            request, provider=self.provider, model=self.model, npc=self, **kwargs
-        )
-
-
 class Tool:
     def __init__(self, tool_data: dict):
         if not tool_data or not isinstance(tool_data, dict):
@@ -408,6 +238,7 @@ class Tool:
                 "command": command,
             }
         )
+        # print(tools_dict)
         # Process Preprocess Steps
         for step in self.preprocess:
             context = self.execute_step(step, context, jinja_env, npc=npc)
@@ -430,6 +261,7 @@ class Tool:
     ):
         engine = step.get("engine", "natural")
         code = step.get("code", "")
+        # print(step)
 
         if engine == "natural":
             # Create template with debugging
@@ -713,9 +545,9 @@ class NPCCompiler:
         step_name = stage["step_name"]
         npc_name = stage["npc"]
         npc_name = jinja_env.from_string(npc_name).render(context)
-        print("npc name: ", npc_name)
+        # print("npc name: ", npc_name)
         npc_path = get_npc_path(npc_name, self.db_path)
-        print("npc path: ", npc_path)
+        # print("npc path: ", npc_path)
         prompt_template = stage["task"]
         num_samples = stage.get("num_samples", 1)
 
@@ -789,7 +621,7 @@ class NPCCompiler:
         if not pipe_file.endswith(".pipe"):
             raise ValueError("Pipeline file must have .pipe extension")
 
-        print(pipe_file)
+        # print(pipe_file)
 
         with open(pipe_file, "r") as f:
             pipeline_data = yaml.safe_load(f)
@@ -853,18 +685,383 @@ class NPCCompiler:
             )  # Print the full error
 
 
-# npc_compiler.py
+import os
+import yaml
+import hashlib
+import sqlite3
+from sqlalchemy import create_engine
+import pandas as pd
+import json
+from datetime import datetime
+from jinja2 import Template
+import re
+
+
+class PipelineRunner:
+    def __init__(
+        self,
+        pipeline_file: str,
+        db_path: str = "~/npcsh_history.db",
+        npc_root_dir: str = "../",
+    ):
+        self.pipeline_file = pipeline_file
+        self.pipeline_data = self.load_pipeline()
+        self.db_path = os.path.expanduser(db_path)
+        self.npc_root_dir = npc_root_dir
+        self.npc_cache = {}
+        self.db_engine = create_engine(f"sqlite:///{self.db_path}")
+
+    def load_pipeline(self):
+        with open(self.pipeline_file, "r") as f:
+            return yaml.safe_load(f)
+
+    def compute_pipeline_hash(self):
+        with open(self.pipeline_file, "r") as f:
+            content = f.read()
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def execute_pipeline(self):
+        context = {
+            "npc": self.npc_ref,
+            "ref": lambda step_name: step_name,  # Directly use step name
+            "source": self.fetch_data_from_source,
+        }
+
+        pipeline_hash = self.compute_pipeline_hash()
+        pipeline_name = os.path.splitext(os.path.basename(self.pipeline_file))[0]
+        results_table_name = f"{pipeline_name}_results"
+        self.ensure_tables_exist(results_table_name)
+        run_id = self.create_run_entry(pipeline_hash)
+
+        for step in self.pipeline_data["steps"]:
+            self.execute_step(step, context, run_id, results_table_name)
+
+    def npc_ref(self, npc_name: str):
+        clean_name = npc_name.replace("MISSING_REF_", "")
+        try:
+            npc_path = self.find_npc_path(clean_name)
+            return clean_name if npc_path else f"MISSING_REF_{clean_name}"
+        except Exception:
+            return f"MISSING_REF_{clean_name}"
+
+    def execute_step(
+        self, step: dict, context: dict, run_id: int, results_table_name: str
+    ):
+        """Execute pipeline step and store results in the database."""
+        print("\nStarting step execution...")
+
+        mixa = step.get("mixa", False)
+        mixa_turns = step.get("mixa_turns", 5 if mixa else None)
+
+        npc_name = Template(step.get("npc", "")).render(context)
+        npc = self.load_npc(npc_name)
+        model = step.get("model", npc.model)
+        provider = step.get("provider", npc.provider)
+
+        response_text = ""
+
+        if mixa:
+            print("Executing mixture of agents strategy...")
+            response_text = self.execute_mixture_of_agents(
+                step,
+                context,
+                run_id,
+                results_table_name,
+                npc,
+                model,
+                provider,
+                mixa_turns,
+            )
+        else:
+            source_matches = re.findall(
+                r"{{\s*source\('([^']+)'\)\s*}}", step.get("task", "")
+            )
+            print(f"Found source matches: {source_matches}")
+
+            if not source_matches:
+                rendered_task = Template(step.get("task", "")).render(context)
+                response = get_llm_response(
+                    rendered_task, model=model, provider=provider, npc=npc
+                )
+                response_text = response.get("response", "")
+            else:
+                table_name = source_matches[0]
+                df = pd.read_sql(f"SELECT * FROM {table_name}", self.db_engine)
+                print(f"\nQuerying table: {table_name}")
+                print(f"Found {len(df)} rows")
+
+                if step.get("batch_mode", False):
+                    data_str = df.to_json(orient="records")
+                    rendered_task = step.get("task", "").replace(
+                        f"{{{{ source('{table_name}') }}}}", data_str
+                    )
+                    rendered_task = Template(rendered_task).render(context)
+
+                    response = get_llm_response(
+                        rendered_task, model=model, provider=provider, npc=npc
+                    )
+                    response_text = response.get("response", "")
+                else:
+                    all_responses = []
+                    for idx, row in df.iterrows():
+                        row_data = json.dumps(row.to_dict())
+                        row_task = step.get("task", "").replace(
+                            f"{{{{ source('{table_name}') }}}}", row_data
+                        )
+                        rendered_task = Template(row_task).render(context)
+
+                        response = get_llm_response(
+                            rendered_task, model=model, provider=provider, npc=npc
+                        )
+                        result = response.get("response", "")
+                        all_responses.append(result)
+
+                    response_text = all_responses
+
+        # Storing the final result in the database
+        self.store_result(
+            run_id,
+            step["step_name"],
+            npc_name,
+            model,
+            provider,
+            {"response": response_text},
+            response_text,
+            results_table_name,
+        )
+
+        context[step["step_name"]] = response_text
+        print(f"\nStep complete. Response stored in context[{step['step_name']}]")
+        return response_text
+
+    def store_result(
+        self,
+        run_id,
+        task_name,
+        npc_name,
+        model,
+        provider,
+        inputs,
+        outputs,
+        results_table_name,
+    ):
+        """Store results into the specified results table in the database."""
+        cleaned_inputs = self.clean_for_json(inputs)
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute(
+                f"""
+                INSERT INTO {results_table_name} (run_id, task_name, npc_name,
+                model, provider, inputs, outputs) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run_id,
+                    task_name,
+                    npc_name,
+                    model,
+                    provider,
+                    json.dumps(cleaned_inputs),
+                    json.dumps(outputs),
+                ),
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"Error storing result: {e}")
+        finally:
+            conn.close()
+
+    def execute_mixture_of_agents(
+        self,
+        step,
+        context,
+        run_id,
+        results_table_name,
+        npc,
+        model,
+        provider,
+        mixa_turns,
+    ):
+        """Facilitates multi-agent decision-making with feedback for refinement."""
+
+        # Read agent counts from the step configuration
+        num_generating_agents = len(step.get("mixa_agents", []))
+        num_voting_agents = len(step.get("mixa_voters", []))
+        num_voters = step.get("mixa_voter_count", num_voting_agents)
+
+        # Step 1: Initial Response Generation
+        round_responses = []
+        print("\nInitial responses generation:")
+        for agent_index in range(num_generating_agents):
+            task_template = Template(step.get("task", "")).render(context)
+            response = get_llm_response(
+                task_template, model=model, provider=provider, npc=npc
+            )
+            round_responses.append(response.get("response", ""))
+            print(
+                f"Agent {agent_index + 1} generated: " f"{response.get('response', '')}"
+            )
+
+        # Loop for each round of voting and refining
+        for turn in range(1, mixa_turns + 1):
+            print(f"\n--- Round {turn}/{mixa_turns} ---")
+
+            # Step 2: Voting Logic by voting agents
+            votes = self.conduct_voting(round_responses, num_voters)
+
+            # Step 3: Report results to generating agents
+            print("\nVoting Results:")
+            for idx, response in enumerate(round_responses):
+                print(f"Response {idx + 1} received {votes[idx]} votes.")
+
+            # Provide feedback on the responses
+            feedback_message = "Responses and their votes:\n" + "\n".join(
+                f"Response {i + 1}: {resp} - Votes: {votes[i]} "
+                for i, resp in enumerate(round_responses)
+            )
+
+            # Step 4: Refinement feedback to each agent
+            refined_responses = []
+            for agent_index in range(num_generating_agents):
+                refined_task = (
+                    feedback_message
+                    + f"\nRefine your response: {round_responses[agent_index]}"
+                )
+                response = get_llm_response(
+                    refined_task, model=model, provider=provider, npc=npc
+                )
+                refined_responses.append(response.get("response", ""))
+                print(
+                    f"Agent {agent_index + 1} refined response: "
+                    f"{response.get('response', '')}"
+                )
+
+            # Update responses for the next round
+            round_responses = refined_responses
+
+        # Step 5: Final synthesis using the LLM
+        final_synthesis_input = (
+            "Synthesize the following refined responses into a coherent answer:\n"
+            + "\n".join(round_responses)
+        )
+        final_synthesis = get_llm_response(
+            final_synthesis_input, model=model, provider=provider, npc=npc
+        )
+
+        return final_synthesis  # Return synthesized response based on LLM output
+
+    def conduct_voting(self, responses, num_voting_agents):
+        """Conducts voting among agents on the given responses."""
+        votes = [0] * len(responses)
+        for _ in range(num_voting_agents):
+            voted_index = random.choice(range(len(responses)))  # Randomly vote
+            votes[voted_index] += 1
+        return votes
+
+    def synthesize_responses(self, votes):
+        """Synthesizes the responses based on votes."""
+        # Example: Choose the highest voted response
+        max_votes = max(votes)
+        chosen_idx = votes.index(max_votes)
+        return f"Synthesized response based on votes from agents: " f"{chosen_idx + 1}"
+
+    def resolve_sources_in_task(self, task: str, context: dict) -> str:
+        # Use Jinja2 template rendering directly for simplicity
+        template = Template(task)
+        return template.render(context)
+
+    def fetch_data_from_source(self, table_name):
+        query = f"SELECT * FROM {table_name}"
+        try:
+            df = pd.read_sql(query, con=self.db_engine)
+        except Exception as e:
+            raise RuntimeError(f"Error fetching data from '{table_name}': {e}")
+        return self.format_data_as_string(df)
+
+    def format_data_as_string(self, df):
+        return df.to_json(orient="records", lines=True, indent=2)
+
+    def ensure_tables_exist(self, results_table_name):
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS pipeline_runs ("
+                "run_id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "pipeline_hash TEXT, timestamp DATETIME)"
+            )
+            conn.execute(
+                f"CREATE TABLE IF NOT EXISTS {results_table_name} ("
+                "result_id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "run_id INTEGER, task_name TEXT, npc_name TEXT, "
+                "model TEXT, provider TEXT, inputs JSON, "
+                "outputs JSON, FOREIGN KEY(run_id) "
+                "REFERENCES pipeline_runs(run_id))"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def create_run_entry(self, pipeline_hash):
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute(
+                "INSERT INTO pipeline_runs (pipeline_hash, timestamp) VALUES (?, ?)",
+                (pipeline_hash, datetime.now()),
+            )
+            conn.commit()
+            return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        finally:
+            conn.close()
+
+    def clean_for_json(self, obj):
+        if isinstance(obj, dict):
+            return {
+                k: self.clean_for_json(v)
+                for k, v in obj.items()
+                if not k.startswith("_") and not callable(v)
+            }
+        elif isinstance(obj, list):
+            return [self.clean_for_json(i) for i in obj]
+        elif isinstance(obj, (str, int, float, bool, type(None))):
+            return obj
+        else:
+            return str(obj)
+
+    def load_npc(self, npc_name: str):
+        if npc_name in self.npc_cache:
+            return self.npc_cache[npc_name]
+
+        npc_path = self.find_npc_path(npc_name)
+        try:
+            if npc_path:
+                connection = sqlite3.connect(self.db_path)
+                npc = load_npc_from_file(npc_path, db_conn=connection)
+                self.npc_cache[npc_name] = npc
+                return npc
+            else:
+                raise FileNotFoundError(f"NPC file not found for {npc_name}")
+        except Exception as e:
+            raise RuntimeError(f"Error loading NPC {npc_name}: {e}")
+
+    def find_npc_path(self, npc_name: str) -> str:
+        for root, _, files in os.walk(self.npc_root_dir):
+            print(f"Checking in directory: {root}")  # Debug output
+            for file in files:
+                if file.startswith(npc_name) and file.endswith(".npc"):
+                    print(f"Found NPC file: {file} at {root}")  # Debug output
+                    return os.path.join(root, file)
+        print(f"NPC file not found for: {npc_name}")  # Debug output
+        return None
 
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
-    print(npc_file)
+    # print(npc_file)
     if not npc_file.endswith(".npc"):
         # append it just incase
         name += ".npc"
 
     try:
         if not os.path.isabs(npc_file):
-            npc_file = os.path.join(os.path.abspath(os.path.dir), npc_file)
+            npc_file = os.path.abspath(npc_file)
 
         with open(npc_file, "r") as f:
             npc_data = yaml.safe_load(f)
@@ -1249,7 +1446,7 @@ class SQLModel:
                 if self.npc_directory in npc:
                     npc = npc.replace(self.npc_directory, "")
 
-                print(npc)
+                # print(npc)
                 ai_functions[func_name] = {
                     "column": params[0],
                     "npc": npc,

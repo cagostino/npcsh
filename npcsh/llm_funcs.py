@@ -17,6 +17,30 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from diffusers import StableDiffusionPipeline
 import base64
+import subprocess
+import requests
+import os
+import json
+import ollama
+import sqlite3
+import pandas as pd
+import openai
+from dotenv import load_dotenv
+import anthropic
+import re
+from jinja2 import Environment, FileSystemLoader, Template, Undefined
+from datetime import datetime
+from typing import List, Dict, Any, Optional, Union
+
+
+def extract_relevant_data(content: str, search_term: str) -> str:
+    """Extract relevant information based on a search term."""
+    # A naive implementation just to illustrate. This should be improved based on your needs.
+    lines = content.split("\n")
+    relevant_data = "\n".join(
+        [line for line in lines if search_term.lower() in line.lower()]
+    )
+    return relevant_data if relevant_data else "No relevant information found."
 
 
 # Load environment variables from .env file
@@ -52,9 +76,9 @@ anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", None)
 openai_api_key = os.getenv("OPENAI_API_KEY", None)
 
 npcsh_model = os.environ.get("NPCSH_MODEL", "llama3.2")
-print("npcsh_model", npcsh_model)
+# print("npcsh_model", npcsh_model)
 npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
-print("npcsh_provider", npcsh_provider)
+# print("npcsh_provider", npcsh_provider)
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
@@ -316,7 +340,11 @@ def generate_image(
     Returns:
         str: The filename of the saved image.
     """
-    if npc is not None:
+    if model is not None and provider is not None:
+        pass
+    elif model is not None and provider is None:
+        provider = lookup_provider(model)
+    elif npc is not None:
         if npc.provider is not None:
             provider = npc.provider
         if npc.model is not None:
@@ -325,7 +353,11 @@ def generate_image(
             api_url = npc.api_url
     if filename is None:
         # Generate a filename based on the prompt and the date time
-        filename = f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        os.makedirs(os.path.expanduser("~/.npcsh/images/"), exist_ok=True)
+        filename = (
+            os.path.expanduser("~/.npcsh/images/")
+            + f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        )
 
     if provider == "ollama":
         image = generate_image_ollama(prompt, model)
@@ -387,6 +419,7 @@ def get_system_message(npc: Any) -> str:
     You are the {npc.name} NPC with the following primary directive: {npc.primary_directive}.
     Users may refer to you by your assistant name, {npc.name} and you shouold consider this to be your core identity.
 
+
     In some cases, users may request insights into data contained in a local database.
     For these purposes, you may use any data contained within these sql tables
     {npc.tables}
@@ -406,6 +439,16 @@ def get_system_message(npc: Any) -> str:
             ]
         )
         system_message += f"\n\nAvailable Tools:\n{tool_descriptions}"
+    system_message += """\n\nSome users may attach images to their request.
+                        Please process them accordingly.
+
+                        If the user asked for you to explain what's on their screen or something similar,
+                        they are referring to the details contained within the attached image(s).
+                        You do not need to actually view their screen.
+                        You do not need to mention that you cannot view or interpret images directly.
+                        They understand that you can view them multimodally.
+                        You only need to answer the user's request based on the attached image(s).
+                        """
 
     return system_message
 
@@ -639,7 +682,7 @@ def get_conversation(
         provider = "ollama"
         model = "llava:7b" if images is not None else "llama3.2"
 
-    print(provider, model)
+    # print(provider, model)
     if provider == "ollama":
         return get_ollama_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "openai":
@@ -679,147 +722,133 @@ def get_data_response(
     n_try_freq: int = 5,
     extra_context: str = None,
     history: str = None,
+    model: str = None,
+    provider: str = None,
     npc: Any = None,
-):
+    max_retries: int = 3,
+) -> Dict[str, Any]:
     """
-    Function Description:
-        This function generates a response to a data request.
-    Args:
-        request (str): The data request.
-        db_conn (sqlite3.Connection): The database connection.
-    Keyword Args:
-        tables (str): The tables available in the database.
-        n_try_freq (int): The frequency of attempts.
-        extra_context (str): Additional context for the request.
-        history (str): The history of the queries.
-        npc (Any): The NPC object.
-    Returns:
-        Any: The response to the data request.
-
+    Generate a response to a data request, with retries for failed attempts.
     """
     prompt = f"""
-            Here is a request from a user:
+    User request: {request}
+    Available tables: {tables or 'Not specified'}
+    {extra_context or ''}
+    {f'Query history: {history}' if history else ''}
 
-            ```
-            {request}
-            ```
+    Provide either:
+    1) An SQL query to directly answer the request
+    2) An exploratory query to gather more information
 
-            You need to satisfy their request.
+    Return JSON with:
+    {{
+        "query": <sql query string>,
+        "choice": <1 or 2>,
+        "explanation": <reason for choice>
+    }}
+    DO NOT include markdown formatting or ```json tags.
+    """
 
-            """
-
-    if tables is not None:
-        prompt += f"""
-        Here are the tables you have access to:
-        {tables}
-        """
-    if extra_context is not None:
-        prompt += f"""
-        {extra_context}
-        """
-    if history:
-        prompt += f"""
-        The history of the queries that have been run so far is:
-        {history}
-        """
-
-    prompt += f"""
-
-            Please either write :
-            1) an SQL query that will return the requested data.
-            or
-            2) a query that will provide you more information so that you can answer the request.
-
-            Return the query and the choice you made, i.e. whether you chose 1 or 2.
-            Please return a json with the following keys: "query" and "choice".
-
-            This is a description of the types and requirements for the outputs.
-            {{
-                "query": {"type": "string",
-                          "description": "a valid SQL query that will accomplish the task"},
-                "choice": {"type":"int",
-                           "enum":[1,2]}
-                "choice_explanation": {"type": "string",
-                                        "description": "a brief explanation of why you chose 1 or 2"}
-            }}
-            Do not return any extra information. Respond only with the json.
-            """
-    llm_response = get_llm_response(prompt, format="json", npc=npc)
-
-    list_failures = []
-    success = False
-    n_tries = 0
-    while not success:
-        response_json = process_data_output(
-            llm_response,
-            db_conn,
-            request,
-            tables=tables,
-            history=list_failures,
-            npc=npc,
-        )
-        if response_json["code"] == 200:
-            return response_json["response"]
-
-        else:
-            list_failures.append(response_json["response"])
-        n_tries += 1
-        if n_tries % n_try_freq == 0:
-            print(
-                f"The attempt to obtain the data has failed {n_tries} times. Do you want to continue?"
+    failures = []
+    for attempt in range(max_retries):
+        try:
+            llm_response = get_llm_response(
+                prompt, npc=npc, format="json", model=model, provider=provider
             )
-            user_input = input('Press enter to continue or enter "n" to stop: ')
-            if user_input.lower() == "n":
-                return list_failures
 
-    return llm_response
+            # Clean response if it's a string
+            response_data = llm_response.get("response", {})
+            if isinstance(response_data, str):
+                response_data = (
+                    response_data.replace("```json", "").replace("```", "").strip()
+                )
+                try:
+                    response_data = json.loads(response_data)
+                except json.JSONDecodeError:
+                    failures.append("Invalid JSON response")
+                    continue
+
+            result = process_data_output(
+                response_data,
+                db_conn,
+                request,
+                tables=tables,
+                history=failures,
+                npc=npc,
+                model=model,
+                provider=provider,
+            )
+
+            if result["code"] == 200:
+                return result
+
+            failures.append(result["response"])
+
+            if attempt == max_retries - 1:
+                return {
+                    "response": f"Failed after {max_retries} attempts. Errors: {'; '.join(failures)}",
+                    "code": 400,
+                }
+
+        except Exception as e:
+            failures.append(str(e))
+
+    return {"response": "Max retries exceeded", "code": 400}
 
 
 def check_output_sufficient(
     request: str,
-    response: pd.DataFrame,
+    data: pd.DataFrame,
     query: str,
     model: str = None,
     provider: str = None,
     npc: Any = None,
-):
+) -> Dict[str, Any]:
+    """
+    Check if the query results are sufficient to answer the user's request.
+    """
     prompt = f"""
+    Given:
+    - User request: {request}
+    - Query executed: {query}
+    - Results:
+      Summary: {data.describe()}
+      data schema: {data.dtypes}
+      Sample: {data.head()}
 
-            A user made this request:
-                            ```
-                {request}
-                    ```
-            You have extracted a result from the database using the following query:
-                            ```
-                {query}
-                    ```
-            Here is the result:
-                            ```
-                {response.head(),
-                    response.describe()}
-                    ```
-            Is this result sufficient to answer the user's request?
+    Is this result sufficient to answer the user's request?
+    Return JSON with:
+    {{
+        "IS_SUFFICIENT": <boolean>,
+        "EXPLANATION": <string : If the answer is not sufficient specify what else is necessary.
+                                IFF the answer is sufficient, provide a response that can be returned to the user as an explanation that answers their question.
+                                The explanation should use the results to answer their question as long as they wouold be useful to the user.
+                                    For example, it is not useful to report on the "average/min/max/std ID" or the "min/max/std/average of a string column".
 
-            Return a json with the following
-            key: 'IS_SUFFICIENT'
-            Here is a description of the types and requirements for the output.
-                            ```
-                {{
-                    "IS_SUFFICIENT": {"type": "bool",
-                                        "description": "whether the result is sufficient to answer the user's request"}
-                }}
-                            ```
+                                Be smart about what you report.
+                                It should not be a conceptual or abstract summary of the data.
+                                It should not unnecessarily bring up a need for more data.
+                                You should write it in a tone that answers the user request. Do not spout unnecessary self-referential fluff like "This information gives a clear overview of the x landscape".
+                                >
+    }}
+    DO NOT include markdown formatting or ```json tags.
 
+    """
 
-
-            """
-    llm_response = get_llm_response(
+    response = get_llm_response(
         prompt, format="json", model=model, provider=provider, npc=npc
     )
-    if llm_response["IS_SUFFICIENT"] == True:
-        return response
-    else:
-        return False
+
+    # Clean response if it's a string
+    result = response.get("response", {})
+    if isinstance(result, str):
+        result = result.replace("```json", "").replace("```", "").strip()
+        try:
+            result = json.loads(result)
+        except json.JSONDecodeError:
+            return {"IS_SUFFICIENT": False, "EXPLANATION": "Failed to parse response"}
+
+    return result
 
 
 def process_data_output(
@@ -827,89 +856,66 @@ def process_data_output(
     db_conn: sqlite3.Connection,
     request: str,
     tables: str = None,
-    n_try_freq: int = 5,
     history: str = None,
     npc: Any = None,
-):
+    model: str = None,
+    provider: str = None,
+) -> Dict[str, Any]:
     """
-    Function Description:
-        This function processes the output of a data request.
-    Args:
-        llm_response (Dict[str, Any]): The response from the LLM.
-        db_conn (sqlite3.Connection): The database connection.
-        request (str): The data request.
-    Keyword Args:
-        tables (str): The tables available in the database.
-        n_try_freq (int): The frequency of attempts.
-        history (str): The history of the queries.
-        npc (Any): The NPC object.
-    Returns:
-        Any: The processed output of the data request.
+    Process the LLM's response to a data request and execute the appropriate query.
     """
+    try:
+        choice = llm_response.get("choice")
+        query = llm_response.get("query")
 
-    if llm_response["choice"] == 1:
-        query = llm_response["query"]
-        try:
-            response = db_conn.execute(query).fetchall()
-            # make into pandas
-            response = pd.DataFrame(response)
-            result = check_output_sufficient(request, response, query)
-            if result:
-                return {"response": response, "code": 200}
-            else:
-                output = {
-                    "response": f"""The result in the response : ```{response.head()} ```
-                        was not sufficient to answer the user's request. """,
+        if not query:
+            return {"response": "No query provided", "code": 400}
+
+        if choice == 1:  # Direct answer query
+            try:
+                df = pd.read_sql_query(query, db_conn)
+                result = check_output_sufficient(
+                    request, df, query, model=model, provider=provider, npc=npc
+                )
+
+                if result.get("IS_SUFFICIENT"):
+                    return {"response": result["EXPLANATION"], "data": df, "code": 200}
+                return {
+                    "response": f"Results insufficient: {result.get('EXPLANATION')}",
                     "code": 400,
                 }
-                return output
 
-            return response
-        except Exception as e:
-            return {"response": f"Error executing query: {str(e)}", "code": 400}
-    elif llm_response["choice"] == 2:
-        if "query" in llm_response:
-            query = llm_response["query"]
+            except Exception as e:
+                return {"response": f"Query execution failed: {str(e)}", "code": 400}
+
+        elif choice == 2:  # Exploratory query
             try:
-                response = db_conn.execute(query).fetchall()
-                # make into pandas
-                response = pd.DataFrame(response)
+                df = pd.read_sql_query(query, db_conn)
                 extra_context = f"""
-
-
-                You indicated that you would need to run
-                the following query to provide a more complete response:
-                        ```
-                    {query}
-                        ```
-                Here is the result:
-                                ```
-                    {response.head(),
-                        response.describe()}
-                        ```
-
+                Exploratory query results:
+                Query: {query}
+                Results summary: {df.describe()}
+                Sample data: {df.head()}
                 """
-                if history is not None:
-                    extra_context += f"""
-                    The history of the queries that have been run so far is:
-                    {history}
-                    """
 
-                llm_response = get_data_response(
+                return get_data_response(
                     request,
                     db_conn,
                     tables=tables,
                     extra_context=extra_context,
-                    n_try_freq=n_try_freq,
                     history=history,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
                 )
-                return {"response": llm_response, "code": 200}
+
             except Exception as e:
-                return {"response": f"Error executing query: {str(e)}", "code": 400}
-        else:
-            return {"response": "Error: Missing query in response", "code": 400}
-    else:
-        return {"response": "Error: Invalid choice in response", "code": 400}
+                return {"response": f"Exploratory query failed: {str(e)}", "code": 400}
+
+        return {"response": "Invalid choice specified", "code": 400}
+
+    except Exception as e:
+        return {"response": f"Processing error: {str(e)}", "code": 400}
 
 
 def get_ollama_response(
@@ -948,8 +954,7 @@ def get_ollama_response(
             # print(model)
             # print(messages)
 
-            # Call the ollama API
-            res = ollama.chat(model=model, messages=[message])
+            res = ollama.chat(model=model, messages=[message], format=format)
             # print(res)
             # Extract the response content
             response_content = res["message"]["content"]
@@ -969,8 +974,7 @@ def get_ollama_response(
             message = {"role": "user", "content": prompt}
 
             # Call the ollama API
-            res = ollama.chat(model=model, messages=[message])
-
+            res = ollama.chat(model=model, messages=[message], format=format)
             # Extract the response content
             response_content = res["message"]["content"]
 
@@ -982,6 +986,15 @@ def get_ollama_response(
                 messages.append({"role": "assistant", "content": response_content})
                 items_to_return["messages"] = messages
 
+            if format == "json":
+                try:
+                    items_to_return["response"] = json.loads(response_content)
+                    return items_to_return
+                except json.JSONDecodeError:
+                    print(
+                        f"Warning: Expected JSON response, but received: {response_content}"
+                    )
+                    return {"error": "Invalid JSON response"}
             return items_to_return
 
     except Exception as e:
@@ -1028,6 +1041,8 @@ def get_openai_response(
             ]
         if images:
             for image in images:
+                # print(f"Image file exists: {os.path.exists(image['file_path'])}")
+
                 with open(image["file_path"], "rb") as image_file:
                     image_data = base64.b64encode(
                         compress_image(image_file.read())
@@ -1040,7 +1055,7 @@ def get_openai_response(
                             },
                         }
                     )
-
+        # print(model)
         completion = client.chat.completions.create(model=model, messages=messages)
 
         llm_response = completion.choices[0].message.content
@@ -1048,6 +1063,7 @@ def get_openai_response(
         items_to_return = {"response": llm_response}
 
         items_to_return["messages"] = messages
+        # print(llm_response, model)
         if format == "json":
             try:
                 items_to_return["response"] = json.loads(llm_response)
@@ -1065,27 +1081,31 @@ def get_openai_response(
         return f"Error interacting with OpenAI: {e}"
 
 
-def compress_image(image_bytes, max_size=(800, 800)):
+def compress_image(image_bytes, max_size=(800, 600)):
     from PIL import Image
     import io
 
-    img = Image.open(io.BytesIO(image_bytes))
+    # Create a copy of the bytes in memory
+    buffer = io.BytesIO(image_bytes)
+    img = Image.open(buffer)
+
+    # Force loading of image data
+    img.load()
 
     # Convert RGBA to RGB if necessary
     if img.mode == "RGBA":
-        # Create white background
         background = Image.new("RGB", img.size, (255, 255, 255))
-        # Paste the image using alpha channel as mask
         background.paste(img, mask=img.split()[3])
         img = background
 
     # Resize if needed
-    img.thumbnail(max_size)
+    if img.size[0] > max_size[0] or img.size[1] > max_size[1]:
+        img.thumbnail(max_size)
 
-    # Save as JPEG
-    buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=85)
-    return buffer.getvalue()
+    # Save with minimal compression
+    out_buffer = io.BytesIO()
+    img.save(out_buffer, format="JPEG", quality=95, optimize=False)
+    return out_buffer.getvalue()
 
 
 def get_anthropic_response(
@@ -1157,6 +1177,7 @@ def get_anthropic_response(
         llm_response = message.content[0].text
         items_to_return = {"response": llm_response}
 
+        print(format)
         # Update messages if they were provided
         if messages is None:
             messages = []
@@ -1296,7 +1317,7 @@ def get_llm_response(
     elif provider == "openai":
         if model is None:
             model = "gpt-4o-mini"
-        # print("gpt4o")
+        # print(model)
         return get_openai_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
@@ -1314,26 +1335,9 @@ def get_llm_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
     else:
-        #print(provider)
-        #print(model)
+        # print(provider)
+        # print(model)
         return "Error: Invalid provider specified."
-
-
-def load_data(file_path: str, dataframes: Dict[str, pd.DataFrame], name: str):
-    """
-    Function Description:
-        This function loads data from a file.
-    Args:
-        file_path (str): The file path.
-        dataframes (Dict[str, pd.DataFrame]): The dictionary of dataframes.
-        name (str): The name of the dataframe.
-    Keyword Args:
-        None
-    Returns:
-        None
-    """
-    dataframes[name] = pd.read_csv(file_path)
-    print(f"Data loaded as '{name}'")
 
 
 def execute_data_operations(
@@ -1717,7 +1721,7 @@ def check_llm_command(
         for filename, content in retrieved_docs[:n_docs]:
             context += f"Document: {filename}\n{content}\n\n"
         context = f"Refer to the following documents for context:\n{context}\n\n"
-
+    # print(npc, "sdfasdfa")
     # Update the prompt to include tool consideration
     prompt = f"""
     A user submitted this query: {command}
@@ -1755,6 +1759,8 @@ def check_llm_command(
         "tool_name": "<tool_name_if_applicable>",
         "explanation": "<your_explanation>"
     }}
+
+    Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING.
     """
 
     if context:
@@ -1815,6 +1821,7 @@ def check_llm_command(
 
         elif action == "invoke_tool":
             tool_name = response_content_parsed.get("tool_name")
+            # print(npc)
             result = handle_tool_call(
                 command,
                 tool_name,
@@ -1884,6 +1891,7 @@ def handle_tool_call(
 
     """
     print(f"handle_tool_call invoked with tool_name: {tool_name}")
+    # print(npc)
     if not npc or not npc.tools_dict:
         print("not available")
         available_tools = npc.tools_dict if npc else None
