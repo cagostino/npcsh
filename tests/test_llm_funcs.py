@@ -19,50 +19,51 @@ from npcsh.llm_funcs import (
     execute_llm_command,
     check_llm_command,
 )
-                                                        
-# Sample example for `generate_image_ollama`                                
-def test_generate_image_ollama():                                           
-    prompt = "A scenic landscape"                                           
-    model = "latest-model"                                                  
-    image_url = generate_image_ollama(prompt, model)                        
-    assert isinstance(image_url, str) and image_url.startswith('http')  #   
-                                                                            
-# Sample example for `generate_image_openai`                                
-def test_generate_image_openai():                                           
-    prompt = "A futuristic cityscape"                                       
 
-    image_url = generate_image_openai(prompt)               
-    assert isinstance(image_url, str) and image_url.startswith('http')  #   
-                                                                            
-# Sample example for `generate_image_anthropic`                             
-def test_generate_image_anthropic():                                        
-    prompt = "An underwater scene"                                          
-    model = "anthropic-image-model"                                         
-    api_key = "your_anthropic_api_key"                                      
-    image_url = generate_image_anthropic(prompt, model, api_key)            
-    assert isinstance(image_url, str) and image_url.startswith('http')  #   
-                                                                            
-# Sample example for `generate_image_openai_like`                           
-def test_generate_image_openai_like():                                      
-    prompt = "A beautiful mountain"                                         
-    model = "image-beta-002"                                                
-    api_url = "https://api.example.com"                                     
-    api_key = "your_custom_api_key"                                         
-    image_url = generate_image_openai_like(prompt, model, api_url, api_key) 
-    assert isinstance(image_url, str) and image_url.startswith('http')  #   
+
+# Sample example for `generate_image_ollama`
+def test_generate_image_ollama():
+    prompt = "A scenic landscape"
+    model = "latest-model"
+    image_url = generate_image_ollama(prompt, model)
+    assert isinstance(image_url, str) and image_url.startswith("http")  #
+
+
+# Sample example for `generate_image_openai`
+def test_generate_image_openai():
+    prompt = "A futuristic cityscape"
+
+    image_url = generate_image_openai(prompt)
+    assert isinstance(image_url, str) and image_url.startswith("http")  #
+
+
+# Sample example for `generate_image_anthropic`
+def test_generate_image_anthropic():
+    prompt = "An underwater scene"
+    model = "anthropic-image-model"
+    api_key = "your_anthropic_api_key"
+    image_url = generate_image_anthropic(prompt, model, api_key)
+    assert isinstance(image_url, str) and image_url.startswith("http")  #
+
+
+# Sample example for `generate_image_openai_like`
+def test_generate_image_openai_like():
+    prompt = "A beautiful mountain"
+    model = "image-beta-002"
+    api_url = "https://api.example.com"
+    api_key = "your_custom_api_key"
+    image_url = generate_image_openai_like(prompt, model, api_url, api_key)
+    assert isinstance(image_url, str) and image_url.startswith("http")  #
+
 
 def test_ollama_image():
-    
+
     image_path = "/home/caug/.npcsh/screenshots/screenshot_1728963234.png"
     prompt = "What do you see in this image?"
     image_data = {"file_path": image_path}
-    
-    response = get_ollama_response(
-        prompt=prompt,
-        model="llava-phi3",
-        image=image_data
-    )
-    
+
+    response = get_ollama_response(prompt=prompt, model="llava-phi3", image=image_data)
+
     assert isinstance(response, dict), "Response should be a dictionary"
     assert "response" in response, "Response should contain 'response' key"
     assert len(response["response"]) > 0, "Response should not be empty"
@@ -80,7 +81,7 @@ def test_get_openai_like_response():
 def test_get_openai_response():
     prompt = """Generate a short JSON object with a
     'greeting' key and a 'farewell' key.
-    Respond only with the formatted JSON object. 
+    Respond only with the formatted JSON object.
     Do not include any extra text or markdown formatting.
     """
     response = get_openai_response(prompt, "gpt-4o-mini")
@@ -157,13 +158,13 @@ def test_get_ollama_response():
     assert response is not None
     assert isinstance(response, str)
 
-    prompt = """A user submitted this query: "SELECT * FROM table_name". 
-    You need to generate a script that will accomplish the user\'s intent. 
-    Respond ONLY with the procedure that should be executed. Place it in a JSON object with the key 
+    prompt = """A user submitted this query: "SELECT * FROM table_name".
+    You need to generate a script that will accomplish the user\'s intent.
+    Respond ONLY with the procedure that should be executed. Place it in a JSON object with the key
     "script_to_test".
     The format and requiremrents of the output are as follows:
     {
-    "script_to_test": {"type": "string", 
+    "script_to_test": {"type": "string",
     "description": "a valid SQL query that will accomplish the task"}
     }
 
@@ -274,3 +275,67 @@ def test_execute_llm_question(mock_command_history):
             "What is the capital of France?", mock_command_history
         )
         assert result == "This is an answer"
+
+
+import pytest
+from pydantic import ValidationError
+from npcsh.llm_funcs import get_ollama_response, get_openai_response
+
+from pydantic import BaseModel
+
+
+class Country(BaseModel):
+    name: str
+    capital: str
+    languages: list[str]
+
+
+# Test for get_ollama_response
+def test_get_ollama_response():
+    # Given a prompt that is expected to return a structured response
+    prompt = "Tell me about Canada."
+
+    # When calling get_ollama_response with the schema
+    response = get_ollama_response(prompt, model="llama3.2", format=Country)
+
+    # Then we verify that the response matches our expected structure
+    assert isinstance(response, Country)
+    assert response.name == "Canada"
+    assert response.capital == "Ottawa"
+    assert "English" in response.languages
+    assert "French" in response.languages
+
+
+# Test for get_openai_response
+def test_get_openai_response():
+    # Given a prompt that is expected to return a structured response
+    prompt = "Tell me about Canada."
+
+    # When calling get_openai_response with the schema
+    response = get_openai_response(prompt, model="gpt-4o", format=Country)
+
+    # Then we verify that the response matches our expected structure
+    assert isinstance(response, Country)
+    assert response.name == "Canada"
+    assert response.capital == "Ottawa"
+    assert "English" in response.languages
+    assert "French" in response.languages
+
+
+# Test for invalid response
+def test_get_ollama_response_invalid():
+    # Given a prompt that does not match the schema
+    prompt = "Give me a country."
+
+    # When calling get_ollama_response, we expect a ValidationError
+    with pytest.raises(ValidationError):
+        get_ollama_response(prompt, model="llama3.1", output_schema=Country)
+
+
+def test_get_openai_response_invalid():
+    # Given a prompt that does not match the schema
+    prompt = "Provide a random fact."
+
+    # When calling get_openai_response, we expect a ValidationError
+    with pytest.raises(ValidationError):
+        get_openai_response(prompt, model="gpt-4o", output_schema=Country)
