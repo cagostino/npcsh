@@ -732,6 +732,7 @@ def execute_slash_command(
     messages=None,
     model: str = None,
     provider: str = None,
+    conversation_id: str = None,
 ):
     """
     Function Description:
@@ -804,27 +805,35 @@ def execute_slash_command(
 
             output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
             print(output)
-    if command_name == "flush":
+    elif command_name == "flush":
         n = float("inf")  # Default to infinite
         for arg in args:
             if arg.startswith("n="):
                 try:
                     n = int(arg.split("=")[1])
                 except ValueError:
-                    return {"messages": messages, "output": "Error: 'n' must be an integer."
+                    return {
+                        "messages": messages,
+                        "output": "Error: 'n' must be an integer." + "\n",
+                    }
 
         flush_result = flush_messages(n, messages)
         return flush_result  # Return the result of flushing messages
 
     # Handle /rehash command
     elif command_name == "rehash":
-        rehash_result = rehash_last_message(messages)
+        rehash_result = rehash_last_message(command_history, conversation_id)
         return rehash_result  # Return the result of rehashing last message
 
     elif command_name == "pipe":
         if len(args) > 0:  # Specific NPC file(s) provided
             for npc_file in args:
                 # differentiate between .npc and .pipe
+                pipeline_runner = PipelineRunner(
+                    pipeline_file=npc_file,  # Uses the current NPC file
+                    db_path="~/npcsh_history.db",  # Ensure this path is correctly set
+                    npc_root_dir="./npc_team",  # Adjust this to your actual NPC directory
+                )
 
                 # run through the steps in the pipe
     elif command_name == "select":
@@ -1106,38 +1115,49 @@ def execute_set_command(command: str, value: str) -> str:
 
     return f"{command.capitalize()} has been set to: {value}"
 
+
 def flush_messages(n: int, messages: list) -> dict:
     if n <= 0:
-        return {"messages": messages, "output": "Error: 'n' must be a positive integer."}
+        return {
+            "messages": messages,
+            "output": "Error: 'n' must be a positive integer.",
+        }
 
     removed_count = min(n, len(messages))  # Calculate how many to remove
     del messages[-removed_count:]  # Remove the last n messages
 
     return {
         "messages": messages,
-        "output": f"Flushed {removed_count} message(s). Context count is now {len(messages)}
+        "output": f"Flushed {removed_count} message(s). Context count is now {len(messages)} messages.",
     }
-def rehash_last_message(messages: list) -> dict:
-    if not messages:
-        return {"messages": messages, "output": "No messages to rehash."}
 
-    # Find the last user message
-    last_user_message = None
-    for msg in reversed(messages):
-        if msg["role"] == "user":
-            last_user_message = msg["content"]
-            break
 
-    if last_user_message is None:
-        return {"messages": messages, "output": "No last user message found."}
+def rehash_last_message(command_history: CommandHistory, conversation_id: str) -> dict:
+    # Fetch the last message or command related to this conversation ID
+    last_conversation = command_history.get_last_conversation(conversation_id)
 
-    # Execute the last user message as a command
-    output = check_llm_command(last_user_message, command_history, npc=npc)
+    if last_conversation:
+        user_command = last_conversation[3]  # Assuming content is in the 4th column
+        output = check_llm_command(
+            user_command, command_history, messages=None
+        )  # Adjust parameters as needed
 
-    return {
-        "messages": messages,
-        "output": f"Rehashed message: {last_user_message}\nResponse: {output}",
-    }
+        return {
+            "output": f"Rehashed conversation message: {user_command}\nResponse: {output}",
+        }
+
+    last_command = command_history.get_last_command()
+    if last_command:
+        user_command = last_command[2]  # Assuming command is in the 3rd column
+        output = check_llm_command(
+            user_command, command_history, messages=None
+        )  # Adjust parameters as needed
+
+        return {
+            "output": f"Rehashed command: {user_command}\nResponse: {output}",
+        }
+
+    return {"output": "No last message or command found to rehash."}
 
 
 def execute_hash_command(
@@ -1239,6 +1259,7 @@ def execute_command(
     text_data: str = None,
     text_data_embedded: np.ndarray = None,
     messages: list = None,
+    conversation_id: str = None,
 ):
     """
     Function Description:
@@ -1329,6 +1350,7 @@ def execute_command(
             messages=messages,
             model=model_override,
             provider=provider_override,
+            conversation_id=conversation_id,
         )
         output = result.get("output", "")
         new_messages = result.get("messages", None)
@@ -1464,9 +1486,6 @@ def execute_command(
                 model=model_override,
                 provider=provider_override,
             )
-
-    # Add command to history
-    command_history.add(command, subcommands, output, location)
 
     if isinstance(output, dict):
         response = output.get("output", "")
@@ -1706,7 +1725,7 @@ def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
                 dataframes[df_name] = df
                 print(f"Data loaded into dataframe '{df_name}'")
                 # Record in command_history
-                command_history.add(
+                command_history.add_command(
                     user_input, ["load"], f"Loaded data into {df_name}", os.getcwd()
                 )
             except Exception as e:
@@ -1721,7 +1740,7 @@ def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
                 # Optionally store result in a dataframe
                 dataframes["sql_result"] = df
                 print("Result stored in dataframe 'sql_result'")
-                command_history.add(
+                command_history.add_command(
                     user_input, ["sql"], "Executed SQL query", os.getcwd()
                 )
             except Exception as e:
@@ -1735,7 +1754,9 @@ def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
                 exec_globals = {"pd": pd, "plt": plt, **dataframes}
                 exec(code, exec_globals)
                 plt.show()
-                command_history.add(user_input, ["plot"], "Generated plot", os.getcwd())
+                command_history.add_command(
+                    user_input, ["plot"], "Generated plot", os.getcwd()
+                )
             except Exception as e:
                 print(f"Error generating plot: {e}")
 
@@ -1754,7 +1775,9 @@ def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
                         if isinstance(v, pd.DataFrame)
                     }
                 )
-                command_history.add(user_input, ["exec"], "Executed code", os.getcwd())
+                command_history.add_command(
+                    user_input, ["exec"], "Executed code", os.getcwd()
+                )
             except Exception as e:
                 print(f"Error executing code: {e}")
 
@@ -2086,7 +2109,7 @@ def enter_spool_mode(
                 )  # Print for debugging
                 continue
 
-            command_history.add(
+            command_history.add_command(
                 user_input,
                 ["spool", npc.name if npc else ""],
                 assistant_reply,

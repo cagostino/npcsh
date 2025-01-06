@@ -1620,7 +1620,7 @@ def execute_llm_command(
             output = response.get("response", "")
 
             # render_markdown(output)
-            command_history.add(command, subcommands, output, location)
+            command_history.add_command(command, subcommands, output, location)
 
             return {"messages": messages, "output": output}
         except subprocess.CalledProcessError as e:
@@ -1675,7 +1675,7 @@ def execute_llm_command(
 
         attempt += 1
 
-    command_history.add(command, subcommands, "Execution failed", location)
+    command_history.add_command(command, subcommands, "Execution failed", location)
     return {
         "messages": messages,
         "output": "Max attempts reached. Unable to execute the command successfully.",
@@ -2025,5 +2025,5 @@ def execute_llm_question(
         output = "Error: Invalid response from conversation function"
 
     # render_markdown(output)
-    command_history.add(command, [], output, location)
+    command_history.add_command(command, [], output, location)
     return {"messages": messages, "output": output}
