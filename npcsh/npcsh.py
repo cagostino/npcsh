@@ -25,7 +25,11 @@ try:
 except:
     print("Could not load the sentence-transformers package.")
 # Local imports
-from .command_history import CommandHistory
+from .command_history import (
+    CommandHistory,
+    start_new_conversation,
+    save_conversation_message,
+)
 from .llm_funcs import (
     execute_llm_command,
     execute_llm_question,
@@ -166,6 +170,8 @@ def main() -> None:
 
     current_npc = None
     messages = None
+    current_conversation_id = start_new_conversation()
+
     while True:
         try:
             if current_npc:
@@ -196,6 +202,7 @@ def main() -> None:
                 text_data=text_data,
                 text_data_embedded=text_data_embedded,
                 messages=messages,
+                conversation_id=current_conversation_id,
             )
 
             # Update messages with the new conversation history
@@ -208,6 +215,16 @@ def main() -> None:
             output = result.get("output")
             # if output:
             #    print(output)
+            # Save messages to conversation history
+            save_conversation_message(
+                command_history, current_conversation_id, "user", user_input
+            )
+            save_conversation_message(
+                command_history,
+                current_conversation_id,
+                "assistant",
+                result.get("output", ""),
+            )
 
             # Optionally, print the result
             if (

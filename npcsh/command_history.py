@@ -16,6 +16,7 @@ class CustomJSONEncoder(json.JSONEncoder):
             return obj.tolist()
         return super().default(obj)
 
+
 def show_history(command_history, args):
     if args:
         search_results = command_history.search(args[0])
@@ -43,9 +44,10 @@ class CommandHistory:
         self.db_path = os.path.expanduser(path)
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
-        self.create_table()
+        self.create_command_table()
+        self.create_conversation_table()
 
-    def create_table(self):
+    def create_command_table(self):
         self.cursor.execute(
             """
         CREATE TABLE IF NOT EXISTS command_history (
@@ -59,49 +61,93 @@ class CommandHistory:
         """
         )
         self.conn.commit()
-    def safe_serialize(self, obj):
-        """Safely serialize any object to a JSON-compatible format."""
-        if isinstance(obj, (str, int, float, bool, type(None))):
-            return obj
-        elif isinstance(obj, (list, tuple)):
-            return [self.safe_serialize(item) for item in obj]
-        elif isinstance(obj, dict):
-            return {str(k): self.safe_serialize(v) for k, v in obj.items()}
-        else:
-            return str(obj)
 
+    def create_conversation_table(self):
+        self.cursor.execute(
+            """
+        CREATE TABLE IF NOT EXISTS conversation_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            role TEXT,
+            content TEXT,
+            conversation_id TEXT
+        )
+        """
+        )
+        self.conn.commit()
 
-    def add(self, command, subcommands, output, location):
+    def add_command(self, command, subcommands, output, location):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
         # Convert everything to strings to ensure it can be stored
         safe_subcommands = str(subcommands)
         safe_output = str(output)
-        
-        self.cursor.execute("""
+
+        self.cursor.execute(
+            """
             INSERT INTO command_history (timestamp, command, subcommands, output, location)
             VALUES (?, ?, ?, ?, ?)
-        """, (timestamp, command, safe_subcommands, safe_output, location))
+        """,
+            (timestamp, command, safe_subcommands, safe_output, location),
+        )
         self.conn.commit()
 
-        
-    def search(self, term):
-        self.cursor.execute(
-            """
-        SELECT * FROM command_history WHERE command LIKE ?
-        """,
-            (f"%{term}%",),
-        )
-        return self.cursor.fetchall()
+    def add_conversation(self, role, content, conversation_id):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    def get_all(self, limit=100):
         self.cursor.execute(
             """
-        SELECT * FROM command_history ORDER BY id DESC LIMIT ?
+            INSERT INTO conversation_history (timestamp, role, content, conversation_id)
+            VALUES (?, ?, ?, ?)
         """,
-            (limit,),
+            (timestamp, role, content, conversation_id),
         )
-        return self.cursor.fetchall()
+        self.conn.commit()
+
+    def get_last_command(self):
+        self.cursor.execute(
+            """
+        SELECT * FROM command_history ORDER BY id DESC LIMIT 1
+        """
+        )
+        return self.cursor.fetchone()
 
     def close(self):
         self.conn.close()
+
+    def get_last_conversation(self, conversation_id):
+        self.cursor.execute(
+            """
+        SELECT * FROM conversation_history WHERE conversation_id = ? ORDER BY id DESC LIMIT 1
+        """,
+            (conversation_id,),
+        )
+        return self.cursor.fetchone()
+
+
+def start_new_conversation() -> str:
+    """
+    Starts a new conversation and returns a unique conversation ID.
+    """
+    return f"conversation_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+
+def save_conversation_message(
+    command_history: CommandHistory, conversation_id: str, role: str, content: str
+):
+    """
+    Saves a conversation message linked to a conversation ID.
+    """
+    command_history.add_conversation(role, content, conversation_id)
+
+
+def retrieve_last_conversation(
+    command_history: CommandHistory, conversation_id: str
+) -> str:
+    """
+    Retrieves and formats all messages from the last conversation.
+    """
+    last_message = command_history.get_last_conversation(conversation_id)
+    if last_message:
+        return last_message[3]  # content
+    return "No previous conversation messages found."

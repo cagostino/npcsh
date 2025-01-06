@@ -173,7 +173,7 @@ def analyze_image(
                 )
                 # print(response)
                 # Add to command history *inside* the try block
-                command_history.add(
+                command_history.add_command(
                     f"screenshot with prompt: {user_prompt}",
                     ["screenshot", npc.name if npc else ""],
                     response,
