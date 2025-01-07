@@ -1032,7 +1032,6 @@ Bash commands and other programs can be executed directly."""
                 device = part.split("=")[1]
             if part.startswith("rag_similarity_threshold="):
                 rag_similarity_threshold = float(part.split("=")[1])
-
         match = re.search(r"files=\s*\[(.*?)\]", command)
         files = []
         if match:
@@ -1044,6 +1043,32 @@ Bash commands and other programs can be executed directly."""
             # Call the enter_spool_mode with the list of files
         else:
             files = None
+
+        if len(command_parts) >= 2 and command_parts[1] == "reattach":
+            last_conversation = command_history.get_last_conversation_by_path(
+                os.getcwd()
+            )
+            print(last_conversation)
+            if last_conversation:
+                spool_context = [
+                    {"role": part[2], "content": part[3]} for part in last_conversation
+                ]
+
+                print(f"Reattached to previous conversation:\n\n")
+                output = enter_spool_mode(
+                    command_history,
+                    inherit_last,
+                    files=files,
+                    npc=npc,
+                    rag_similarity_threshold=rag_similarity_threshold,
+                    device=device,
+                    messages=spool_context,
+                )
+                return {"messages": output["messages"], "output": output}
+
+            else:
+                return {"messages": [], "output": "No previous conversation found."}
+
         output = enter_spool_mode(
             command_history,
             inherit_last,
@@ -1949,6 +1974,7 @@ def enter_spool_mode(
     files: List[str] = None,  # New files parameter
     rag_similarity_threshold: float = 0.3,
     device: str = "cpu",
+    messages: List[Dict] = None,
 ) -> Dict:
     """
     Function Description:
@@ -1965,7 +1991,11 @@ def enter_spool_mode(
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
 
-    spool_context = []
+    if messages is None:
+        messages = []
+    else:
+        spool_context = messages.copy()
+
     loaded_content = {}  # New dictionary to hold loaded content
 
     # Load specified files if any
@@ -1987,7 +2017,8 @@ def enter_spool_mode(
 
     # Add system message to context
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
-    spool_context.insert(0, {"role": "assistant", "content": system_message})
+    if spool_context[0]["role"] != "system":
+        spool_context.insert(0, {"role": "system", "content": system_message})
 
     # Inherit last n messages if specified
     if inherit_last > 0:

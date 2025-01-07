@@ -3,6 +3,8 @@ import sqlite3
 import json
 from datetime import datetime
 
+from typing import Optional, List, Dict, Any
+
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -70,7 +72,8 @@ class CommandHistory:
             timestamp TEXT,
             role TEXT,
             content TEXT,
-            conversation_id TEXT
+            conversation_id TEXT,
+            directory_path TEXT
         )
         """
         )
@@ -92,15 +95,15 @@ class CommandHistory:
         )
         self.conn.commit()
 
-    def add_conversation(self, role, content, conversation_id):
+    def add_conversation(self, role, content, conversation_id, directory_path):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         self.cursor.execute(
             """
-            INSERT INTO conversation_history (timestamp, role, content, conversation_id)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO conversation_history (timestamp, role, content, conversation_id, directory_path)
+            VALUES (?, ?, ?, ?, ?)
         """,
-            (timestamp, role, content, conversation_id),
+            (timestamp, role, content, conversation_id, directory_path),
         )
         self.conn.commit()
 
@@ -122,7 +125,41 @@ class CommandHistory:
         """,
             (conversation_id,),
         )
+
         return self.cursor.fetchone()
+
+    def get_last_conversation_by_path(self, directory_path):
+        most_recent_conversation_id = self.get_most_recent_conversation_id_by_path(
+            directory_path
+        )
+        convo = self.get_conversations_by_id(most_recent_conversation_id[0])
+        return convo
+
+    def get_most_recent_conversation_id_by_path(self, path) -> Optional[str]:
+        """Retrieve the most recent conversation ID for the current path."""
+        current_path = os.getcwd()
+        self.cursor.execute(
+            """
+            SELECT conversation_id FROM conversation_history
+            WHERE directory_path = ?
+            ORDER BY timestamp DESC LIMIT 1
+            """,
+            (path,),
+        )
+        result = self.cursor.fetchone()
+        return result
+
+    def get_conversations_by_id(self, conversation_id: str) -> List[Dict[str, Any]]:
+        """Retrieve all messages for a specific conversation ID."""
+        self.cursor.execute(
+            """
+            SELECT * FROM conversation_history
+            WHERE conversation_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (conversation_id,),
+        )
+        return self.cursor.fetchall()  #
 
 
 def start_new_conversation() -> str:
@@ -138,7 +175,7 @@ def save_conversation_message(
     """
     Saves a conversation message linked to a conversation ID.
     """
-    command_history.add_conversation(role, content, conversation_id)
+    command_history.add_conversation(role, content, conversation_id, os.getcwd())
 
 
 def retrieve_last_conversation(
