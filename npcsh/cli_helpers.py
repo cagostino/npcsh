@@ -1991,10 +1991,9 @@ def enter_spool_mode(
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
 
-    if messages is None:
-        messages = []
-    else:
-        spool_context = messages.copy()
+    spool_context = (
+        messages.copy() if messages else []
+    )  # Initialize context with messages
 
     loaded_content = {}  # New dictionary to hold loaded content
 
@@ -2017,9 +2016,11 @@ def enter_spool_mode(
 
     # Add system message to context
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
-    if spool_context[0]["role"] != "system":
-        spool_context.insert(0, {"role": "system", "content": system_message})
-
+    if len(spool_context) > 0:
+        if spool_context[0]["role"] != "system":
+            spool_context.insert(0, {"role": "system", "content": system_message})
+    else:
+        spool_context.append({"role": "system", "content": system_message})
     # Inherit last n messages if specified
     if inherit_last > 0:
         last_commands = command_history.get_all(limit=inherit_last)
