@@ -98,6 +98,9 @@ class CommandHistory:
     def add_conversation(self, role, content, conversation_id, directory_path):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        if isinstance(content, dict):
+            content = json.dumps(content, cls=CustomJSONEncoder)
+
         self.cursor.execute(
             """
             INSERT INTO conversation_history (timestamp, role, content, conversation_id, directory_path)

@@ -2035,8 +2035,8 @@ def enter_spool_mode(
                 print("Exiting spool mode.")
                 break
             if user_input.startswith("/ots"):
-                if len(user_input) > 1:
-                    command_parts = user_input.split()
+                command_parts = user_input.split()
+                if len(command_parts) > 1:
                     filename = command_parts[1]
                     file_path = os.path.join(os.getcwd(), filename)
                     # Get user prompt about the image
