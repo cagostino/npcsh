@@ -1020,7 +1020,7 @@ def get_openai_response(
     if api_key is None:
         api_key = os.environ["OPENAI_API_KEY"]
     client = OpenAI(api_key=api_key)
-    #print(npc)
+    # print(npc)
 
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
     if messages is None or len(messages) == 0:
@@ -1044,7 +1044,7 @@ def get_openai_response(
                         },
                     }
                 )
-    #print(model)
+    # print(model)
     response_format = None if format == "json" else format
     if response_format is None:
         completion = client.chat.completions.create(model=model, messages=messages)
@@ -1766,9 +1766,11 @@ def check_llm_command(
     - Whether a tool should be used.
 
     Respond with a JSON object containing:
-    - "action": one of ["execute_command", "invoke_tool", "answer_question"]
+    - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc"]
     - "tool_name": (if action is "invoke_tool") the name of the tool to use.
     - "explanation": a brief explanation of why you chose this action.
+    - "npc_name": (if action is "pass_to_npc") the name of the NPC to pass the question to.
+
 
     Return only the JSON object. Do not include any additional text.
 
@@ -1776,7 +1778,8 @@ def check_llm_command(
     {{
         "action": "execute_command" | "invoke_tool" | "answer_question",
         "tool_name": "<tool_name_if_applicable>",
-        "explanation": "<your_explanation>"
+        "explanation": "<your_explanation>",
+        "npc_name": "<npc_name_if_applicable>"
     }}
 
     Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING.
@@ -1869,6 +1872,19 @@ def check_llm_command(
             messages = result.get("messages", messages)
             output = result.get("output", "")
             return {"messages": messages, "output": output}
+        elif action == "pass_to_npc":
+            npc_to_pass = response_content_parsed.get("npc_name")
+            # print(npc)
+
+            return npc.handle_agent_pass(
+                npc_to_pass,
+                command,
+                command_history,
+                messages=messages,
+                retrieved_docs=retrieved_docs,
+                n_docs=n_docs,
+            )
+
         else:
             print("Error: Invalid action in LLM response")
             return "Error: Invalid action in LLM response"

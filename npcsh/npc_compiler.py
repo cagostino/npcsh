@@ -22,6 +22,9 @@ from .llm_funcs import (
     process_data_output,
     get_data_response,
     generate_image,
+    check_llm_command,
+    handle_tool_call,
+    execute_llm_command,
 )
 from .helpers import get_npc_path
 from .search import search_web, rag_search
@@ -256,8 +259,8 @@ def load_tools_from_directory(directory) -> list:
 class NPC:
     def __init__(
         self,
-        name: str,
         db_conn: sqlite3.Connection,
+        name: str,
         primary_directive: str = None,
         suggested_tools_to_use: list = None,
         restrictions: list = None,
@@ -343,6 +346,86 @@ class NPC:
             self.resolved_npcs = self.resolve_all_npcs()
         else:
             self.parsed_npcs = []
+
+    def _check_llm_command(
+        self,
+        command,
+        command_history,
+        retrieved_docs=None,
+        messages=None,
+        n_docs=5,
+    ):
+        return check_llm_command(
+            command,
+            command_history,
+            model=self.model,
+            provider=self.provider,
+            npc=self,
+            retrieved_docs=retrieved_docs,
+            messages=messages,
+            n_docs=n_docs,
+        )
+
+    def handle_agent_pass(
+        self,
+        npc_to_pass: Any,
+        command: str,
+        command_history: Any,
+        messages: List[Dict[str, str]] = None,
+        retrieved_docs=None,
+        n_docs: int = 5,
+    ) -> Union[str, Dict[str, Any]]:
+        """
+        Function Description:
+            This function handles an agent pass.
+        Args:
+            command (str): The command.
+            command_history (Any): The command history.
+        Keyword Args:
+            model (str): The model to use for handling the agent pass.
+            provider (str): The provider to use for handling the agent pass.
+            messages (List[Dict[str, str]]): The list of messages.
+            npc (Any): The NPC object.
+            retrieved_docs (Any): The retrieved documents.
+            n_docs (int): The number of documents.
+        Returns:
+            Union[str, Dict[str, Any]]: The result of handling the agent pass.
+        """
+        print(npc_to_pass, command)
+
+        target_npc = self.get_npc(npc_to_pass)
+        if target_npc is None:
+            return "NPC not found."
+
+        # initialize them as an actual NPC
+        npc_to_pass_init = NPC(self.db_conn, **target_npc)
+        print(npc_to_pass_init, command)
+        updated_command = (
+            command
+            + "/n"
+            + f"""
+
+            NOTE: THIS COMMAND HAS ALREADY BEEN PASSED FROM ANOTHER NPC
+            TO YOU, {npc_to_pass}.
+
+            THUS YOU WILL LIKELY NOT NEED TO PASS IT AGAIN TO YOURSELF
+            OR TO ANOTHER NPC. pLEASE CHOOSE ONE OF THE OTHER OPTIONS WHEN
+            RESPONDING.
+
+
+        """
+        )
+        return npc_to_pass_init._check_llm_command(
+            updated_command,
+            command_history,
+            retrieved_docs=retrieved_docs,
+            messages=messages,
+            n_docs=n_docs,
+        )
+
+    def get_npc(self, npc_name: str):
+        if npc_name + ".npc" in self.npc_cache:
+            return self.npc_cache[npc_name + ".npc"]
 
     def load_suggested_tools(
         self,
@@ -969,8 +1052,8 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
 
         # Initialize and return the NPC object
         return NPC(
-            name,
             db_conn,
+            name,
             primary_directive=primary_directive,
             suggested_tools_to_use=suggested_tools_to_use,
             restrictions=restrictions,

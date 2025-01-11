@@ -794,11 +794,12 @@ db_path = '~/npcsh_history.db'
 conn = sqlite3.connect(db_path)
 
 # Load NPC from a file
-npc = NPC(name='Simon Bolivar',
+npc = NPC(db_conn=conn,
+          name='Simon Bolivar',
           primary_directive='Liberate South America from the Spanish Royalists.',
           model='gpt-4o-mini',
           provider='openai',
-          db_conn=conn)
+          )
 
 response = npc.get_llm_response("What is the most important territory to retain in the Andes mountains?")
 print(response['response'])
@@ -830,11 +831,12 @@ df = pd.DataFrame(data)
 df.to_sql('customer_feedback', conn, if_exists='replace', index=False)
 
 
-npc = NPC(name='Felix',
+npc = NPC(db_conn=conn,
+          name='Felix',
           primary_directive='Analyze customer feedback for sentiment.',
           model='llama3.2',
           provider='ollama',
-          db_conn=conn)
+          )
 response = npc.analyze_db_data('Provide a detailed report on the data contained in the `customer_feedback` table?')
 
 
