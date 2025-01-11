@@ -158,6 +158,11 @@ class NPC:
         self.provider = provider
         self.api_url = api_url
         self.tools = tools or []
+        # for npcs, if a set of tools is provided in the NPC file, we need to ensure they are loaded and refed
+        # well also need to introduce a "default" tool set that will be available in addition to the manual tools
+        # this will allow for a more flexible tooling system
+
+
         self.tools_dict = {tool.tool_name: tool for tool in self.tools}
         self.shared_context = {
             "dataframes": {},
