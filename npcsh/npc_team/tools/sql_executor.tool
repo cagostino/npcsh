@@ -1,6 +1,5 @@
-# npcsh/npc_team/tools/sql_executor.tool
-
 tool_name: sql_executor
+description: Execute SQL queries and display the result
 inputs:
   - sql_query
 preprocess:

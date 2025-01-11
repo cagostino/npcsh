@@ -1,8 +1,9 @@
 tool_name: stats_calculator
+description: Calculates basic statistics on a DataFrame.
 inputs:
-  - table_name   
-  - operation    
-  - filters      
+  - table_name
+  - operation
+  - filters
 preprocess:
   - engine: python
     code: |
@@ -11,7 +12,7 @@ preprocess:
       import operator  # Add this line
 
       df = context['dataframes'][inputs['table_name']]
-            
+
       def fix_inputs(error_msg, current_inputs, df):
         #render_markdown("FIXING INPUTS")
         #render_markdown(f"Error was: {error_msg}")
@@ -138,7 +139,7 @@ preprocess:
                   #render_markdown(filtered_df.head().to_string())
 
               # Specify the operation column
-              operation_column = inputs.get('operation_column')  
+              operation_column = inputs.get('operation_column')
               result = getattr(filtered_df[operation_column], inputs['operation'])()
               #render_markdown(f"\nResult: {result}")
               context['stats'] = str(result)
@@ -167,4 +168,3 @@ prompt:
 postprocess:
   - engine: natural
     code: ""
-      

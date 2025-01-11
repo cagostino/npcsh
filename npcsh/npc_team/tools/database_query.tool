@@ -1,6 +1,6 @@
-# database_query.tool
-
 tool_name: database_query
+description: Executes a query on tables in the ~/npcsh_history.db sqlite3 database.
+
 inputs:
   - query_text
 preprocess:
@@ -13,13 +13,13 @@ preprocess:
 
 
       query_text = inputs['query_text'].lower()
-      
+
       output = None
-      
+
       # Initialize dataframes dict in context if it doesn't exist
       if 'dataframes' not in context:
           context['dataframes'] = {}
-      
+
       # Handle "load table" requests
       if 'load' in query_text and ('table' in query_text or 'data' in query_text):
           # Extract table name - assume it's the last word
@@ -31,10 +31,10 @@ preprocess:
               df = pd.read_sql_query(query, npc.db_conn)
               print(f'{table_name} loaded')
               print(df)
-              
+
               # Store in context
               context['dataframes'][table_name] = df
-              
+
               output = df
           except Exception as e:
               # If fails, try to find CSV with similar name
@@ -42,10 +42,10 @@ preprocess:
                   print('Trying to load table through CSV')
                   df = pd.read_csv(f"{table_name}.csv")
                   print(f'{table_name} loaded')
-                  
+
                   # Store in context
                   context['dataframes'][table_name] = df
-                  
+
                   output = df
               except Exception as e2:
                   output = f"Failed to load table or file: {str(e2)}"

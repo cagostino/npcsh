@@ -1,4 +1,5 @@
 tool_name: "generic_search_tool"
+description: Searches the web for information based on a query
 inputs:
   - "query"
 preprocess:

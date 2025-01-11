@@ -1,4 +1,5 @@
 tool_name: "example_tool"
+description: "An example tool for demonstration purposes"
 inputs:
   - "input_param"
 preprocess:

@@ -1,4 +1,6 @@
 tool_name: local_search
+description: |
+    searches files in current and downstream directories to find items related to the user's query to help in answering.
 inputs:
   - query
   - file_filter  # Optional - can be filename patterns or folder names

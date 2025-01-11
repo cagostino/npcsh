@@ -1,6 +1,5 @@
-# data_loader.tool
-
 tool_name: data_loader
+description: Loads data from a file into a DataFrame.
 inputs:
   - file_path
   - table_name

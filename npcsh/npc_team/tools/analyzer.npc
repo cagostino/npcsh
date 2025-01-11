@@ -1,0 +1,7 @@
+name: Analyzer
+description: Analyze collected feedback to determine user preferences.
+primary_directive: Analyze collected feedback to determine user preferences.
+suggested_tools_to_use:
+  -  pref_analyzer
+model: claude-3-haiku-latest
+provider: anthropic

@@ -1,4 +1,5 @@
 tool_name: additional_tool
+description: "A tool to enhance data"
 inputs:
   - data
 preprocess:
