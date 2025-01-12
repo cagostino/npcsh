@@ -1732,7 +1732,8 @@ def check_llm_command(
     2. Should a tool be invoked to fulfill the request?
     3. Is it a general question that requires an informative answer?
     4. Would this question be best answered by an alternative NPC?
-
+    5. Is it a complex request that actually requires more than one
+    tool to be called, perhaps in a sequence?
 
     Available tools:
     """
@@ -1766,8 +1767,9 @@ def check_llm_command(
     - Whether a tool should be used.
 
     Respond with a JSON object containing:
-    - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc"]
-    - "tool_name": (if action is "invoke_tool") the name of the tool to use.
+    - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc", "execute_sequence"]
+    - "tool_name": : if action is "invoke_tool": the name of the tool to use.
+                     else if action is "execute_sequence", a list of tool names to use.
     - "explanation": a brief explanation of why you chose this action.
     - "npc_name": (if action is "pass_to_npc") the name of the NPC to pass the question to.
 
@@ -1776,8 +1778,8 @@ def check_llm_command(
 
     The format of the JSON object is:
     {{
-        "action": "execute_command" | "invoke_tool" | "answer_question",
-        "tool_name": "<tool_name_if_applicable>",
+        "action": "execute_command" | "invoke_tool" | "answer_question" | "pass_to_npc" | "execute_sequence",
+        "tool_name": "<tool_name(s)_if_applicable>",
         "explanation": "<your_explanation>",
         "npc_name": "<npc_name_if_applicable>"
     }}
@@ -1884,7 +1886,28 @@ def check_llm_command(
                 retrieved_docs=retrieved_docs,
                 n_docs=n_docs,
             )
+        elif action == "execute_sequence":
+            tool_names = response_content_parsed.get("tool_name")
+            output = ""
+            results_tool_calls = []
+            for tool_name in tool_names:
+                result = handle_tool_call(
+                    command,
+                    tool_name,
+                    command_history,
+                    model=model,
+                    provider=provider,
+                    messages=messages,
+                    npc=npc,
+                    retrieved_docs=retrieved_docs,
+                )
+                results_tool_calls.append(result)
+                messages = result.get("messages", messages)
+                output += result.get("output", "")
+            # import pdb
 
+            # pdb.set_trace()
+            return {"messages": messages, "output": output}
         else:
             print("Error: Invalid action in LLM response")
             return "Error: Invalid action in LLM response"

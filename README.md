@@ -129,10 +129,12 @@ liberty, governance, and social issues continue to inspire movements for democra
 in the history of Latin America.
 ```
 
+
 ```npcsh
 npcsh> What is the capital of France?
 The capital of France is Paris. It is the largest city in the country and is known for its rich history, art, culture, and architecture, including famous landmarks such as the Eiffel Tower, Notre-Dame Cathedral, and the Louvre Museum.
 ```
+
 
 ```npcsh
 npcsh> What's the weather in Tokyo?
@@ -289,6 +291,26 @@ npcsh> can you generate an image of a calico cat and an orange tabby cat in the 
 handle_tool_call invoked with tool_name: image_generation_tool
 ```
 ![catfight](test_data/catfight.PNG)
+
+
+In addition to its ability to execute one-off tasks or tool calls, npcsh also has
+the ability to generate tool call sequences when asked:
+```npcsh
+
+npcsh> can you use a tool sequence to find the gdp of russia in 2024 and then to use that information to generate an image?
+
+handle_tool_call invoked with tool_name: generic_search_tool
+Tool found: generic_search_tool
+handle_tool_call invoked with tool_name: image_generation_tool
+Tool found: image_generation_tool
+
+The Gross Domestic Product (GDP) of Russia is estimated to be $8.311 trillion by the end of 2024, according to World Economics.
+This figure is significantly larger than the official estimate of $5.804 trillion published by the World Bank for the end of 2023.
+
+It seems that you've generated an image. If you have any questions or need assistance related to this image, please let me know how I can help!
+```
+and then the associated image :
+![gdp](test_data/r8ss9a.PNG)
 
 
 
