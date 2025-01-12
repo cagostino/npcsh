@@ -1,6 +1,5 @@
-# npcsh/npc_team/tools/pandas_executor.tool
-
 tool_name: pandas_executor
+description: Execute pandas code and display the result
 inputs:
   - code
 preprocess:

@@ -1,4 +1,5 @@
 tool_name: data_plotter
+description: Plots data from a DataFrame.
 inputs:
   - table_name
   - plot_type

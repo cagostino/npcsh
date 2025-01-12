@@ -1,4 +1,6 @@
 tool_name: "image_generation_tool"
+description: |
+  Generates images based on a text prompt.
 inputs:
   - "prompt"
 preprocess:

@@ -168,6 +168,7 @@ def analyze_image(
 
         if user_prompt:
             try:
+                print("Analyzing image...")
                 response = get_llm_response(
                     user_prompt, images=[image_info], npc=npc, **model_kwargs
                 )
@@ -179,10 +180,11 @@ def analyze_image(
                     response,
                     os.getcwd(),
                 )
+
                 # print(reponse)
                 # import pdb
                 # pdb.set_trace()
-                print(response["response"])  # Print response after adding to history
+
                 return response
 
             except Exception as e:

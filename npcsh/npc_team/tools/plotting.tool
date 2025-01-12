@@ -1,5 +1,5 @@
 # npcsh/npc_team/tools/plotting_tool.tool
-
+description: Generate and display a plot based on the provided code.
 tool_name: plotting_tool
 inputs:
   - code
