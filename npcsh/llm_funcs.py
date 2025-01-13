@@ -428,6 +428,9 @@ def get_system_message(npc: Any) -> str:
     {npc.tables}
 
     which are contained in the database at {npcsh_db_path}.
+
+    If you ever need to produce markdown texts for the user, please do so
+    with less than 80 characters width for each line.
     """
 
     # need to move this to the check_llm_command or move that one here
