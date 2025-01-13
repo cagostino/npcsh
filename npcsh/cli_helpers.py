@@ -2147,7 +2147,14 @@ def enter_spool_mode(
                 assistant_reply,
                 os.getcwd(),
             )
-            print(assistant_reply)
+
+            #sometimes claude responds with unfinished markdown notation. so we need to check if there are two sets
+            #of markdown notation and if not, we add it. so if # markdown notations is odd we add one more
+            if assistant_reply.count("```") % 2 != 0:
+                assistant_reply = assistant_reply + "```"
+
+
+            render_markdown(assistant_reply)
 
         except (KeyboardInterrupt, EOFError):
             print("\nExiting spool mode.")
