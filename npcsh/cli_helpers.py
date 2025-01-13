@@ -2147,7 +2147,7 @@ def enter_spool_mode(
                 assistant_reply,
                 os.getcwd(),
             )
-            render_markdown(assistant_reply)
+            print(assistant_reply)
 
         except (KeyboardInterrupt, EOFError):
             print("\nExiting spool mode.")
