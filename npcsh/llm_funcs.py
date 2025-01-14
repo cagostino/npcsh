@@ -541,11 +541,22 @@ def get_openai_conversation(
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
 
-def get_openai_like_response( prompt: str, model: str, api_url: str, api_key: str , **kwargs, ) -> Dict[str, Any]:
+
+def get_openai_like_response(
+    prompt: str,
+    model: str,
+    api_url: str,
+    api_key: str,
+    **kwargs,
+) -> Dict[str, Any]:
     try:
         if api_url is None:
             raise ValueError("api_url is required for openai-like provider")
-        request_data = { "model": model, "prompt": prompt, **kwargs,}
+        request_data = {
+            "model": model,
+            "prompt": prompt,
+            **kwargs,
+        }
         headers = {"Content-Type": "application/json"}
         headers["Authorization"] = f"Bearer {api_key}"
         response = requests.post(api_url, headers=headers, json=request_data)
@@ -968,46 +979,45 @@ def get_ollama_response(
     Returns:
         Dict[str, Any]: The response, optionally including updated messages.
     """
-    try:
-        # Prepare the message payload
-        message = {"role": "user", "content": prompt}
-        if images:
-            message["images"] = [image["file_path"] for image in images]
+    # try:
+    # Prepare the message payload
+    message = {"role": "user", "content": prompt}
+    if images:
+        message["images"] = [image["file_path"] for image in images]
 
-        # Prepare format
-        if isinstance(format, type) and issubclass(format, BaseModel):
-            schema = format.model_json_schema()
-        else:
-            schema = format if format else "json"
-
-        print(schema, type(schema))
-        # Call the Ollama API
+    # Prepare format
+    if isinstance(format, type):
+        schema = format.model_json_schema()
         res = ollama.chat(model=model, messages=[message], format=schema)
-        response_content = res.get("message", {}).get("content")
 
-        if isinstance(response_content, str):
-            # parse it as a json
-            response_content = json.loads(response_content)
-
-        # Prepare the return dictionary
-        result = {"response": response_content}
-
-        # Append response to messages if provided
-        if messages is not None:
-            messages.append({"role": "assistant", "content": response_content})
-            result["messages"] = messages
-
-        # Handle JSON format if specified
+    elif isinstance(format, str):
         if format == "json":
-            try:
-                result["response"] = json.loads(response_content)
-            except json.JSONDecodeError:
-                return {"error": f"Invalid JSON response: {response_content}"}
+            res = ollama.chat(model=model, messages=[message], format=format)
+        else:
+            res = ollama.chat(model=model, messages=[message])
+    else:
+        res = ollama.chat(model=model, messages=[message])
+    response_content = res.get("message", {}).get("content")
 
-        return result
+    # Prepare the return dictionary
+    result = {"response": response_content}
 
-    except Exception as e:
-        return {"error": f"Exception occurred: {e}"}
+    # Append response to messages if provided
+    if messages is not None:
+        messages.append({"role": "assistant", "content": response_content})
+        result["messages"] = messages
+
+    # Handle JSON format if specified
+    if format == "json":
+        try:
+            result["response"] = json.loads(response_content)
+        except json.JSONDecodeError:
+            return {"error": f"Invalid JSON response: {response_content}"}
+
+    return result
+
+    # except Exception as e:
+    #    return {"error": f"Exception occurred: {e}"}
 
 
 def get_openai_response(
