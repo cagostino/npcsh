@@ -420,7 +420,8 @@ def get_system_message(npc: Any) -> str:
     Welcome to the team.
     You are an NPC working as part of our team.
     You are the {npc.name} NPC with the following primary directive: {npc.primary_directive}.
-    Users may refer to you by your assistant name, {npc.name} and you shouold consider this to be your core identity.
+    Users may refer to you by your assistant name, {npc.name} and you should
+    consider this to be your core identity.
 
     The current date and time are : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
@@ -431,9 +432,11 @@ def get_system_message(npc: Any) -> str:
 
     which are contained in the database at {npcsh_db_path}.
 
-    if you need to respond with markdown in a conversational response,
-    limit the width of the markdown to <80
+    If you ever need to produce markdown texts for the user, please do so
+    with less than 80 characters width for each line.
     """
+
+    # need to move this to the check_llm_command or move that one here
 
     if npc.tools:
         tool_descriptions = "\n".join(
@@ -1685,6 +1688,19 @@ def execute_llm_command(
     }
 
 
+def handle_agent_call(
+    command: str,
+    command_history: Any,
+    model: str = npcsh_model,
+    provider: str = npcsh_provider,
+    npc: Any = None,
+    retrieved_docs=None,
+    messages: List[Dict[str, str]] = None,
+    n_docs=5,
+):
+    return
+
+
 def check_llm_command(
     command: str,
     command_history: Any,
@@ -1710,8 +1726,6 @@ def check_llm_command(
     Returns:
         Any: The result of checking the LLM command.
     """
-
-    location = os.getcwd()
 
     if messages is None:
         messages = []
