@@ -575,10 +575,11 @@ class NPC:
     def parse_all_npcs(self) -> None:
         directories = [self.global_npc_directory, self.project_npc_directory]
         for directory in directories:
-            for filename in os.listdir(directory):
-                if filename.endswith(".npc"):
-                    npc_path = os.path.join(directory, filename)
-                    self.parse_npc_file(npc_path)
+            if os.path.exists(directory):
+                for filename in os.listdir(directory):
+                    if filename.endswith(".npc"):
+                        npc_path = os.path.join(directory, filename)
+                        self.parse_npc_file(npc_path)
 
     def parse_npc_file(self, npc_file_path: str) -> dict:
         npc_file = os.path.basename(npc_file_path)
