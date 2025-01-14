@@ -1,4 +1,5 @@
 tool_name: "screen_capture_analysis_tool"
+description: Captures the whole screen and sends the image for analysis
 inputs:
   - "prompt"
 preprocess:

@@ -927,6 +927,8 @@ def execute_slash_command(
                 npc=npc,
                 **output["model_kwargs"],
             )
+            print(output)
+
         if output:
             if isinstance(output, dict) and "filename" in output:
                 message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
@@ -1501,7 +1503,7 @@ def execute_command(
 
         else:
             # print(model_override, provider_override)
-            # print(npc)
+            #print(npc)
             output = check_llm_command(
                 command,
                 command_history,

@@ -1,4 +1,5 @@
 tool_name: "weather_tool"
+description: "Summarize the weather forecast for a location in November 2024"
 inputs:
   - "location"
 preprocess:

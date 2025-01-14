@@ -1,4 +1,7 @@
 tool_name: splonk
+description: |
+  Debugging tool to analyze and fix code issues based on user's description and test command.
+  The tool uses a language model to provide insights and suggestions for code changes.
 inputs:
   - issue_description   # User's description of the bug/issue
   - test_command       # Required - to verify fixes
@@ -16,39 +19,39 @@ preprocess:
         import numpy as np
         from typing import List, Dict
         import fnmatch
-        
+
         TfidfVectorizer = sklearn.feature_extraction.text.TfidfVectorizer
         cosine_similarity = sklearn.metrics.pairwise.cosine_similarity
 
         def find_files(file_filter=None):
             default_extensions = ['.py', '.txt', '.md', '.json', '.yml', '.yaml']
             matches = []
-            
+
             for root, dirnames, filenames in os.walk('.'):
                 if any(ignore in root for ignore in ['.git', '__pycache__', 'node_modules', 'venv']):
                     continue
-                    
+
                 for filename in filenames:
                     if not any(filename.endswith(ext) for ext in default_extensions):
                         continue
-                        
+
                     full_path = os.path.join(root, filename)
-                    
+
                     if not file_filter:
                         matches.append(full_path)
                         continue
-                        
+
                     if isinstance(file_filter, str):
                         filters = [file_filter]
                     else:
                         filters = file_filter
-                        
+
                     for f in filters:
-                        if (fnmatch.fnmatch(filename, f) or 
+                        if (fnmatch.fnmatch(filename, f) or
                             fnmatch.fnmatch(full_path, f'*{f}*')):
                             matches.append(full_path)
                             break
-            
+
             return matches
 
         def load_document(file_path):
@@ -81,29 +84,29 @@ preprocess:
                 }
             except Exception as e:
                 return {'success': False, 'error': str(e)}
-        
+
         def backup_file(file_path):
             backup_path = str(file_path) + '.bak'
             with open(file_path, 'r') as src, open(backup_path, 'w') as dst:
                 dst.write(src.read())
             return backup_path
-            
+
         def apply_changes(file_path, new_content):
             with open(file_path, 'r') as f:
                 old_content = f.read()
-            
+
             backup = backup_file(file_path)
-            
+
             with open(file_path, 'w') as f:
                 f.write(new_content)
-                
+
             diff = list(difflib.unified_diff(
                 old_content.splitlines(keepends=True),
                 new_content.splitlines(keepends=True),
                 fromfile=str(file_path),
                 tofile=str(file_path)
             ))
-            
+
             return {
                 'backup': backup,
                 'diff': ''.join(diff)
@@ -122,32 +125,32 @@ preprocess:
                     print(f"Error loading {file_path}: {str(e)}")
 
             relevant_chunks = find_relevant_chunks(issue_description, chunks)
-            
+
             # Build prompt
             prompt = f"""Debug this issue: {issue_description}"""
-            
+
             if debug_history:
                 prompt += "\n\nPrevious debug attempts:\n"
                 for attempt in debug_history:
                     prompt += f"\nAttempt {attempt['attempt']}:\n"
                     prompt += f"Changes: {attempt['changes']}\n"
                     prompt += f"Error: {attempt['error']}\n"
-            
+
             prompt += "\nRelevant code:\n"
             for chunk, similarity in relevant_chunks:
                 prompt += f"\nFile: {chunk['path']} (relevance: {similarity:.2f})\n```{chunk['ext'][1:]}\n{chunk['content']}\n```\n"
-            
+
             prompt += "\n\nProvide:\n1. Analysis of the issue\n2. Specific file changes needed\n3. Expected outcome"
-            
+
             # Get and apply fixes
             llm_response = get_llm_response(prompt)
             changes = parse_llm_changes(llm_response)
-            
+
             changes_made = []
             for change in changes:
                 result = apply_changes(change['path'], change['content'])
                 changes_made.append(result)
-                
+
             return changes_made, llm_response
 
         # Main debugging loop
@@ -159,16 +162,16 @@ preprocess:
         while attempt < max_attempts and not success:
             attempt += 1
             print(f"\nDebug Attempt {attempt}/{max_attempts}")
-            
+
             # Analyze and fix
             changes_made, analysis = analyze_and_fix(
-                inputs['issue_description'], 
+                inputs['issue_description'],
                 debug_history if debug_history else None
             )
-            
+
             # Run tests
             test_result = run_test(inputs['test_command'])
-            
+
             if test_result['success']:
                 success = True
                 print("✅ Fix successful!")
@@ -197,13 +200,13 @@ prompt:
     Debug Session Summary:
     Success: {{ debug_results['success'] }}
     Attempts: {{ debug_results['attempts'] }}
-    
+
     {% if debug_results['success'] %}
     ✅ Issue resolved after {{ debug_results['attempts'] }} attempts.
     {% else %}
     ❌ Failed to resolve after {{ debug_results['attempts'] }} attempts.
     {% endif %}
-    
+
     Debug History:
     {% for attempt in debug_results['history'] %}
     Attempt {{ attempt.attempt }}:
