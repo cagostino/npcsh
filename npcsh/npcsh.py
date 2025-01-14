@@ -48,12 +48,6 @@ from .helpers import (
     initialize_base_npcs_if_needed,
 )
 from .cli_helpers import (
-    enter_whisper_mode,
-    enter_notes_mode,
-    render_markdown,
-    log_action,
-    enter_spool_mode,
-    enter_data_mode,
     complete,  # For command completion
     readline_safe_prompt,
     get_multiline_input,

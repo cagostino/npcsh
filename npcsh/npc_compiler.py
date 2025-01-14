@@ -69,24 +69,6 @@ def init_pipeline_runs(db_path: str = "~/npcsh_history.db"):
         conn.commit()
 
 
-def load_tool_from_file(tool_path: str) -> Union[dict, None]:
-    try:
-        with open(tool_path, "r") as f:
-            tool_content = f.read()
-        if not tool_content.strip():
-            print(f"Tool file {tool_path} is empty. Skipping.")
-            return None
-        tool_data = yaml.safe_load(tool_content)
-        if tool_data is None:
-            print(f"Tool file {tool_path} is invalid or empty. Skipping.")
-            return None
-        return tool_data
-    except yaml.YAMLError as e:
-        print(f"Error parsing tool {tool_path}: {e}")
-        return None
-    except Exception as e:
-        print(f"Error loading tool {tool_path}: {e}")
-        return None
 
 
 # SilentUndefined handles undefined behavior in Jinja2
