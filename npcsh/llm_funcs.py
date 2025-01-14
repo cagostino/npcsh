@@ -541,6 +541,22 @@ def get_openai_conversation(
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
 
+def get_openai_like_response( prompt: str, model: str, api_url: str, api_key: str , **kwargs, ) -> Dict[str, Any]:
+    try:
+        if api_url is None:
+            raise ValueError("api_url is required for openai-like provider")
+        request_data = { "model": model, "prompt": prompt, **kwargs,}
+        headers = {"Content-Type": "application/json"}
+        headers["Authorization"] = f"Bearer {api_key}"
+        response = requests.post(api_url, headers=headers, json=request_data)
+        response.raise_for_status()
+        response_json = response.json()
+        return response_json
+    except requests.exceptions.RequestException as e:
+        return f"Error making API request: {e}"
+    except Exception as e:
+        return f"Error interacting with API: {e}"
+
 
 def get_openai_like_conversation(
     messages: List[Dict[str, str]],
