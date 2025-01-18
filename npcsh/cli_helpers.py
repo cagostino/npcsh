@@ -717,6 +717,66 @@ def validate_bash_command(command_parts: list) -> bool:
     return True
 
 
+def execute_rag_command(
+    command: str,
+    command_history: CommandHistory,
+    db_path: str,
+    db_conn: sqlite3.Connection,
+    npc_compiler: NPCCompiler,
+    valid_npcs: list,
+    npc: NPC = None,
+    retrieved_docs: list = None,
+    embedding_model=None,
+    text_data=None,
+    text_data_embedded=None,
+    messages=None,
+    model: str = None,
+    provider: str = None,
+    conversation_id: str = None,
+):
+    """
+    Function Description:
+        Executes a RAG command with a specified embedding model or specified data source
+    Args:
+        command : str : Command
+        command_history : CommandHistory : Command history
+        db_path : str : Database path
+        npc_compiler : NPCCompiler : NPC compiler
+    Keyword Args:
+        embedding_model : None : Embedding model
+        current_npc : None : Current NPC
+        text_data : None : Text data
+        text_data_embedded : None : Embedded text data
+        messages : None : Messages
+    Returns:
+        dict : dict : Dictionary
+    """
+    # assume rag will be performed on old conversations
+
+    # extract the command the embedding model if specified in the command
+    split_command = command.split()
+
+    embedding_model = np.where(split_command.str.contains("embedding_model="))
+    data_source = np.where(split_command.str.contains("data_source="))
+
+    # if data source is a list process each file
+    # otherwise process each file, support csv, txt, md, py, json, pdf, xlsx
+
+    # figure out the model provider from a lookup in a table
+    # well cover openai, anthropic, and ollama embeddings.
+    embedding_model = initialize_embedding_model(
+        get_model_and_provider(embedding_model)
+    )
+
+
+def execute_squish_command():
+    return
+
+
+def execute_splat_command():
+    return
+
+
 def execute_slash_command(
     command: str,
     command_history: CommandHistory,
@@ -1503,7 +1563,7 @@ def execute_command(
 
         else:
             # print(model_override, provider_override)
-            #print(npc)
+            # print(npc)
             output = check_llm_command(
                 command,
                 command_history,
