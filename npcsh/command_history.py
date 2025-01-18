@@ -173,11 +173,17 @@ def start_new_conversation() -> str:
 
 
 def save_conversation_message(
-    command_history: CommandHistory, conversation_id: str, role: str, content: str
+    command_history: CommandHistory,
+    conversation_id: str,
+    role: str,
+    content: str,
+    wd: str = None,
 ):
     """
     Saves a conversation message linked to a conversation ID.
     """
+    if wd is None:
+        wd = os.getcwd()
     command_history.add_conversation(role, content, conversation_id, os.getcwd())
 
 
