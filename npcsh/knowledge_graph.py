@@ -1,0 +1,183 @@
+import kuzu
+import json
+from .llm_funcs import get_llm_response
+from .npc_compiler import NPC
+from typing import Optional, Dict, List
+
+
+def init_db(db_path: str):
+    """Initialize Kùzu database and create schema"""
+    db = kuzu.Database(db_path)
+    conn = kuzu.Connection(db)
+
+    # Create schema if the tables do not exist
+    conn.execute(
+        """CREATE NODE TABLE IF NOT EXISTS Fact(
+           content STRING,
+           path STRING,
+           recorded_at STRING,
+           PRIMARY KEY (content)
+        );"""
+    )
+    print("Fact table created or already exists.")
+
+    conn.execute(
+        """CREATE NODE TABLE IF NOT EXISTS Groups(
+           name STRING,
+           metadata STRING,
+           PRIMARY KEY (name)
+        );"""
+    )
+    print("Groups table created or already exists.")
+
+    conn.execute(
+        """CREATE REL TABLE IF NOT EXISTS Contains(
+           FROM Groups TO Fact
+        );"""
+    )
+    print("Contains relationship table created or already exists.")
+
+    return conn
+
+
+def extract_facts(
+    text: str, model: str = "llama3.2", provider: str = "ollama", npc: NPC = None
+) -> List:
+    """Extract facts from text using LLM"""
+    prompt = """Extract facts from this text.
+        A fact is a piece of information that makes a statement about the world.
+        A fact is typically a sentence that is true or false.
+        Facts may be simple or complex. They can also be conflicting with each other, usually
+        because there is some hidden context that is not mentioned in the text.
+        In any case, it is simply your job to extract a list of facts that could pertain to
+        an individual's  personality.
+        For example, if a user says :
+            "since I am a doctor I am often trying to think up new ways to help people.
+            Can you help me set up a new kind of software to help with that?"
+        You might extract the following facts:
+            - The user is a doctor
+            - The user is helpful
+
+        Another example:
+            "I am a software engineer who loves to play video games. I am also a huge fan of the
+            Star Wars franchise and I am a member of the 501st Legion."
+        You might extract the following facts:
+            - The user is a software engineer
+            - The user loves to play video games
+            - The user is a huge fan of the Star Wars franchise
+            - The user is a member of the 501st Legion
+
+        Thus, it is your mission to reliably extract litss of facts.
+
+
+    Return a JSON object with the following structure:
+
+        {{
+            "fact list": "a list containing the facts where each fact is a string",
+        }}
+
+
+    Return only the JSON object.
+    Do not include any additional markdown formatting.
+
+    """
+
+    response = get_llm_response(
+        prompt + f"\n\nText: {text}",
+        model=model,
+        provider=provider,
+        format="json",
+    )
+    response = response["response"]
+    print(response)
+    return response
+
+
+def find_similar_groups(
+    conn: kuzu.Connection,
+    fact: Dict,
+    model: str = "llama3.2",
+    provider: str = "ollama",
+    npc: NPC = None,
+) -> List[str]:
+    """Find existing groups that might contain this fact"""
+    response = conn.execute(f"MATCH (g:Groups) RETURN g.name;")  # Ensure
+    # this matches the correct table
+    groups = [row[0] for row in response]
+
+    print(f"Groups: {groups}")
+    if not groups:
+        return []
+
+    prompt = f"""Given this fact: {json.dumps(fact)}
+    And these groups: {json.dumps(groups)}
+
+    Return a array of group names that this fact belongs to, if any.
+    """
+
+    response = get_llm_response(
+        prompt, model=model, provider=provider, npc=npc, format="json"
+    )
+    return json.loads(response)
+
+
+def add_fact_to_db(conn: kuzu.Connection, fact: str, path: str):
+    """Add a fact to the database and connect it to appropriate groups"""
+    import datetime
+
+    recorded_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Ensure the fact is a string and not a dictionary here
+    print(f"Inserting fact: {fact}")
+    try:
+        conn.execute(
+            """INSERT INTO Fact(content, path, recorded_at)
+               VALUES (:content, :path, :recorded_at);""",
+            {"content": fact, "path": path, "recorded_at": recorded_at},
+        )
+        print("Fact inserted successfully.")
+    except Exception as e:
+        print(f"Error inserting fact: {e}")
+
+    # Find similar groups
+    similar_groups = find_similar_groups(conn, fact)
+
+    if not similar_groups:
+        group_name = f"Group for {fact}"
+        conn.execute(
+            """INSERT INTO Groups(name, metadata)
+               VALUES (:name, :metadata);""",
+            {"name": group_name, "metadata": "{}"},
+        )
+        conn.execute(
+            """MATCH (g:Groups),(f:Fact) WHERE g.name = :group_name AND f.content = :content
+               CREATE (g)-[:Contains]->(f);""",
+            {"group_name": group_name, "content": fact},
+        )
+    else:
+        for group_name in similar_groups:
+            conn.execute(
+                """MATCH (g:Groups),(f:Fact) WHERE g.name = :group_name AND f.content = :content
+                   CREATE (g)-[:Contains]->(f);""",
+                {"group_name": group_name, "content": fact},
+            )
+
+    conn.commit()
+
+
+def process_text(
+    db_path: str,
+    text: str,
+    path: str,
+    model: str = "llama3.2",
+    provider: str = "ollama",
+    npc: NPC = None,
+):
+    """Process text and add extracted facts to the Kùzu database"""
+    conn = init_db(db_path)
+    facts = extract_facts(text, model=model, provider=provider, npc=npc)
+
+    for fact in facts:
+        add_fact_to_db(conn, fact, path)
+
+    conn.close()
