@@ -3,12 +3,18 @@ import json
 from .llm_funcs import get_llm_response
 from .npc_compiler import NPC
 from typing import Optional, Dict, List
+import os
 
 
-def init_db(db_path: str):
+def init_db(db_path: str, drop=False):
     """Initialize Kùzu database and create schema"""
     db = kuzu.Database(db_path)
     conn = kuzu.Connection(db)
+
+    if drop:
+        conn.execute(""" drop table Contains""")
+        conn.execute("""drop  table if exists Fact;""")
+        conn.execute("""drop  table if exists Groups;""")
 
     # Create schema if the tables do not exist
     conn.execute(
@@ -73,7 +79,7 @@ def extract_facts(
     Return a JSON object with the following structure:
 
         {{
-            "fact list": "a list containing the facts where each fact is a string",
+            "fact_list": "a list containing the facts where each fact is a string",
         }}
 
 
@@ -90,20 +96,21 @@ def extract_facts(
     )
     response = response["response"]
     print(response)
-    return response
+    return response["fact_list"]
 
 
 def find_similar_groups(
     conn: kuzu.Connection,
-    fact: Dict,
+    fact: str,  # Ensure fact is passed as a string
     model: str = "llama3.2",
     provider: str = "ollama",
     npc: NPC = None,
 ) -> List[str]:
     """Find existing groups that might contain this fact"""
-    response = conn.execute(f"MATCH (g:Groups) RETURN g.name;")  # Ensure
-    # this matches the correct table
-    groups = [row[0] for row in response]
+    response = conn.execute(f"MATCH (g:Groups) RETURN g.name;")  # Execute query
+
+    # Extracting group names properly from QueryResult
+    groups = [row[0] for row in response.fetch_all()]  # Use fetch_all() to get rows
 
     print(f"Groups: {groups}")
     if not groups:
@@ -112,7 +119,7 @@ def find_similar_groups(
     prompt = f"""Given this fact: {json.dumps(fact)}
     And these groups: {json.dumps(groups)}
 
-    Return a array of group names that this fact belongs to, if any.
+    Return an array of group names that this fact belongs to, if any.
     """
 
     response = get_llm_response(
@@ -121,48 +128,42 @@ def find_similar_groups(
     return json.loads(response)
 
 
-def add_fact_to_db(conn: kuzu.Connection, fact: str, path: str):
-    """Add a fact to the database and connect it to appropriate groups"""
+def insert_fact(conn: kuzu.Connection, fact: str, path: str):
+    """Insert a fact into the database"""
+    # Escape special characters
+    escaped_fact = fact.replace("'", "''")
+    escaped_path = os.path.expanduser(path).replace("'", "''")  # Empty string if None
+
     import datetime
 
-    recorded_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    recorded_at = datetime.datetime.now()
+    escaped_recorded_at = recorded_at.strftime("%Y-%m-%d %H:%M:%S")
 
-    # Ensure the fact is a string and not a dictionary here
-    print(f"Inserting fact: {fact}")
+    # Construct the query
+    query = f"""
+    CREATE (f:Fact {{
+        content: "{escaped_fact}",
+        path: "`{escaped_path}`",
+        recorded_at: '{escaped_recorded_at}'
+    }});
+    """
+
+    # Debug output to ensure everything is correct
+    print(f"Inserting fact: {escaped_fact}")
+    print(f"With path: {escaped_path}")
+    print(f"With recorded_at: {escaped_recorded_at}")
+
     try:
-        conn.execute(
-            """INSERT INTO Fact(content, path, recorded_at)
-               VALUES (:content, :path, :recorded_at);""",
-            {"content": fact, "path": path, "recorded_at": recorded_at},
-        )
-        print("Fact inserted successfully.")
+        conn.execute(query)
+        print(f"Inserted fact: {escaped_fact}")
     except Exception as e:
-        print(f"Error inserting fact: {e}")
+        print(f"Error inserting fact: {escaped_fact}\n{e}")
 
-    # Find similar groups
-    similar_groups = find_similar_groups(conn, fact)
 
-    if not similar_groups:
-        group_name = f"Group for {fact}"
-        conn.execute(
-            """INSERT INTO Groups(name, metadata)
-               VALUES (:name, :metadata);""",
-            {"name": group_name, "metadata": "{}"},
-        )
-        conn.execute(
-            """MATCH (g:Groups),(f:Fact) WHERE g.name = :group_name AND f.content = :content
-               CREATE (g)-[:Contains]->(f);""",
-            {"group_name": group_name, "content": fact},
-        )
-    else:
-        for group_name in similar_groups:
-            conn.execute(
-                """MATCH (g:Groups),(f:Fact) WHERE g.name = :group_name AND f.content = :content
-                   CREATE (g)-[:Contains]->(f);""",
-                {"group_name": group_name, "content": fact},
-            )
-
-    conn.commit()
+def save_facts_to_db(conn: kuzu.Connection, facts: List[str], path: str):
+    """Save a list of facts to the database"""
+    for fact in facts:
+        insert_fact(conn, fact, path)
 
 
 def process_text(
@@ -174,10 +175,10 @@ def process_text(
     npc: NPC = None,
 ):
     """Process text and add extracted facts to the Kùzu database"""
-    conn = init_db(db_path)
+    conn = init_db(db_path, drop=True)
     facts = extract_facts(text, model=model, provider=provider, npc=npc)
-
     for fact in facts:
-        add_fact_to_db(conn, fact, path)
+        print(fact)  # Confirm that 'fact' is correctly iterated
 
+    save_facts_to_db(conn, facts, path)
     conn.close()
