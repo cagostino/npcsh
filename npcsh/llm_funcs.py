@@ -35,16 +35,6 @@ from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field
 
 
-def extract_relevant_data(content: str, search_term: str) -> str:
-    """Extract relevant information based on a search term."""
-    # A naive implementation just to illustrate. This should be improved based on your needs.
-    lines = content.split("\n")
-    relevant_data = "\n".join(
-        [line for line in lines if search_term.lower() in line.lower()]
-    )
-    return relevant_data if relevant_data else "No relevant information found."
-
-
 # Load environment variables from .env file
 def load_env_from_execution_dir() -> None:
     """
@@ -84,6 +74,422 @@ npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
+NPCSH_EMBEDDING_MODEL = "nomic-embed-text"
+
+
+def get_ollama_embeddings(
+    texts: List[str], model: str = NPCSH_EMBEDDING_MODEL
+) -> List[List[float]]:
+    """Generate embeddings using Ollama."""
+    embeddings = []
+    for text in texts:
+        response = ollama.embeddings(model=model, prompt=text)
+        embeddings.append(response["embedding"])
+    return embeddings
+
+
+def get_openai_embeddings(
+    texts: List[str], model: str = "text-embedding-3-small"
+) -> List[List[float]]:
+    """Generate embeddings using OpenAI."""
+    client = OpenAI(api_key=openai_api_key)
+    response = client.embeddings.create(input=texts, model=model)
+    return [embedding.embedding for embedding in response.data]
+
+
+def get_anthropic_embeddings(
+    texts: List[str], model: str = "claude-3-haiku-20240307"
+) -> List[List[float]]:
+    """Generate embeddings using Anthropic."""
+    client = anthropic.Anthropic(api_key=anthropic_api_key)
+    embeddings = []
+    for text in texts:
+        response = client.messages.create(
+            model=model, max_tokens=1024, messages=[{"role": "user", "content": text}]
+        )
+        # Note: This is a placeholder as Anthropic currently doesn't have a dedicated embeddings endpoint
+        embeddings.append([0.0] * 1024)  # Replace with actual embedding when available
+    return embeddings
+
+
+def ensure_sqlite_vec(db_path: str = npcsh_db_path) -> bool:
+    """
+    Check if sqlite-vec is available and load it if needed.
+    Returns True if successful, False if extension can't be loaded.
+    """
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    try:
+        # Try loading the extension
+        sqlite_lib_path = os.path.join(os.path.dirname(sqlite3.__file__), "lib")
+
+        # Path to sqlite-vec shared object
+        extension_path = os.path.join(sqlite_lib_path, "sqlite-vec.so")  # For Linux
+
+        conn.enable_load_extension(True)
+        conn.load_extension(extension_path)
+
+        # Verify it's loaded by trying to create a test table
+        c.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS vec_test USING vec0(
+                id INTEGER PRIMARY KEY,
+                v float[3]
+            )
+            """
+        )
+
+        # Clean up test table
+        c.execute("DROP TABLE IF EXISTS vec_test")
+
+        conn.commit()
+        return True
+
+    except sqlite3.OperationalError as e:
+        print(f"Error loading sqlite-vec: {e}")
+        print("Make sure sqlite-vec is installed:")
+        print("  pip install sqlite-vec")
+        print("  OR")
+        print("  Download from https://github.com/asg017/sqlite-vec/releases")
+        return False
+
+    finally:
+        conn.close()
+
+
+# Modified setup function to ensure extension is loaded
+# Add a table for each embedding model
+def setup_vector_db_for_model(
+    db_path: str, model_name: str, provider: str, dimension: int
+) -> sqlite3.Connection:
+    """Set up SQLite database with vector search capabilities for a specific embedding model and provider."""
+    if not ensure_sqlite_vec(db_path):
+        raise RuntimeError("sqlite-vec extension not available")
+
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    # Construct the table name based on provider and model
+    table_name = f"{provider}_{model_name}_embeddings"
+
+    # Create a table for this model's embeddings
+    c.execute(
+        f"""
+        CREATE VIRTUAL TABLE IF NOT EXISTS {table_name} USING vec0(
+            id INTEGER PRIMARY KEY,
+            text TEXT NOT NULL,
+            embedding float[{dimension}],
+            metadata TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    conn.commit()
+    return conn
+
+
+def store_embeddings_for_model(
+    texts: List[str],
+    embeddings: List[List[float]],
+    model_name: str,
+    provider: str,
+    metadata: Optional[List[dict]] = None,
+    db_path: str = npcsh_db_path,
+):
+    """Store embeddings for a specific model and provider in sqlite-vec."""
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    if metadata is None:
+        metadata = [{}] * len(texts)
+
+    # Construct the table name based on provider and model
+    table_name = f"{provider}_{model_name}_embeddings"
+
+    # Create the table for this model if it doesn't exist
+    c.execute(
+        f"CREATE TABLE IF NOT EXISTS {table_name} (id INTEGER PRIMARY KEY, text TEXT, embedding TEXT, metadata TEXT)"
+    )
+
+    for text, embedding, meta in zip(texts, embeddings, metadata):
+        meta_json = json.dumps(meta)
+        # Convert embedding to string format expected by sqlite-vec
+        embedding_str = f'[{",".join(map(str, embedding))}]'
+
+        c.execute(
+            f"INSERT INTO {table_name}(text, embedding, metadata) VALUES (?, ?, ?)",
+            (text, embedding_str, meta_json),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def search_similar_texts_for_model(
+    query_embedding: List[float],
+    model_name: str,
+    provider: str,
+    top_k: int = 5,
+    db_path: str = npcsh_db_path,
+) -> List[dict]:
+    """Search for similar texts using sqlite-vec's efficient KNN search for a specific model and provider."""
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    # Convert query embedding to string format
+    query_str = f'[{",".join(map(str, query_embedding))}]'
+
+    # Construct the table name based on provider and model
+    table_name = f"{provider}_{model_name}_embeddings"
+
+    # Use sqlite-vec's MATCH syntax for KNN search
+    c.execute(
+        f"""
+        SELECT
+            id,
+            text,
+            metadata,
+            distance
+        FROM {table_name}
+        WHERE embedding MATCH ?
+        AND k = ?
+        """,
+        (query_str, top_k),
+    )
+
+    results = []
+    for row in c.fetchall():
+        id_, text, metadata, distance = row
+        results.append(
+            {
+                "id": id_,
+                "text": text,
+                "distance": float(distance),
+                "metadata": json.loads(metadata) if metadata else {},
+            }
+        )
+
+    conn.close()
+    return results
+
+
+def verify_vector_functionality(db_path: str = npcsh_db_path):
+    """
+    Verify that vector operations are working correctly.
+    Returns True if all tests pass.
+    """
+    if not ensure_sqlite_vec(db_path):
+        return False
+
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    try:
+        # Test vector creation and search
+        c.execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS vec_test USING vec0(
+                id INTEGER PRIMARY KEY,
+                v float[3]
+            )
+        """
+        )
+
+        # Insert test vectors
+        c.execute(
+            """
+            INSERT INTO vec_test(id, v) VALUES
+            (1, '[1.0, 0.0, 0.0]'),
+            (2, '[0.0, 1.0, 0.0]'),
+            (3, '[0.0, 0.0, 1.0]')
+        """
+        )
+
+        # Test KNN search
+        c.execute(
+            """
+            SELECT id, distance
+            FROM vec_test
+            WHERE v MATCH '[1.0, 0.0, 0.0]'
+            AND k = 1
+        """
+        )
+
+        result = c.fetchone()
+
+        # Clean up
+        c.execute("DROP TABLE vec_test")
+        conn.commit()
+
+        # Verify result
+        return result is not None and result[0] == 1
+
+    except Exception as e:
+        print(f"Vector functionality test failed: {e}")
+        return False
+
+    finally:
+        conn.close()
+
+
+def initialize_vector_database(db_path: str = npcsh_db_path):
+    """
+    Initialize the vector database with all necessary checks.
+    Returns the connection if successful, raises exception if not.
+    """
+    print(f"Checking sqlite-vec version: {get_sqlite_vec_version(db_path)}")
+
+    if not ensure_sqlite_vec(db_path):
+        raise RuntimeError("Could not load sqlite-vec extension")
+
+    if not verify_vector_functionality(db_path):
+        raise RuntimeError("Vector functionality verification failed")
+
+    print("Vector database initialization successful")
+    return setup_vector_db(db_path)
+
+
+def store_embeddings(
+    texts: List[str],
+    embeddings: List[List[float]],
+    metadata: Optional[List[dict]] = None,
+    db_path: str = npcsh_db_path,
+):
+    """Store text embeddings using sqlite-vec."""
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    if metadata is None:
+        metadata = [{}] * len(texts)
+
+    for text, embedding, meta in zip(texts, embeddings, metadata):
+        meta_json = json.dumps(meta)
+        # Convert embedding to string format expected by sqlite-vec
+        embedding_str = f'[{",".join(map(str, embedding))}]'
+
+        c.execute(
+            "INSERT INTO embeddings(text, embedding, metadata) VALUES (?, ?, ?)",
+            (text, embedding_str, meta_json),
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def search_similar_texts(
+    query_embedding: List[float], top_k: int = 5, db_path: str = npcsh_db_path
+) -> List[dict]:
+    """Search for similar texts using sqlite-vec's efficient KNN search."""
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    # Convert query embedding to string format
+    query_str = f'[{",".join(map(str, query_embedding))}]'
+
+    # Use sqlite-vec's MATCH syntax for KNN search
+    c.execute(
+        """
+        SELECT
+            id,
+            text,
+            metadata,
+            distance
+        FROM embeddings
+        WHERE embedding MATCH ?
+        AND k = ?
+    """,
+        (query_str, top_k),
+    )
+
+    results = []
+    for row in c.fetchall():
+        id_, text, metadata, distance = row
+        results.append(
+            {
+                "id": id_,
+                "text": text,
+                "distance": float(distance),
+                "metadata": json.loads(metadata) if metadata else {},
+            }
+        )
+
+    conn.close()
+    return results
+
+
+def optimize_embeddings(db_path: str = npcsh_db_path):
+    """Optimize the vector database for better search performance."""
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    # Analyze the table to update statistics
+    c.execute("ANALYZE embeddings")
+
+    # Optimize the database
+    c.execute("PRAGMA optimize")
+
+    conn.commit()
+    conn.close()
+
+
+def quantize_embeddings(db_path: str = npcsh_db_path):
+    """Create a quantized version of embeddings for faster search."""
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    # Create quantized table
+    c.execute(
+        """
+        CREATE VIRTUAL TABLE IF NOT EXISTS embeddings_quantized USING vec0(
+            id INTEGER PRIMARY KEY,
+            text TEXT NOT NULL,
+            embedding_binary bit[384],
+            metadata TEXT
+        )
+    """
+    )
+
+    # Copy and quantize data
+    c.execute(
+        """
+        INSERT INTO embeddings_quantized(id, text, embedding_binary, metadata)
+        SELECT
+            id,
+            text,
+            vec_quantize_binary(embedding),
+            metadata
+        FROM embeddings
+    """
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def get_embeddings(
+    texts: List[str], provider: str = npcsh_provider, model: str = NPCSH_EMBEDDING_MODEL
+) -> List[List[float]]:
+    """Generate embeddings using specified provider."""
+    if provider == "ollama":
+        return get_ollama_embeddings(texts, model)
+    elif provider == "openai":
+        return get_openai_embeddings(texts, model)
+    elif provider == "anthropic":
+        return get_anthropic_embeddings(texts, model)
+    else:
+        raise ValueError(f"Unsupported provider: {provider}")
+
+
+def extract_relevant_data(content: str, search_term: str) -> str:
+    """Extract relevant information based on a search term."""
+    # A naive implementation just to illustrate. This should be improved based on your needs.
+    lines = content.split("\n")
+    relevant_data = "\n".join(
+        [line for line in lines if search_term.lower() in line.lower()]
+    )
+    return relevant_data if relevant_data else "No relevant information found."
 
 
 def get_model_and_provider(command: str, available_models: list) -> tuple:
@@ -2130,7 +2536,6 @@ def execute_llm_question(
 def generate_plonk(
     request,
 ):
-
     prompt = f"""
 
     A user asked the following question: {request}
