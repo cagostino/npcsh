@@ -1,6 +1,11 @@
 import pysqlite3 as sqlite3
 import sqlite_vec
 
+from npcsh.llm_funcs import (
+    get_anthropic_embeddings,
+    get_ollama_embeddings,
+    get_openai_embeddings,
+)
 
 db = sqlite3.connect("/home/caug/npcsh_history.db.sqlite")
 db.enable_load_extension(True)
@@ -59,8 +64,9 @@ results = db.execute(query).fetchall()
 
 
 print("\nTest 2 - Pairwise distances:")
-for id1, id2, distance in results:
-    print(f"Between row {id1} and {id2}: distance = {distance:.4f}")
+for idx, (rowid, distance) in enumerate(results):
+    print(f"Row {idx + 1} (ID: {rowid}): distance = {distance:.4f}")
+
 
 # Test 3: Find vectors within a certain distance
 threshold = 2.5
@@ -68,13 +74,46 @@ results = db.execute(
     """
     SELECT rowid, distance
     FROM vec_examples
-    WHERE sample_embedding MATCH ?
-    AND distance < ?
+    WHERE sample_embedding MATCH '[0.890, 0.544, 0.825, 0.961, 0.358, 0.0196, 0.521, 0.175]'
     ORDER BY distance
+    LIMIT 3;
 """,
-    [formatted_query, threshold],
 ).fetchall()
 
 print(f"\nTest 3 - Vectors within distance {threshold}:")
 for rowid, distance in results:
     print(f"Row {rowid}: distance = {distance:.4f}")
+
+
+def example_embeddings():
+    texts = ["Example text 1", "Example text 2", "Example text 3"]
+
+    # Ollama
+
+    ollama_embeddings = get_ollama_embeddings(texts)
+
+    print("Ollama Embeddings:")
+
+    for embedding in ollama_embeddings:
+        print(embedding)
+
+    # OpenAI
+
+    openai_embeddings = get_openai_embeddings(texts)
+
+    print("\nOpenAI Embeddings:")
+
+    for embedding in openai_embeddings:
+        print(embedding)
+
+    # Anthropic
+
+    anthropic_embeddings = get_anthropic_embeddings(texts)
+
+    print("\nAnthropic Embeddings:")
+
+    for embedding in anthropic_embeddings:
+        print(embedding)
+
+
+example_embeddings()
