@@ -50,6 +50,8 @@ setup(
         "python-dotenv",
         "pytest",
         "googlesearch-python",
+        "flask",
+        "flask_cors",
         "diffusers",
     ],
     entry_points={

@@ -57,20 +57,39 @@ from .cli_helpers import (
 )
 from .npc_compiler import NPCCompiler
 
+import argparse
+from .serve import (
+    start_flask_server,
+)  # Assuming you move the Flask logic to a separate `serve.py`
+
+import argparse
+from .serve import (
+    start_flask_server,
+)  # Assuming you move the Flask logic to a separate `serve.py`
+
 
 def main() -> None:
     """
-    Function Description:
-        Main function for the npcsh shell.
-    Args:
-        None
-    Keyword Args:
-        None
-    Returns:
-        None
-
+    Main function for the npcsh shell and server.
+    Starts either the Flask server or the interactive shell based on the argument provided.
     """
+    # Set up argument parsing to handle 'serve' and regular commands
+    parser = argparse.ArgumentParser(description="npcsh CLI")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default=None,
+        help="The command to run ('serve' to start Flask server)",
+    )
+    args = parser.parse_args()
 
+    if args.command == "serve":
+        # Start the Flask server
+        print("Starting Flask server...")
+        start_flask_server()
+        return
+
+    # If 'serve' is not provided, proceed with the regular CLI
     setup_npcsh_config()
     if "NPCSH_DB_PATH" in os.environ:
         db_path = os.path.expanduser(os.environ["NPCSH_DB_PATH"])
@@ -78,7 +97,6 @@ def main() -> None:
         db_path = os.path.expanduser("~/npcsh_history.db")
 
     command_history = CommandHistory(db_path)
-    global valid_commands  # Make sure it's global
     valid_commands = [
         "/compile",
         "/com",
@@ -96,20 +114,17 @@ def main() -> None:
         "/quit",
     ]
 
-    readline.set_completer_delims(" \t\n")  # Simplified delims
+    readline.set_completer_delims(" \t\n")
     readline.set_completer(complete)
-    if sys.platform == "darwin":  # For macOS
+    if sys.platform == "darwin":
         readline.parse_and_bind("bind ^I rl_complete")
-    else:  # For Linux and others
+    else:
         readline.parse_and_bind("tab: complete")
 
     # Initialize base NPCs and tools
     initialize_base_npcs_if_needed(db_path)
 
-    # Set npc_directory to the user's ~/.npcsh/npc_team directory
     user_npc_directory = os.path.expanduser("~/.npcsh/npc_team")
-
-    # Check for project-specific npc_team directory
     project_npc_directory = os.path.abspath("./npc_team")
     npc_compiler = NPCCompiler(user_npc_directory, db_path)
 
@@ -119,27 +134,18 @@ def main() -> None:
             npc_file_path = os.path.join(user_npc_directory, filename)
             npc_compiler.compile(npc_file_path)
 
-    # If project npc_team directory exists, compile NPCs from there as well
+    # Compile NPCs from project-specific npc_team directory
     if os.path.exists(project_npc_directory):
         for filename in os.listdir(project_npc_directory):
             if filename.endswith(".npc"):
                 npc_file_path = os.path.join(project_npc_directory, filename)
                 npc_compiler.compile(npc_file_path)
 
-    # Load all files for RAG searches
-    # Define the directory to load text files from
     text_data_directory = os.path.abspath("./")
-    # Load all text files from the directory recursively
-
     text_data = load_all_files(text_data_directory)
 
-    # embed all the text_data
-
     try:
-        # Load the SentenceTransformer model
         embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-        # Embed all the text data
-
         text_data_embedded = {
             filename: embedding_model.encode(
                 text_data[filename], convert_to_tensor=True, show_progress_bar=False
@@ -156,6 +162,7 @@ def main() -> None:
         print(
             "NPCSH initialization complete. Please restart your terminal or run 'source ~/.npcshrc' for the changes to take effect."
         )
+
     history_file = setup_readline()
     atexit.register(readline.write_history_file, history_file)
     atexit.register(command_history.close)
@@ -199,17 +206,12 @@ def main() -> None:
                 conversation_id=current_conversation_id,
             )
 
-            # Update messages with the new conversation history
             messages = result.get("messages", messages)
 
             if "current_npc" in result:
                 current_npc = result["current_npc"]
 
-            # Optionally, print the assistant's response
             output = result.get("output")
-            # if output:
-            #    print(output)
-            # Save messages to conversation history
             save_conversation_message(
                 command_history, current_conversation_id, "user", user_input
             )
@@ -220,7 +222,6 @@ def main() -> None:
                 result.get("output", ""),
             )
 
-            # Optionally, print the result
             if (
                 result["output"] is not None
                 and not user_input.startswith("/")
