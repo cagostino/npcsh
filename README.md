@@ -56,8 +56,17 @@ pip install npcsh
 ```
 ### Widows Install
 
-Coming soon!
+Download and install ollama exe. 
 
+Then, in a powershell. Download and install ffmpeg.
+
+```
+ollama pull llama3.2
+ollama pull llava:7b
+pip install npcsh
+```
+As of now, npcsh appears to work well with some of the core functionalities like /ots and /whisper. 
+Haven't figured out the command execution parts with windows yet but will make an issue.
 
 
 ## Startup Configuration and Project Structure
