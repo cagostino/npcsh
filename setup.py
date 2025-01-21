@@ -96,8 +96,6 @@ setup(
     entry_points={
         "console_scripts": [
             "npcsh=npcsh.npcsh:main",
-            'npcsh-windows-setup=npcsh.npcsh_windows_setup:setup_windows_config',
-
         ],
     },
     author="Christopher Agostino",
