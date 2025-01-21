@@ -17,9 +17,15 @@ import textwrap
 import subprocess
 from termcolor import colored
 import sys
-import termios
-import tty
-import pty
+import platform 
+print(platform.system())
+if platform.system() == 'Windows':
+    
+    pass
+else:
+    import termios
+    import tty
+    import pty
 import select
 import signal
 import time
