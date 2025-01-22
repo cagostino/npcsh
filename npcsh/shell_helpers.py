@@ -625,69 +625,6 @@ def start_interactive_session(command: list) -> int:
     return p.returncode
 
 
-def execute_rag_command(
-    search_term: str,
-    command_history: CommandHistory,
-    db_path: str,
-    db_conn: sqlite3.Connection,
-    npc_compiler: NPCCompiler,
-    valid_npcs: list,
-    npc: NPC = None,
-    folders: List[str] = None,
-    embedding_model: str = None,
-    embedding_provider: str = None,
-    messages: List[Dict] = None,
-    model: str = None,
-    provider: str = None,
-    conversation_id: str = None,
-):
-    """
-    Execute RAG (Retrieval Augmented Generation) command
-    Args:
-        search_term: Search query from user
-        folders: List of folders to search in
-        embedding_model: Model to use for embeddings
-        embedding_provider: Provider for embeddings
-    Returns:
-        Retrieved and processed results
-    """
-    try:
-        # If no embedding model specified, use defaults
-        if embedding_model is None:
-            embedding_model = "nomic-embed-text"
-        if embedding_provider is None:
-            embedding_provider = "ollama"
-
-        all_texts = []
-        for folder in folders:
-            for root, _, files in os.walk(folder):
-                for file in files:
-                    if file.endswith((".txt", ".md", ".py", ".json", ".csv")):
-                        file_path = os.path.join(root, file)
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                            all_texts.append({"content": content, "source": file_path})
-
-        # Generate embeddings and perform search
-        results = rag_search(
-            search_term, all_texts, model=emb_model, similarity_threshold=0.3
-        )
-
-        # Format results
-        if results:
-            output = "Retrieved relevant documents:\n\n"
-            for doc in results:
-                output += f"Source: {doc['source']}\n"
-                output += f"Content: {doc['content'][:200]}...\n\n"
-        else:
-            output = "No relevant documents found."
-
-        return output
-
-    except Exception as e:
-        return f"Error executing RAG command: {str(e)}"
-
-
 def validate_bash_command(command_parts: list) -> bool:
     """
     Function Description:
