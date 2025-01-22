@@ -35,7 +35,9 @@ import chromadb
 
 from pydantic import BaseModel, Field
 
-client = chromadb.PersistentClient(path="/home/caug/npcsh_chroma.db")
+EMBEDDINGS_DB_PATH = os.path.expanduser("~/npcsh_chroma.db")
+
+chroma_client = chromadb.PersistentClient(path=EMBEDDINGS_DB_PATH)
 
 
 # Load environment variables from .env file
@@ -81,7 +83,8 @@ npcsh_vector_db_path = os.path.expanduser(
     os.environ.get("NPCSH_VECTOR_DB_PATH", "~/npcsh_chroma.db")
 )
 
-NPCSH_EMBEDDING_MODEL = "nomic-embed-text"
+NPCSH_EMBEDDING_MODEL = os.environ.get("NPCSH_EMBEDDING_MODEL","nomic-embed-text")
+NPCSH_EMBEDDING_PROVIDER = os.environ.get("NPCSH_EMBEDDING_PROVIDER", "ollama")
 
 
 def get_ollama_embeddings(
@@ -119,13 +122,22 @@ def get_anthropic_embeddings(
     return embeddings
 
 
-def store_embeddings_for_model(texts, embeddings, model, provider):
+def store_embeddings_for_model(
+    texts,
+    embeddings,
+    metadata=None,
+    model: str = NPCSH_EMBEDDING_MODEL,
+    provider: str = NPCSH_EMBEDDING_PROVIDER,
+):
     collection_name = f"{provider}_{model}_embeddings"
-    collection = client.get_collection(collection_name)
+    collection = chroma_client.get_collection(collection_name)
 
     # Create meaningful metadata for each document (adjust as necessary)
-    metadata = [{"text_length": len(text)} for text in texts]  # Example metadata
-
+    if metadata is None:
+        metadata = [{"text_length": len(text)} for text in texts]  # Example metadata
+        print(
+            "metadata is none, creating metadata for each document as the length of the text"
+        )
     # Add embeddings to the collection with metadata
     collection.add(
         ids=[str(i) for i in range(len(texts))],
@@ -141,16 +153,16 @@ def delete_embeddings_from_collection(collection, ids):
         collection.delete(ids=ids)  # Only delete if ids are provided
 
 
-def search_similar_texts_for_model(
+def search_similar_texts(
     query_embedding: List[float],
-    embedding_model: str,
-    provider: str,
     top_k: int = 5,
     db_path: str = npcsh_vector_db_path,
+    embedding_model: str = NPCSH_EMBEDDING_MODEL,
+    embedding_provider: str = NPCSH_EMBEDDING_PROVIDER,
 ) -> List[dict]:
     """Search for similar texts in Chroma using KNN."""
-    collection_name = f"{provider}_{embedding_model}_embeddings"
-    collection = client.get_collection(collection_name)
+    collection_name = f"{embedding_provider}_{embedding_model}_embeddings"
+    collection = chroma_client.get_collection(collection_name)
 
     search_results = collection.query(query_embedding, n_results=top_k)
 
@@ -168,7 +180,9 @@ def search_similar_texts_for_model(
 
 
 def get_embeddings(
-    texts: List[str], provider: str = npcsh_provider, model: str = NPCSH_EMBEDDING_MODEL
+    texts: List[str],
+    model: str = NPCSH_EMBEDDING_MODEL,
+    provider: str = NPCSH_EMBEDDING_PROVIDER,
 ) -> List[List[float]]:
     """Generate embeddings using the specified provider and store them in Chroma."""
     if provider == "ollama":
@@ -181,7 +195,7 @@ def get_embeddings(
         raise ValueError(f"Unsupported provider: {provider}")
 
     # Store the embeddings in the relevant Chroma collection
-    store_embeddings_for_model(texts, embeddings, model, provider)
+    #store_embeddings_for_model(texts, embeddings, model, provider)
     return embeddings
 
 

@@ -41,6 +41,9 @@ from .llm_funcs import (
     get_system_message,
     check_llm_command,
     generate_image,
+    get_embeddings,
+    search_similar_texts,
+    chroma_client,
 )
 from .helpers import get_valid_npcs, get_npc_path
 from .npc_compiler import NPCCompiler, NPC, load_npc_from_file, PipelineRunner
@@ -717,58 +720,6 @@ def validate_bash_command(command_parts: list) -> bool:
     return True
 
 
-def execute_rag_command(
-    command: str,
-    command_history: CommandHistory,
-    db_path: str,
-    db_conn: sqlite3.Connection,
-    npc_compiler: NPCCompiler,
-    valid_npcs: list,
-    npc: NPC = None,
-    retrieved_docs: list = None,
-    embedding_model=None,
-    text_data=None,
-    text_data_embedded=None,
-    messages=None,
-    model: str = None,
-    provider: str = None,
-    conversation_id: str = None,
-):
-    """
-    Function Description:
-        Executes a RAG command with a specified embedding model or specified data source
-    Args:
-        command : str : Command
-        command_history : CommandHistory : Command history
-        db_path : str : Database path
-        npc_compiler : NPCCompiler : NPC compiler
-    Keyword Args:
-        embedding_model : None : Embedding model
-        current_npc : None : Current NPC
-        text_data : None : Text data
-        text_data_embedded : None : Embedded text data
-        messages : None : Messages
-    Returns:
-        dict : dict : Dictionary
-    """
-    # assume rag will be performed on old conversations
-
-    # extract the command the embedding model if specified in the command
-    split_command = command.split()
-
-    embedding_model = np.where(split_command.str.contains("embedding_model="))
-    data_source = np.where(split_command.str.contains("data_source="))
-
-    # if data source is a list process each file
-    # otherwise process each file, support csv, txt, md, py, json, pdf, xlsx
-
-    # figure out the model provider from a lookup in a table
-    # well cover openai, anthropic, and ollama embeddings.
-    embedding_model = initialize_embedding_model(
-        get_model_and_provider(embedding_model)
-    )
-
-
 def execute_squish_command():
     return
 
@@ -786,9 +737,6 @@ def execute_slash_command(
     valid_npcs: list,
     npc: NPC = None,
     retrieved_docs: list = None,
-    embedding_model=None,
-    text_data=None,
-    text_data_embedded=None,
     messages=None,
     model: str = None,
     provider: str = None,
@@ -1058,6 +1006,57 @@ Bash commands and other programs can be executed directly."""
         output = execute_llm_command(
             command, command_history, npc=npc, retrieved_docs=retrieved_docs
         )
+    elif command_name == "rag":
+        # Extract search term and parameters
+        parts = command.split()
+        search_term = []
+        params = {}
+
+        # Skip the first part (/rag)
+        for part in parts[1:]:
+            if "=" in part:  # This is a parameter
+                key, value = part.split("=", 1)
+                params[key.strip()] = value.strip()
+            else:  # This is part of the search term
+                search_term.append(part)
+
+        search_term = " ".join(search_term)
+
+        # Get embedding parameters with defaults from llm_funcs
+
+        try:
+            # Generate embedding for search term
+
+            embeddings = get_embeddings(
+                [search_term],
+            )
+
+            # Search for similar texts
+            similar_texts = search_similar_texts(
+                query_embedding=embeddings[0],  # First (and only) embedding
+                top_k=5,  # Return top 5 results
+            )
+
+            # Format results
+            if similar_texts:
+                output = "Found similar texts:\n\n"
+                for result in similar_texts:
+                    output += f"Score: {result['score']:.3f}\n"
+                    output += f"Text: {result['text']}\n"
+                    if "id" in result:
+                        output += f"ID: {result['id']}\n"
+                    output += "\n"
+            else:
+                output = "No similar texts found in the database."
+
+            return {"messages": messages, "output": output}
+
+        except Exception as e:
+            return {
+                "messages": messages,
+                "output": f"Error during RAG search: {str(e)}",
+            }
+
     elif command_name == "set":
         parts = command.split()
         if len(parts) == 3 and parts[1] in ["model", "provider", "db_path"]:
@@ -1343,8 +1342,6 @@ def execute_command(
     npc_compiler: NPCCompiler,
     embedding_model: Union[SentenceTransformer, Any] = None,
     current_npc: NPC = None,
-    text_data: str = None,
-    text_data_embedded: np.ndarray = None,
     messages: list = None,
     conversation_id: str = None,
 ):
@@ -1377,20 +1374,6 @@ def execute_command(
     retrieved_docs = None
 
     # Only try RAG search if text_data exists
-    if text_data is not None:
-        try:
-            if embedding_model is None:
-                embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-            retrieved_docs = rag_search(
-                command,
-                text_data,
-                embedding_model,
-                text_data_embedded=text_data_embedded,
-            )
-        except Exception as e:
-            print(f"Error searching text data: {str(e)}")
-            retrieved_docs = None
-
     # print(retrieved_docs)
     if current_npc is None:
         valid_npcs = get_valid_npcs(db_path)
@@ -1429,11 +1412,8 @@ def execute_command(
             db_conn,
             npc_compiler,
             valid_npcs,
-            embedding_model=embedding_model,
             npc=npc,
             retrieved_docs=retrieved_docs,
-            text_data=text_data,
-            text_data_embedded=text_data_embedded,
             messages=messages,
             model=model_override,
             provider=provider_override,
@@ -1587,6 +1567,59 @@ def execute_command(
             render_markdown(output)
         except AttributeError:
             print(output)
+
+        try:
+            # Prepare text to embed (both command and response)
+            texts_to_embed = [command, str(output) if output else ""]
+
+            # Generate embeddings
+            embeddings = get_embeddings(
+                texts_to_embed,
+            )
+
+            # Prepare metadata
+            metadata = [
+                {
+                    "type": "command",
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "path": os.getcwd(),
+                    "npc": npc.name if npc else None,
+                    "conversation_id": conversation_id,
+                },
+                {
+                    "type": "response",
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "path": os.getcwd(),
+                    "npc": npc.name if npc else None,
+                    "conversation_id": conversation_id,
+                },
+            ]
+            embedding_model = os.environ.get("NPCSH_EMBEDDING_MODEL")
+            embedding_provider = os.environ.get("NPCSH_EMBEDDING_PROVIDER")
+            collection_name = f"{embedding_provider}_{embedding_model}_embeddings"
+
+            try:
+                collection = chroma_client.get_collection(collection_name)
+            except Exception as e:
+                print(f"Warning: Failed to get collection: {str(e)}")
+                print("Creating new collection...")
+                collection = chroma_client.create_collection(collection_name)
+            date_str = datetime.datetime.now().isoformat()
+            # Add to collection
+            collection.add(
+                embeddings=embeddings,
+                documents=texts_to_embed,
+                metadatas=metadata,
+                ids=[
+                    f"cmd_{date_str}",
+                    f"resp_{date_str}",
+                ],
+            )
+            print("Stored embeddings.")
+            print("collection", collection)
+        except Exception as e:
+            print(f"Warning: Failed to store embeddings: {str(e)}")
+
     return {"messages": messages, "output": output}
 
 

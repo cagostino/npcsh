@@ -89,6 +89,9 @@ def ensure_npcshrc_exists() -> str:
             npcshrc.write("export NPCSH_INITIALIZED=0\n")
             npcshrc.write("export NPCSH_PROVIDER='ollama'\n")
             npcshrc.write("export NPCSH_MODEL='llama3.2'\n")
+            npcshrc.write("export NPCSH_EMBEDDING_PROVIDER='ollama'\n")
+            npcshrc.write("export NPCSH_EMBEDDING_MODEL='nomic-embed-text'\n")
+
             npcshrc.write("export NPCSH_API_URL=''")
             npcshrc.write("export NPCSH_DB_PATH='~/npcsh_history.db'\n")
     return npcshrc_path
