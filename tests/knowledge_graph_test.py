@@ -21,7 +21,25 @@ Bash Wrapper: Execute bash commands directly without leaving the shell. Use your
 
     """
     path = "~/npcww/npcsh/tests/"
-    process_text(db_path, text, path, model="gpt-4o-mini", provider="openai")
+    conn = init_db(db_path, drop=False)
+
+    facts = process_text(db_path, text, path, model="gpt-4o-mini", provider="openai")
+    groups = identify_groups(facts, model="gpt-4o-mini", provider="openai")
+    print("\nIdentified Groups:")
+
+    for group in groups:
+        print(f"- {group}")
+        create_group(conn, group)
+
+    # For each fact, assign it to appropriate groups
+    for fact in facts:
+        group_assignments = assign_to_groups(
+            fact, groups, model="gpt-4o-mini", provider="openai"
+        )
+        for group in group_assignments["groups"]:
+            assign_fact_to_group(conn, fact, group)
+
+    conn.close()
 
 
 ## ultimately wwell do the vector store in the main db. so when we eventually starti adding new facts well  do so by checking similar facts
