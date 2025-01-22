@@ -78,13 +78,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.command.split()[0] == "serve":
-        # Start the Flask server
-
-        print("Starting Flask server...")
-        start_flask_server()
-        return
-
     # If 'serve' is not provided, proceed with the regular CLI
     setup_npcsh_config()
     if "NPCSH_DB_PATH" in os.environ:
@@ -121,7 +114,8 @@ def main() -> None:
     initialize_base_npcs_if_needed(db_path)
 
     user_npc_directory = os.path.expanduser("~/.npcsh/npc_team")
-    project_npc_directory = os.path.abspath("./npc_team")
+    project_npc_directory = os.path.abspath("./npc_team/")
+
     npc_compiler = NPCCompiler(user_npc_directory, db_path)
 
     # Compile all NPCs in the user's npc_team directory
@@ -136,21 +130,6 @@ def main() -> None:
             if filename.endswith(".npc"):
                 npc_file_path = os.path.join(project_npc_directory, filename)
                 npc_compiler.compile(npc_file_path)
-
-    text_data_directory = os.path.abspath("./")
-    text_data = load_all_files(text_data_directory)
-
-    try:
-        embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-        text_data_embedded = {
-            filename: embedding_model.encode(
-                text_data[filename], convert_to_tensor=True, show_progress_bar=False
-            )
-            for filename in text_data
-        }
-    except Exception as e:
-        print(f"Error embedding text data: {str(e)}")
-        text_data_embedded = None
 
     if not is_npcsh_initialized():
         print("Initializing NPCSH...")
@@ -194,10 +173,7 @@ def main() -> None:
                 command_history,
                 db_path,
                 npc_compiler,
-                embedding_model,
                 current_npc,
-                text_data=text_data,
-                text_data_embedded=text_data_embedded,
                 messages=messages,
                 conversation_id=current_conversation_id,
             )

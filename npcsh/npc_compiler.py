@@ -638,13 +638,15 @@ class NPCCompiler:
     def __init__(self, npc_directory, db_path):
         self.npc_directory = npc_directory
         self.dirs = [self.npc_directory]
-        if self.npc_directory == os.path.abspath("./npc_team"):
+        if self.npc_directory == os.path.abspath("./npc_team/"):
             self.project_npc_directory = None
             self.project_tools_directory = None
         else:
-            self.project_npc_directory = os.path.abspath("./npc_team")
+            self.project_npc_directory = os.path.abspath("./npc_team/")
+            self.project_tools_directory = os.path.join(
+                self.project_npc_directory, "tools"
+            )
             self.dirs.append(self.project_npc_directory)
-            self.project_tools_directory = os.path.join(self.project_npc_directory, "tools")
 
         self.db_path = db_path
         self.npc_cache = {}
@@ -653,7 +655,6 @@ class NPCCompiler:
 
         # Set tools directories
         self.global_tools_directory = os.path.join(self.npc_directory, "tools")
-
 
         # Initialize Jinja environment with multiple loaders
         self.jinja_env = Environment(
@@ -773,11 +774,13 @@ class NPCCompiler:
             return None
 
     def parse_all_npcs(self) -> None:
+        print(self.dirs)
         for directory in self.dirs:
-            for filename in os.listdir(directory):
-                if filename.endswith(".npc"):
-                    npc_path = os.path.join(directory, filename)
-                    self.parse_npc_file(npc_path)
+            if os.path.exists(directory):
+                for filename in os.listdir(directory):
+                    if filename.endswith(".npc"):
+                        npc_path = os.path.join(directory, filename)
+                        self.parse_npc_file(npc_path)
 
     def parse_npc_file(self, npc_file_path: str) -> dict:
         npc_file = os.path.basename(npc_file_path)
