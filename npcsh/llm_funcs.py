@@ -783,6 +783,7 @@ def get_anthropic_conversation(
             model=model,
             system=system_message,  # Include system message in each turn for Anthropic
             messages=messages,  # Send only the last user message
+            max_tokens=8192,
             **kwargs,
         )
 

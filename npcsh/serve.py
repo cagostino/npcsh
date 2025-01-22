@@ -22,7 +22,7 @@ from .llm_funcs import (
 )
 from .helpers import get_valid_npcs, get_npc_path
 from .npc_compiler import load_npc_from_file
-from .cli_helpers import execute_command
+from .shell_helpers import execute_command
 import base64
 
 # Configuration
@@ -31,7 +31,7 @@ user_npc_directory = os.path.expanduser("~/.npcsh/npc_team")
 project_npc_directory = os.path.abspath("./npc_team")
 
 # Initialize components
-npc_compiler = NPCCompiler(user_npc_directory, db_path)
+npc_compiler = NPCCompiler(project_npc_directory, db_path)
 
 app = Flask(__name__)
 CORS(
@@ -46,7 +46,7 @@ CORS(
 def after_request(response):
     response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
     response.headers.add("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS")
-    response.headers.add("Access-Control-Allow-Credentials", "true")  # Add this line
+    response.headers.add("Access-Control-Allow-Credentials", "true")
     return response
 
 
@@ -128,7 +128,6 @@ def get_attachment_response():
             "~/.npcsh/" + extension_mapped + "/" + attachment["name"]
         )
         if extension_mapped == "images":
-
             ImageFile.LOAD_TRUNCATED_IMAGES = True
             img = Image.open(base64.b64decode(attachment["base64"]))
             img.save(file_path, optimize=True, quality=50)
@@ -314,7 +313,7 @@ def health_check():
     return jsonify({"status": "ok", "error": None})
 
 
-def start_flask_server():
+def start_flask_server(port=5337):
     try:
         # Ensure the database tables exist
         conn = get_db_connection()
@@ -361,4 +360,4 @@ def start_flask_server():
 
 
 if __name__ == "__main__":
-    start_flask_server
+    start_flask_server()

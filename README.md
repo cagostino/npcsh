@@ -802,6 +802,43 @@ results = runner.execute_pipeline()
 Note, in the future we will aim to separate compilation and running so that we will have a compilation step that is more like a jinja rendering of the relevant information so that it can be more easily audited.
 
 
+## NPC CLI
+When npcsh is installed, it comes with the `npc` cli as well. The `npc` cli has various command to make initializing and serving NPC projects easier.
+
+### Serving
+To serve an NPC project, navigate to the project directory and run:
+```bash
+npc serve
+```
+If you want to specify a certain port, you can do so with the `-p` flag:
+```bash
+npc serve -p 5337
+```
+or with the `--port` flag:
+```bash
+npc serve --port 5337
+```
+
+Once the server is up and running, you can access the API endpoints at `http://localhost:5337/api/`. Here are some example curl commands to test the endpoints:
+
+```bash
+echo "Testing health endpoint..."
+curl -s http://localhost:5337/api/health | jq '.'
+
+echo -e "\nTesting execute endpoint..."
+curl -s -X POST http://localhost:5337/api/execute \
+  -H "Content-Type: application/json" \
+  -d '{"commandstr": "hello world", "currentPath": "/media/caug/extradrive1/npcww/npcsh", "conversationId": "test124"}' | jq '.'
+
+echo -e "\nTesting conversations endpoint..."
+curl -s "http://localhost:5337/api/conversations?path=/tmp" | jq '.'
+
+echo -e "\nTesting conversation messages endpoint..."
+curl -s http://localhost:5337/api/conversation/test123/messages | jq '.'
+```
+
+
+
 ## Python Examples
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
 

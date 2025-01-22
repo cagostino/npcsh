@@ -14,7 +14,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.2.24",
+    version="0.2.26",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
@@ -56,7 +56,8 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "npcsh=npcsh.npcsh:main",
+            "npcsh=npcsh.shell:main",
+            "npc=npcsh.cli:main",
         ],
     },
     author="Christopher Agostino",
