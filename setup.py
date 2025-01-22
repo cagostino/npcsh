@@ -55,7 +55,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.2.25",
+    version="0.2.26",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
@@ -91,11 +91,14 @@ setup(
         "python-dotenv",
         "pytest",
         "googlesearch-python",
+        "flask",
+        "flask_cors",
         "diffusers",
     ],
     entry_points={
         "console_scripts": [
-            "npcsh=npcsh.npcsh:main",
+            "npcsh=npcsh.shell:main",
+            "npc=npcsh.cli:main",
         ],
     },
     author="Christopher Agostino",

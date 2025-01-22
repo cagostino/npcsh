@@ -31,18 +31,11 @@ import re
 from jinja2 import Environment, FileSystemLoader, Template, Undefined
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
+import chromadb
 
 from pydantic import BaseModel, Field
 
-
-def extract_relevant_data(content: str, search_term: str) -> str:
-    """Extract relevant information based on a search term."""
-    # A naive implementation just to illustrate. This should be improved based on your needs.
-    lines = content.split("\n")
-    relevant_data = "\n".join(
-        [line for line in lines if search_term.lower() in line.lower()]
-    )
-    return relevant_data if relevant_data else "No relevant information found."
+client = chromadb.PersistentClient(path="/home/caug/npcsh_chroma.db")
 
 
 # Load environment variables from .env file
@@ -84,6 +77,122 @@ npcsh_provider = os.environ.get("NPCSH_PROVIDER", "ollama")
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
+npcsh_vector_db_path = os.path.expanduser(
+    os.environ.get("NPCSH_VECTOR_DB_PATH", "~/npcsh_chroma.db")
+)
+
+NPCSH_EMBEDDING_MODEL = "nomic-embed-text"
+
+
+def get_ollama_embeddings(
+    texts: List[str], model: str = NPCSH_EMBEDDING_MODEL
+) -> List[List[float]]:
+    """Generate embeddings using Ollama."""
+    embeddings = []
+    for text in texts:
+        response = ollama.embeddings(model=model, prompt=text)
+        embeddings.append(response["embedding"])
+    return embeddings
+
+
+def get_openai_embeddings(
+    texts: List[str], model: str = "text-embedding-3-small"
+) -> List[List[float]]:
+    """Generate embeddings using OpenAI."""
+    client = OpenAI(api_key=openai_api_key)
+    response = client.embeddings.create(input=texts, model=model)
+    return [embedding.embedding for embedding in response.data]
+
+
+def get_anthropic_embeddings(
+    texts: List[str], model: str = "claude-3-haiku-20240307"
+) -> List[List[float]]:
+    """Generate embeddings using Anthropic."""
+    client = anthropic.Anthropic(api_key=anthropic_api_key)
+    embeddings = []
+    for text in texts:
+        response = client.messages.create(
+            model=model, max_tokens=1024, messages=[{"role": "user", "content": text}]
+        )
+        # Placeholder for actual embedding
+        embeddings.append([0.0] * 1024)  # Replace with actual embedding when available
+    return embeddings
+
+
+def store_embeddings_for_model(texts, embeddings, model, provider):
+    collection_name = f"{provider}_{model}_embeddings"
+    collection = client.get_collection(collection_name)
+
+    # Create meaningful metadata for each document (adjust as necessary)
+    metadata = [{"text_length": len(text)} for text in texts]  # Example metadata
+
+    # Add embeddings to the collection with metadata
+    collection.add(
+        ids=[str(i) for i in range(len(texts))],
+        embeddings=embeddings,
+        metadatas=metadata,  # Passing populated metadata
+        documents=texts,
+    )
+
+
+def delete_embeddings_from_collection(collection, ids):
+    """Delete embeddings by id from Chroma collection."""
+    if ids:
+        collection.delete(ids=ids)  # Only delete if ids are provided
+
+
+def search_similar_texts_for_model(
+    query_embedding: List[float],
+    embedding_model: str,
+    provider: str,
+    top_k: int = 5,
+    db_path: str = npcsh_vector_db_path,
+) -> List[dict]:
+    """Search for similar texts in Chroma using KNN."""
+    collection_name = f"{provider}_{embedding_model}_embeddings"
+    collection = client.get_collection(collection_name)
+
+    search_results = collection.query(query_embedding, n_results=top_k)
+
+    # Now access the results based on the actual keys in the search result
+    return [
+        {"id": result_id, "score": distance, "text": document}
+        for result_id, distance, document in zip(
+            search_results["ids"][
+                0
+            ],  # Get the list of IDs (assuming it's nested in a list)
+            search_results["distances"][0],  # Get the corresponding distances
+            search_results["documents"][0],  # Get the corresponding documents
+        )
+    ]
+
+
+def get_embeddings(
+    texts: List[str], provider: str = npcsh_provider, model: str = NPCSH_EMBEDDING_MODEL
+) -> List[List[float]]:
+    """Generate embeddings using the specified provider and store them in Chroma."""
+    if provider == "ollama":
+        embeddings = get_ollama_embeddings(texts, model)
+    elif provider == "openai":
+        embeddings = get_openai_embeddings(texts, model)
+    elif provider == "anthropic":
+        embeddings = get_anthropic_embeddings(texts, model)
+    else:
+        raise ValueError(f"Unsupported provider: {provider}")
+
+    # Store the embeddings in the relevant Chroma collection
+    store_embeddings_for_model(texts, embeddings, model, provider)
+    return embeddings
+
+
+def extract_relevant_data(content: str, search_term: str) -> str:
+    """Extract relevant information based on a search term."""
+    # A naive implementation just to illustrate. This should be improved based on your needs.
+    lines = content.split("\n")
+    relevant_data = "\n".join(
+        [line for line in lines if search_term.lower() in line.lower()]
+    )
+    return relevant_data if relevant_data else "No relevant information found."
 
 
 def get_model_and_provider(command: str, available_models: list) -> tuple:
@@ -672,9 +781,9 @@ def get_anthropic_conversation(
 
         message = client.messages.create(
             model=model,
-            max_tokens=1024,
             system=system_message,  # Include system message in each turn for Anthropic
             messages=messages,  # Send only the last user message
+            max_tokens=8192,
             **kwargs,
         )
 
@@ -2131,7 +2240,6 @@ def execute_llm_question(
 def generate_plonk(
     request,
 ):
-
     prompt = f"""
 
     A user asked the following question: {request}

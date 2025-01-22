@@ -184,7 +184,7 @@ def save_conversation_message(
     """
     if wd is None:
         wd = os.getcwd()
-    command_history.add_conversation(role, content, conversation_id, os.getcwd())
+    command_history.add_conversation(role, content, conversation_id, wd)
 
 
 def retrieve_last_conversation(

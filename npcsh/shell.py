@@ -2,9 +2,23 @@ import os
 import sys
 import readline
 import atexit
+import re
+import pty
+import select
+import termios
+import tty
+import shlex
+import json
+from datetime import datetime
 
 # Third-party imports
+import pandas as pd
+import sqlite3
+import numpy as np
 from termcolor import colored
+from dotenv import load_dotenv
+import subprocess
+from typing import Dict, Any, List, Optional
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -16,8 +30,19 @@ from .command_history import (
     start_new_conversation,
     save_conversation_message,
 )
+from .llm_funcs import (
+    execute_llm_command,
+    execute_llm_question,
+    generate_image,
+    lookup_provider,
+    check_llm_command,
+    get_conversation,
+    get_system_message,
+)
+from .search import rag_search, search_web
 from .helpers import (
     load_all_files,
+    initialize_npc_project,
     setup_npcsh_config,
     is_npcsh_initialized,
     initialize_base_npcs_if_needed,

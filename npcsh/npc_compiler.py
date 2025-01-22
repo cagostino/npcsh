@@ -69,8 +69,6 @@ def init_pipeline_runs(db_path: str = "~/npcsh_history.db"):
         conn.commit()
 
 
-
-
 # SilentUndefined handles undefined behavior in Jinja2
 class SilentUndefined(Undefined):
     def _fail_with_undefined_error(self, *args, **kwargs):
@@ -257,7 +255,6 @@ class NPC:
         global_tools_directory: str = None,
         project_tools_directory: str = None,
     ):
-
         # 2. Load global tools from ~/.npcsh/npc_team/tools
         if global_tools_directory is None:
             user_home = os.path.expanduser("~")
@@ -438,7 +435,6 @@ class NPC:
                     print(f"Error loading tool from global directory: {e}")
                     # trying to load from project tools directory
                     try:
-
                         tool_data = self.load_tool_from_file(
                             os.path.join(project_tools_directory, tool_name)
                         )
@@ -640,8 +636,16 @@ class SilentUndefined(Undefined):
 
 class NPCCompiler:
     def __init__(self, npc_directory, db_path):
-        self.npc_directory = npc_directory  # Global NPC directory (`~/.npcsh/npc_team`)
-        self.project_npc_directory = os.path.abspath("./npc_team")  # Project directory
+        self.npc_directory = npc_directory
+        self.dirs = [self.npc_directory]
+        if self.npc_directory == os.path.abspath("./npc_team"):
+            self.project_npc_directory = None
+            self.project_tools_directory = None
+        else:
+            self.project_npc_directory = os.path.abspath("./npc_team")
+            self.dirs.append(self.project_npc_directory)
+            self.project_tools_directory = os.path.join(self.project_npc_directory, "tools")
+
         self.db_path = db_path
         self.npc_cache = {}
         self.resolved_npcs = {}
@@ -649,11 +653,11 @@ class NPCCompiler:
 
         # Set tools directories
         self.global_tools_directory = os.path.join(self.npc_directory, "tools")
-        self.project_tools_directory = os.path.join(self.project_npc_directory, "tools")
+
 
         # Initialize Jinja environment with multiple loaders
         self.jinja_env = Environment(
-            loader=FileSystemLoader([self.npc_directory, self.project_npc_directory]),
+            loader=FileSystemLoader(self.dirs),
             undefined=SilentUndefined,
         )
 
@@ -731,13 +735,13 @@ class NPCCompiler:
                     tool_paths.append(
                         os.path.join(self.global_tools_directory, filename)
                     )
-
-        if os.path.exists(self.project_tools_directory):
-            for filename in os.listdir(self.project_tools_directory):
-                if filename.endswith(".tool"):
-                    tool_paths.append(
-                        os.path.join(self.project_tools_directory, filename)
-                    )
+        if self.project_tools_directory is not None:
+            if os.path.exists(self.project_tools_directory):
+                for filename in os.listdir(self.project_tools_directory):
+                    if filename.endswith(".tool"):
+                        tool_paths.append(
+                            os.path.join(self.project_tools_directory, filename)
+                        )
 
         tool_dict = {}
         for tool_path in tool_paths:
@@ -769,10 +773,7 @@ class NPCCompiler:
             return None
 
     def parse_all_npcs(self) -> None:
-        directories = [self.npc_directory]
-        if os.path.exists(self.project_npc_directory):
-            directories.append(self.project_npc_directory)
-        for directory in directories:
+        for directory in self.dirs:
             for filename in os.listdir(directory):
                 if filename.endswith(".npc"):
                     npc_path = os.path.join(directory, filename)
@@ -782,8 +783,9 @@ class NPCCompiler:
         npc_file = os.path.basename(npc_file_path)
         if npc_file in self.npc_cache:
             # Project NPCs override global NPCs
-            if npc_file_path.startswith(self.project_npc_directory):
-                print(f"Overriding NPC {npc_file} with project version.")
+            if self.project_npc_directory is not None:
+                if npc_file_path.startswith(self.project_npc_directory):
+                    print(f"Overriding NPC {npc_file} with project version.")
             else:
                 # Skip if already loaded from project directory
                 return self.npc_cache[npc_file]
@@ -1907,9 +1909,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df["ai_analysis"] = (
-                        synthesized_df  # Adjust as per what synthesize returns
-                    )
+                    df[
+                        "ai_analysis"
+                    ] = synthesized_df  # Adjust as per what synthesize returns
 
             return df
 
