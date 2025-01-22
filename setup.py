@@ -1,6 +1,9 @@
 from setuptools import setup, find_packages
 import os
+import site
 
+import platform
+from pathlib import Path
 
 def package_files(directory):
     paths = []
@@ -9,6 +12,44 @@ def package_files(directory):
             paths.append(os.path.join(path, filename))
     return paths
 
+
+def get_setup_message():
+    if platform.system() == "Windows":
+        user_scripts = Path(site.USER_BASE) / "Scripts"
+        return f"""
+==============================================
+Important Setup Instructions for Windows Users
+==============================================
+
+The npcsh command line tool has been installed, but you need to add it to your PATH.
+
+Please add this directory to your PATH:
+{user_scripts}
+
+You can do this in one of two ways:
+
+1. Quick method (run in Command Prompt as Administrator):
+   setx PATH "%PATH%;{user_scripts}"
+
+2. Manual method:
+   a. Press Win + X and select "System"
+   b. Click "Advanced system settings"
+   c. Click "Environment Variables"
+   d. Under "User variables", find and select "Path"
+   e. Click "Edit"
+   f. Click "New"
+   g. Add this path: {user_scripts}
+   h. Click "OK" on all windows
+
+After adding to PATH, restart your terminal/command prompt.
+
+You can then run:
+npcsh-setup
+
+To configure your API keys and preferences.
+==============================================
+"""
+    return ""  # Return empty string for non-Windows platforms
 
 extra_files = package_files("npcsh/npc_team/")
 
@@ -44,7 +85,7 @@ setup(
         "pyttsx3",
         "chromadb",
         "gtts",
-        "playsound",
+        "playsound==1.2.2",
         "termcolor",
         "colorama",
         "python-dotenv",
@@ -74,3 +115,6 @@ setup(
     data_files=[("npcsh/npc_team", extra_files)],
     python_requires=">=3.10",
 )
+# Print setup message only on Windows
+if platform.system() == "Windows":
+    print(get_setup_message())

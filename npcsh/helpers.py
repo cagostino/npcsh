@@ -598,3 +598,38 @@ def read_file(args: List[str]) -> None:
             print(content)
     except Exception as e:
         print(f"Error reading file: {e}")
+
+
+
+import os
+import json
+from pathlib import Path
+
+def get_npcshrc_path_windows():
+    return Path.home() / '.npcshrc'
+
+def read_rc_file_windows(path):
+    """Read shell-style rc file"""
+    config = {}
+    if not path.exists():
+        return config
+    
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#'):
+                # Match KEY='value' or KEY="value" format
+                match = re.match(r'^([A-Z_]+)\s*=\s*[\'"](.*?)[\'"]$', line)
+                if match:
+                    key, value = match.groups()
+                    config[key] = value
+    return config
+
+def get_setting_windows(key, default=None):
+    # Try environment variable first
+    if env_value := os.getenv(key):
+        return env_value
+    
+    # Fall back to .npcshrc file
+    config = read_rc_file_windows(get_npcshrc_path())
+    return config.get(key, default)

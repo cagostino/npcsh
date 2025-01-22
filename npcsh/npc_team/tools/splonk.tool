@@ -174,7 +174,7 @@ preprocess:
 
             if test_result['success']:
                 success = True
-                print("✅ Fix successful!")
+                print(" Fix successful!")
             else:
                 debug_history.append({
                     'attempt': attempt,
@@ -183,7 +183,7 @@ preprocess:
                     'error': test_result['error'],
                     'analysis': analysis
                 })
-                print(f"❌ Fix attempt {attempt} failed. Error:\n{test_result['error']}")
+                print(f"x Fix attempt {attempt} failed. Error:\n{test_result['error']}")
 
         # Store final results
         context['debug_results'] = {
@@ -202,9 +202,9 @@ prompt:
     Attempts: {{ debug_results['attempts'] }}
 
     {% if debug_results['success'] %}
-    ✅ Issue resolved after {{ debug_results['attempts'] }} attempts.
+     Issue resolved after {{ debug_results['attempts'] }} attempts.
     {% else %}
-    ❌ Failed to resolve after {{ debug_results['attempts'] }} attempts.
+    x Failed to resolve after {{ debug_results['attempts'] }} attempts.
     {% endif %}
 
     Debug History:
