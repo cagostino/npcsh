@@ -2,7 +2,7 @@ from npcsh.knowledge_graph import *
 
 # Example usage:
 if __name__ == "__main__":
-    db_path = "./demo.db"  # Specify your database path here
+    db_path = "~/npcsh_graph.db"  # Specify your database path here
     text = """
 npcsh is a python-based command-line tool designed to integrate Large Language Models (LLMs) into one's daily workflow by making them available through the command line shell.
 
