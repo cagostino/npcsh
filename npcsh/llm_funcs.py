@@ -83,7 +83,7 @@ npcsh_vector_db_path = os.path.expanduser(
     os.environ.get("NPCSH_VECTOR_DB_PATH", "~/npcsh_chroma.db")
 )
 
-NPCSH_EMBEDDING_MODEL = os.environ.get("NPCSH_EMBEDDING_MODEL","nomic-embed-text")
+NPCSH_EMBEDDING_MODEL = os.environ.get("NPCSH_EMBEDDING_MODEL", "nomic-embed-text")
 NPCSH_EMBEDDING_PROVIDER = os.environ.get("NPCSH_EMBEDDING_PROVIDER", "ollama")
 
 
@@ -195,7 +195,7 @@ def get_embeddings(
         raise ValueError(f"Unsupported provider: {provider}")
 
     # Store the embeddings in the relevant Chroma collection
-    #store_embeddings_for_model(texts, embeddings, model, provider)
+    # store_embeddings_for_model(texts, embeddings, model, provider)
     return embeddings
 
 
@@ -1332,7 +1332,7 @@ def get_anthropic_response(
         llm_response = message.content[0].text
         items_to_return = {"response": llm_response}
 
-        print(format)
+        # print(format)
         # Update messages if they were provided
         if messages is None:
             messages = []
@@ -2211,7 +2211,7 @@ def execute_llm_question(
     n_docs: int = 5,
 ):
     location = os.getcwd()
-    if messages is None:
+    if messages is None or len(messages) == 0:
         messages = []
         messages.append({"role": "user", "content": command})
 
@@ -2247,6 +2247,9 @@ def execute_llm_question(
         output = "Error: Invalid response from conversation function"
 
     # render_markdown(output)
+    # print(f"LLM response: {output}")
+    # print(f"Messages: {messages}")
+    # print("type of output", type(output))
     command_history.add_command(command, [], output, location)
     return {"messages": messages, "output": output}
 
