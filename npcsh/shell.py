@@ -149,8 +149,8 @@ def main() -> None:
         """
 Welcome to \033[1;94mnpc\033[0m\033[1;38;5;202msh\033[0m!
   \033[1;94m                    \033[0m\033[1;38;5;202m               \\\\
-  \033[1;94m _ __   _ __    ___ \033[0m\033[1;38;5;202m ___  | |       \\\\
-  \033[1;94m| '_ \ | '_ \  / __|\033[0m\033[1;38;5;202m/ __/ | |_ _     \\\\
+  \033[1;94m _ __   _ __    ___ \033[0m\033[1;38;5;202m ___  | |___    \\\\
+  \033[1;94m| '_ \ | '_ \  / __|\033[0m\033[1;38;5;202m/ __/ | |_ _|    \\\\
   \033[1;94m| | | || |_) |( |__ \033[0m\033[1;38;5;202m\_  \ | | | |    //
   \033[1;94m|_| |_|| .__/  \___|\033[0m\033[1;38;5;202m|___/ |_| |_|   //
          \033[1;94m| |          \033[0m\033[1;38;5;202m               //
@@ -170,7 +170,7 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             if current_npc:
                 prompt = f"{colored(os.getcwd(), 'blue')}:{orange(current_npc.name)}> "
             else:
-                prompt = f"{colored(os.getcwd(), 'blue')}:{orange('npcsh')}> "
+                prompt = f"{colored(os.getcwd(), 'blue')}:\033[1;94mnpc\033[0m\033[1;38;5;202msh\033[0m!> "
 
             prompt = readline_safe_prompt(prompt)
             user_input = get_multiline_input(prompt).strip()
