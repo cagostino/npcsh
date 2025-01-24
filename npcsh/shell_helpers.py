@@ -24,6 +24,7 @@ import select
 import signal
 import time
 
+
 import whisper
 
 try:
@@ -56,7 +57,14 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.syntax import Syntax
 from .command_history import CommandHistory
+import warnings
 
+warnings.filterwarnings("ignore", module="whisper.transcribe")
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", module="torch.serialization")
+os.environ["PYTHONWARNINGS"] = "ignore"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
 
 interactive_commands = {
     "ipython": ["ipython"],
@@ -990,7 +998,8 @@ Bash commands and other programs can be executed directly."""
 
     elif command_name == "whisper":
         # try:
-        output = enter_whisper_mode(command_history, npc=npc)
+        messages = enter_whisper_mode(command_history, npc=npc)
+        output = "Exited whisper mode."
         # except Exception as e:
         #    print(f"Error entering whisper mode: {str(e)}")
         #    output = "Error entering whisper mode"
@@ -1618,7 +1627,13 @@ def execute_command(
     return {"messages": messages, "output": output}
 
 
-def enter_whisper_mode(command_history: Any, npc: Any = None) -> str:
+def enter_whisper_mode(
+    command_history: Any,
+    messages: list = None,
+    npc: Any = None,
+    spool=False,
+    continuous=False,
+) -> str:
     """
     Function Description:
         This function is used to enter the whisper mode.
@@ -1630,34 +1645,37 @@ def enter_whisper_mode(command_history: Any, npc: Any = None) -> str:
         str : The output of the whisper mode.
     """
 
-    if npc is not None:
-        llm_name = npc.name
-    else:
-        llm_name = "LLM"
     try:
         model = whisper.load_model("base")
     except Exception as e:
-        print(f"Error loading Whisper model: {e}")
-        return "Error: Unable to load Whisper model"
+        return f"Error: Unable to load Whisper model due to {str(e)}"
 
     whisper_output = []
-    npc_info = f" (NPC: {npc.name})" if npc else ""
-    messages = []  # Initialize messages list for conversation history
+    if npc:
+        npc_info = f" (NPC: {npc.name})"
+    else:
+        npc_info = ""
 
-    print(f"Entering whisper mode{npc_info}. Calibrating silence level...")
+    if messages is None:
+        messages = []  # Initialize messages list if not provided
+
+    # Begin whisper mode functionality
+    whisper_output.append(
+        f"Entering whisper mode{npc_info}. Calibrating silence level..."
+    )
+
     try:
         silence_threshold = calibrate_silence()
     except Exception as e:
-        print(f"Error calibrating silence: {e}")
-        return "Error: Unable to calibrate silence"
+        return f"Error: Unable to calibrate silence due to {str(e)}"
 
-    print("Ready. Speak after seeing 'Listening...'. Say 'exit' or type '/wq' to quit.")
+    whisper_output.append(
+        "Ready. Speak after seeing 'Listening...'. Say 'exit' or type '/wq' to quit."
+    )
     speak_text("Whisper mode activated. Ready for your input.")
 
     while True:
-        # try:
         audio_data = record_audio(silence_threshold=silence_threshold)
-
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
             wf = wave.open(temp_audio.name, "wb")
             wf.setnchannels(1)
@@ -1668,55 +1686,34 @@ def enter_whisper_mode(command_history: Any, npc: Any = None) -> str:
 
             result = model.transcribe(temp_audio.name)
             text = result["text"].strip()
-
+            print(f"You said: {text}")
         os.unlink(temp_audio.name)
 
-        print(f"You said: {text}")
-        whisper_output.append(f"User: {text}")
-
-        if text.lower() == "exit":
-            print("Exiting whisper mode.")
-            speak_text("Exiting whisper mode. Goodbye!")
-            break
-
         messages.append({"role": "user", "content": text})  # Add user message
-
-        llm_response = check_llm_command(
-            text, command_history, npc=npc, messages=messages
-        )  # Use check_llm_command
-        # print(type(llm_response))
-        if isinstance(llm_response, dict):
-            print(f"{llm_name}: {llm_response['output']}")  # Print assistant's reply
-            whisper_output.append(
-                f"{llm_name}: {llm_response['output']}"
-            )  # Add to output
-            # speak_text(llm_response["output"])  # Speak assistant's reply
-        elif isinstance(llm_response, list) and len(llm_response) > 0:
-            assistant_reply = messages[-1]["content"]
-            print(f"{llm_name}: {assistant_reply}")  # Print assistant's reply
-            whisper_output.append(f"{llm_name}: {assistant_reply}")  # Add to output
-            # speak_text(assistant_reply)  # Speak assistant's reply
-        elif isinstance(
-            llm_response, str
-        ):  # Handle string responses (errors or direct replies)
-            print(f"{llm_name}: {llm_response}")
-            whisper_output.append(f"{llm_name}: {llm_response}")
-            # speak_text(llm_response)
-
-        # command_history.add(...)  This is now handled inside check_llm_command
-
-        print("\nPress Enter to speak again, or type '/wq' to quit.")
-        user_input = input()
-        if user_input.lower() == "/wq":
-            print("Exiting whisper mode.")
+        if text.lower() in ["exit", "/wq"]:
+            whisper_output.append("Exiting whisper mode.")
             speak_text("Exiting whisper mode. Goodbye!")
             break
+        if not spool:
+            llm_response = check_llm_command(
+                text, command_history, npc=npc, messages=messages
+            )  # Use
 
-    # except Exception as e:
-    #    print(f"Error in whisper mode: {e}")
-    #    whisper_output.append(f"Error: {e}")
+            messages = llm_response["messages"]
+            output = llm_response["output"]
+        else:
+            messages = get_conversation(
+                messages, model=model, provider=provider, npc=npc
+            )
 
-    return "\n".join(whisper_output)
+            output = messages[-1]["content"]
+        print(output)
+        if not continuous:
+            inp = input("Press Enter to continue or type '/q' to quit: ")
+            if inp.lower() == "/q":
+                break
+
+    return messages
 
 
 def enter_notes_mode(command_history: Any, npc: Any = None) -> None:
@@ -2120,10 +2117,21 @@ def enter_spool_mode(
 
     while True:
         try:
+
             user_input = input("spool> ").strip()
+            if len(user_input) == 0:
+                continue
             if user_input.lower() == "/sq":
                 print("Exiting spool mode.")
                 break
+            if user_input.lower() == "/rehash":  # Check for whisper command
+                # send the most recent message
+                output = rehash_last_message(command_history, npc.name)
+            if user_input.lower() == "/whisper":  # Check for whisper command
+                messages = enter_whisper_mode(command_history, spool_context, npc)
+                print(messages)  # Optionally print output from whisper mode
+                continue  # Continue with spool mode after exiting whisper mode
+
             if user_input.startswith("/ots"):
                 command_parts = user_input.split()
                 if len(command_parts) > 1:

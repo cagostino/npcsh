@@ -107,7 +107,7 @@ def record_audio(
     frames = []
     silent_chunks = 0
     has_speech = False
-    max_silent_chunks = int(sample_rate * 1.0 / 1024)  # 1.0 seconds of silence
+    max_silent_chunks = int(sample_rate * 3.0 / 1024)  # 3.0 seconds of silence
     max_chunks = int(sample_rate * max_duration / 1024)  # Maximum duration in chunks
 
     start_time = time.time()

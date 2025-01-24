@@ -56,7 +56,7 @@ pip install npcsh
 ```
 ### Widows Install
 
-Download and install ollama exe. 
+Download and install ollama exe.
 
 Then, in a powershell. Download and install ffmpeg.
 
@@ -65,7 +65,7 @@ ollama pull llama3.2
 ollama pull llava:7b
 pip install npcsh
 ```
-As of now, npcsh appears to work well with some of the core functionalities like /ots and /whisper. 
+As of now, npcsh appears to work well with some of the core functionalities like /ots and /whisper.
 Haven't figured out the command execution parts with windows yet but will make an issue.
 
 
@@ -340,7 +340,10 @@ npcsh> /exit
 Otherwise, here are some more detailed examples of macros that can be used in npcsh:
 
 ### Spool
-Spool mode allows one to enter into a conversation with a specific LLM or a specific NPC. This is used for having distinct interactions from those in the base shell and these will be separately contained .
+Spool mode allows one to enter into a conversation with a specific LLM or a specific NPC.
+This is used for having distinct interactions from those in the base shell and these will be separately contained.
+
+
 Start the spool mode:
 ```npcsh
 npcsh> /spool
@@ -355,6 +358,101 @@ Start the spool mode with specific files in context that will be referenced thro
 
 ```npcsh
 npcsh> /spool files=[*.py,*.md] # Load specific files for context
+```
+
+Have a conversation and switch between text and voice mode by invoking `/whisper` mode from within spool mode.
+```npcsh
+spool> what can you tell me about green bull from one piece?
+
+Green Bull, also known as Ryokugyu, is a character from the popular anime and manga series One Piece. He is one of the Marine Admirals and was introduced during the Wano Country arc. Here are some key points about Green
+Bull:
+ 1 Real Name: His real name is Aramaki, but he is primarily known by his title, Green Bull (Ryokugyu in Japanese).
+ 2 Appearance: Green Bull has a distinct look characterized by a green military uniform, a long cape, and a
+    noticeable plant-based theme, which aligns with his powers.
+ 3 Devil Fruit: Green Bull is a user of the Mori Mori no Mi (Forest Forest Fruit), a Logia-type Devil Fruit that
+    allows him to generate and manipulate plant matter. This ability can be seen in his combat style, which utilizes
+    plants to entrap and attack opponents.
+ 4 Role as an Admiral: As an Admiral, Green Bull holds a high-ranking position in the Marines and is
+    known for his strength and authority. He is fiercely loyal to the Marine organization and its goals.
+ 5 Personality: Green Bull displays a laid-back attitude and often appears more relaxed compared to other Admirals.
+    His personality can be somewhat ambiguous, which adds depth to his character.
+ 6 Involvement in the Story: Green Bull's introduction brings anticipation regarding his potential confrontations with
+    key characters in the series. His role in major arcs like Wano and his interactions with the Straw Hat Pirates and
+    other significant figures are crucial for the unfolding storyline.
+ Overall, Green Bull is an intriguing character with unique abilities and a significant role within the One Piece universe.
+
+spool> /whisper
+
+Calibrating silence level. Please remain quiet...
+Silence threshold set to: 5679.193548387097
+Listening... (speak now)
+...............
+Max duration reached.
+
+Processing...
+You said: What do you think his greatest weakness is?
+
+
+Based on what we know about Green Bull from the One Piece series, I can identify a few potential weaknesses:
+
+1. **Extreme Laziness**:
+- Green Bull is known for being incredibly lazy, often refusing to move or exert himself unnecessarily.
+- This laziness could be exploited by opponents who understand how to manipulate or provoke him into action.
+
+2. **Dependency on External Nutrition**:
+- His Devil Fruit power allows him to absorb nutrients from the environment, which suggests he might become weakened in environments with limited plant life or nutrients.
+- In extremely barren or non-vegetative settings, his regenerative and plant-based abilities might be significantly reduced.
+
+3. **Pride and Marine Ideology**:
+- Like many Marines, he likely has a rigid sense of justice that could be used against him strategically.
+- His commitment to Marine principles might make him predictable in certain confrontational scenarios.
+
+4. **Potential Overconfidence**:
+- As an Admiral, he might underestimate opponents, especially pirates, due to his high-ranking status.
+- His laid-back nature might lead him to not take threats seriously until it's too late.
+
+The most pronounced weakness seems to be his extreme laziness, which could potentially be exploited tactically by skilled opponents who understand how to force him into action or create scenarios that challenge his passive nature.
+
+Here are some additional details about Green Bull (Aramaki) in "One Piece":
+
+ 1 Devil Fruit Name:
+
+ • Green Bull's Devil Fruit has been confirmed to be the Mori Mori no Mi, which is a mythical Zoan-type fruit. This allows him to utilize various forms of plant life in combat and has regenerative
+   capabilities.
+
+ 2 Combat Abilities:
+
+ • His ability to control vegetation gives him significant advantages in battle. He can generate plants to attack or defend and possibly use them for tactical advantages, such as creating barriers
+   or entangling enemies.
+
+ 3 Reputation:
+
+ • As an Admiral, Green Bull holds a position of great power and authority within the Marines. His reputation is likely formidable among pirates and other opponents.
+
+ 4 Interactions with Other Characters:
+
+ • Green Bull's character dynamics with others in the series, particularly with fellow Marines and pirates, can provide insight into his personality and values. His interactions during missions or
+   discussions about justice will reveal more about his character.
+
+ 5 Appearance and Style:
+
+ • He has a rather unique aesthetic, characterized by his green clothing that symbolizes his connection to nature. His overall appearance contributes to his identity as a plant-based fighter.
+
+ 6 Backstory:
+
+ • As of now, specific details about his backstory and how he rose to the rank of Admiral are not extensively explored in the series. This leaves room for further character development and
+   background to be unveiled in future chapters.
+
+ 7 Ambiguous Personality:
+
+ • While his laziness and laid-back demeanor are evident, it is possible that there are deeper layers to his character that might be revealed through his actions and motivations within the
+   overarching narrative of "One Piece."
+
+ 8 Role in the Marine Organization:
+
+ • His position as Admiral places him in direct opposition to the main pirate characters, particularly the Straw Hat crew, making him a significant figure in the ongoing conflict between pirates
+   and the Marines.
+As the story continues to develop, Green Bull's character may evolve and reveal more complexities, weaknesses, and relationships within the world of "One Piece."
 ```
 
 
