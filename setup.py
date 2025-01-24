@@ -5,6 +5,7 @@ import site
 import platform
 from pathlib import Path
 
+
 def package_files(directory):
     paths = []
     for path, directories, filenames in os.walk(directory):
@@ -51,11 +52,12 @@ To configure your API keys and preferences.
 """
     return ""  # Return empty string for non-Windows platforms
 
+
 extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.2.27",
+    version="0.2.28",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
@@ -83,6 +85,7 @@ setup(
         "pyaudio",
         "pygments",
         "pyttsx3",
+        "kuzu",
         "chromadb",
         "gtts",
         "playsound==1.2.2",

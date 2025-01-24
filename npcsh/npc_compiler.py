@@ -774,7 +774,7 @@ class NPCCompiler:
             return None
 
     def parse_all_npcs(self) -> None:
-        print(self.dirs)
+        # print(self.dirs)
         for directory in self.dirs:
             if os.path.exists(directory):
                 for filename in os.listdir(directory):
@@ -1912,9 +1912,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df[
-                        "ai_analysis"
-                    ] = synthesized_df  # Adjust as per what synthesize returns
+                    df["ai_analysis"] = (
+                        synthesized_df  # Adjust as per what synthesize returns
+                    )
 
             return df
 
