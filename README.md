@@ -94,13 +94,15 @@ if [ -f ~/.npcshrc ]; then
 fi
 ```
 
-We support inference via `openai`, `anthropic`, `ollama`, and `openai-like` APIs. The default provider must be one of `['ollama', 'openai', 'anthropic', 'openai-like']` and the model must be one available from those providers.
+We support inference via `openai`, `anthropic`, `ollama`,`gemini`, `deepseek`,  and `openai-like` APIs. The default provider must be one of `['openai','anthropic','ollama', 'gemini', 'deepseek', 'openai-like']` and the model must be one available from those providers.
 
 To use tools that require API keys, create an `.env` file up in the folder where you are working or place relevant API keys as env variables in your ~/.npcshrc. If you already have these API keys set in a ~/.bashrc or a ~/.zshrc or similar files, you need not additionally add them to ~/.npcshrc or to an `.env` file. Here is an example of what an `.env` file might look like:
 
 ```bash
 export OPENAI_API_KEY="your_openai_key"
 export ANTHROPIC_API_KEY="your_anthropic_key"
+export DEEPSEEK_API_KEY='your_deepseek_key'
+export GEMINI_API_KEY='your_gemini_key'
 ```
 
 
@@ -119,6 +121,7 @@ For cases where you wish to set up a project specific set of NPCs, tools, and as
 ├── tools/             # Project tools
 └── assembly_lines/    # Project workflows
 ```
+
 
 
 ## npcsh usage
@@ -323,6 +326,12 @@ It seems that you've generated an image. If you have any questions or need assis
 and then the associated image :
 ![gdp](test_data/r8ss9a.PNG)
 
+
+
+### Piping outputs
+An important facet that makes `npcsh` so powerful is the ability to pipe outputs from one tool call to another. This allows for the chaining of commands and the creation of complex workflows. For example, you can use the output of a search to generate an image, or you can use the output of an image analysis to generate a report. Here is an example of how this might look in practice:
+```npcsh
+npcsh> what is the gdp of russia in 2024? | /vixynt 'generate an image that contains {0}'
 
 
 ## Macros
