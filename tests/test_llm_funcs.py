@@ -8,6 +8,9 @@ import pytest
 import json
 from npcsh.llm_funcs import (
     get_openai_response,
+    get_gemini_response,
+    generate_image_gemini,
+    get_deepseek_response,
     get_ollama_response,
     get_anthropic_response,
     get_openai_like_response,
@@ -19,6 +22,95 @@ from npcsh.llm_funcs import (
     execute_llm_command,
     check_llm_command,
 )
+
+
+def test_get_gemini_response():
+    prompt = "What is the capital of France?"
+    response = get_gemini_response(prompt, "gemini-1.5-flash")
+    assert "Paris" in response, "Gemini response should contain 'Paris'"
+
+
+def test_get_gemini_json_response():
+    response = get_gemini_response(
+        "Describe this image in JSON format, including objects and their colors.",
+        model="gemini-1.5-flash",
+        images=[{"file_path": "path/to/image.png"}],
+        format="json",
+    )
+    print(response["response"])
+
+
+def test_gemini_pydantic_response():
+    from pydantic import BaseModel
+    from typing import List
+
+    class Person(BaseModel):
+        name: str
+        age: int
+        favorite_foods: List[str]
+
+    response = get_gemini_response(
+        """Return a JSON object with a person's name, age, and a list of their favorite foods.
+        Do not include any additional markdown formatting.""",
+        model="gemini-1.5-flash",
+        format=Person,
+    )
+    print(response["response"])
+
+
+def test_generate_single_image_gemini():
+    prompt = "A drummer fading into cookies and cream pudding"
+    images = generate_image_gemini(prompt, number_of_images=1)
+    print(images)  # Output: ["generated_image_1.jpg"]
+
+
+def test_generate_multiple_images_gemini():
+    prompt = """A plate that has been shattered in half.
+    half of a cheesecake.
+    Both sit on top of a table that has been cut in half."""
+    images = generate_image_gemini(prompt, number_of_images=3, aspect_ratio="16:9")
+    print(
+        images
+    )  # Output: ["generated_image_1.jpg", "generated_image_2.jpg", "generated_image_3.jpg"]
+
+
+def test_generate_image_gemini():
+    prompt = "the boys getting back into town"
+    images = generate_image_gemini(
+        prompt,
+        safety_filter_level="BLOCK_MEDIUM_AND_ABOVE",
+        person_generation="ALLOW_ADULT",
+    )
+    print(images)  # Output: ["generated_image_1.jpg"]
+
+
+def test_get_gemini_messages():
+    # Start a conversation
+    messages = [
+        {"role": "user", "parts": ["My name is Alice."]},
+        {"role": "model", "parts": ["Nice to meet you, Alice! How can I help you?"]},
+    ]
+
+    # First user message
+    response = get_gemini_response(
+        "What's the deal with airline food?",
+        model="gemini-1.5-flash",
+        messages=messages,
+    )
+    print(response["response"])
+
+
+def test_get_gemini_image_analysis():
+    response = get_gemini_response(
+        "What is in this image?", images=[{"file_path": "path/to/image.png"}]
+    )
+    print(response["response"])
+
+
+def test_get_deepseek_response():
+    prompt = "What is the capital of France?"
+    response = get_deepseek_response(prompt, "deepseek-chat")
+    assert "Paris" in response, "DeepSeek response should contain 'Paris'"
 
 
 # Sample example for `generate_image_ollama`
@@ -57,7 +149,6 @@ def test_generate_image_openai_like():
 
 
 def test_ollama_image():
-
     image_path = "/home/caug/.npcsh/screenshots/screenshot_1728963234.png"
     prompt = "What do you see in this image?"
     image_data = {"file_path": image_path}
