@@ -359,7 +359,8 @@ def complete(text: str, state: int) -> str:
 
     """
     buffer = readline.get_line_buffer()
-    available_models = get_available_models()
+    available_chat_models, available_reasoning_models = get_available_models()
+    available_models = available_chat_models + available_reasoning_models
 
     # If completing a model name
     if "@" in buffer:
@@ -2117,7 +2118,6 @@ def enter_spool_mode(
 
     while True:
         try:
-
             user_input = input("spool> ").strip()
             if len(user_input) == 0:
                 continue

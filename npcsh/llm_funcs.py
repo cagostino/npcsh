@@ -23,6 +23,11 @@ import os
 import json
 import ollama
 import sqlite3
+
+from typing import Optional
+from google.generativeai import types
+
+
 import pandas as pd
 import openai
 from dotenv import load_dotenv
@@ -32,12 +37,16 @@ from jinja2 import Environment, FileSystemLoader, Template, Undefined
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 import chromadb
+from PIL import Image
+import typing_extensions as typing
 
 from pydantic import BaseModel, Field
 
 EMBEDDINGS_DB_PATH = os.path.expanduser("~/npcsh_chroma.db")
 
 chroma_client = chromadb.PersistentClient(path=EMBEDDINGS_DB_PATH)
+
+import google.generativeai as genai
 
 
 # Load environment variables from .env file
@@ -69,6 +78,9 @@ def load_env_from_execution_dir() -> None:
 
 load_env_from_execution_dir()
 
+deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", None)
+gemini_api_key = os.getenv("GEMINI_API_KEY", None)
+
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", None)
 openai_api_key = os.getenv("OPENAI_API_KEY", None)
 
@@ -85,6 +97,7 @@ npcsh_vector_db_path = os.path.expanduser(
 
 NPCSH_EMBEDDING_MODEL = os.environ.get("NPCSH_EMBEDDING_MODEL", "nomic-embed-text")
 NPCSH_EMBEDDING_PROVIDER = os.environ.get("NPCSH_EMBEDDING_PROVIDER", "ollama")
+NPCSH_REASONING_MODEL = os.environ.get("NPCSH_REASONING_MODEL", "deepseek-r1")
 
 
 def get_ollama_embeddings(
@@ -263,32 +276,62 @@ def get_available_models() -> list:
         available_models : list : List of available models
 
     """
-    available_models = []
+    available_chat_models = []
+    available_reasoning_models = []
 
-    # Ollama models
-    try:
-        response = subprocess.run(
-            ["ollama", "list"], capture_output=True, text=True, check=True
-        )
-        for line in response.stdout.split("\n")[1:]:  # Skip header line
-            if line.strip():
-                model_name = line.split()[0].split(":")[0]  # Get name before colon
-                available_models.append(model_name)
-    except subprocess.CalledProcessError as e:
-        print(f"Error fetching Ollama models: {e}")
+    ollama_chat_models = [
+        "llama3.3",
+        "llama3.2",
+        "llama3.1" "phi4",
+        "phi3.5",
+        "mistral",
+        "llama3",
+        "gemma",
+        "qwen",
+        "qwen2",
+        "qwen2.5",
+        "phi3",
+        "llava",
+        "codellama",
+        "qwen2.5-coder",
+        "tinyllama",
+        "mistral-nemo",
+        "llama3.2-vesion",
+        "starcoder2",
+        "mixtral",
+        "dolphin-mixtral",
+        "deepseek-coder-v2",
+        "codegemma",
+        "phi",
+        "deepseek-coder",
+        "wizardlm2",
+        "llava-llama3",
+    ]
+    available_chat_models.extend(ollama_chat_models)
 
+    ollama_reasoning_models = ["deepseek-r1"]
+    available_reasoning_models.extend(ollama_reasoning_models)
     # OpenAI models
-    openai_models = [
+    openai_chat_models = [
         "gpt-4-turbo",
         "gpt-4o",
         "gpt-4o-mini",
         "dall-e-3",
         "dall-e-2",
     ]
-    available_models.extend(openai_models)
+    openai_reasoning_models = [
+        "o1-mini",
+        "o1",
+        "o1-preview",
+        "o3-mini",
+        "o3-preview",
+    ]
+    available_reasoning_models.extend(openai_reasoning_models)
+
+    available_chat_models.extend(openai_chat_models)
 
     # Anthropic models
-    anthropic_models = [
+    anthropic_chat_models = [
         "claude-3-opus-20240229",
         "claude-3-sonnet-20240229",
         "claude-3-5-sonnet-20241022",
@@ -297,12 +340,26 @@ def get_available_models() -> list:
         "claude-2.0",
         "claude-instant-1.2",
     ]
-    available_models.extend(anthropic_models)
+    available_chat_models.extend(anthropic_chat_models)
     diffusers_models = [
         "runwayml/stable-diffusion-v1-5",
     ]
-    available_models.extend(diffusers_models)
-    return available_models
+    available_chat_models.extend(diffusers_models)
+
+    deepseek_chat_models = [
+        "deepseek-chat",
+    ]
+
+    deepseek_reasoning_models = [
+        "deepseek-reasoner",
+    ]
+
+    available_chat_models.extend(deepseek_chat_models)
+    available_reasoning_models.extend(deepseek_reasoning_models)
+    return available_chat_models, available_reasoning_models
+
+
+available_chat_models, available_reasoning_models = get_available_models()
 
 
 def generate_image_ollama(prompt: str, model: str) -> str:
@@ -343,15 +400,14 @@ def generate_image_openai(
     Returns:
         str: The URL of the generated image.
     """
-
     if api_key is None:
-        api_key = os.environ["OPENAI_API_KEY"]
+        api_key = os.environ.get("OPENAI_API_KEY")
+    if model is None:
+        model = "dall-e-2"
     client = OpenAI(api_key=api_key)
     if size is None:
         size = "1024x1024"
-    if model is None:
-        model = "dall-e-2"
-    elif model not in ["dall-e-3", "dall-e-2"]:
+    if model not in ["dall-e-3", "dall-e-2"]:
         # raise ValueError(f"Invalid model: {model}")
         print(f"Invalid model: {model}")
         print("Switching to dall-e-3")
@@ -360,6 +416,75 @@ def generate_image_openai(
     if image is not None:
         # print(image)
         return image
+
+
+def generate_image_gemini(
+    prompt: str,
+    model: str = "imagen-3.0-generate-002",  # Default model
+    api_key: str = None,  # Replace with your actual API key
+    size: Optional[str] = None,
+    number_of_images: int = 1,
+    aspect_ratio: str = "1:1",
+    safety_filter_level: str = "BLOCK_LOW_AND_ABOVE",
+    person_generation: str = "DONT_ALLOW",
+) -> List[str]:
+    """
+    Generates an image using the Gemini API (Imagen 3).
+
+    Args:
+        prompt (str): The prompt for generating the image.
+        model (str): The model to use for generating the image.
+        api_key (str): The API key for accessing the Gemini API.
+    Keyword Args:
+        size (str): The size of the generated image (e.g., "1024x1024"). Not directly supported by Gemini.
+        number_of_images (int): The number of images to generate (1 to 4). Default is 1.
+        aspect_ratio (str): The aspect ratio of the generated image. Default is "1:1".
+        safety_filter_level (str): The safety filter level. Default is "BLOCK_LOW_AND_ABOVE".
+        person_generation (str): Whether to allow generation of people. Default is "DONT_ALLOW".
+    Returns:
+        List[str]: A list of URLs or file paths to the generated images.
+    """
+    raise NotImplementedError("Gemini imagen api not yet available in public api?")
+    # Initialize the Gemini client
+    if api_key is None:
+        api_key = os.environ.get("GEMINI_API_KEY")
+    import google.genai as ggenai
+    from google.genai import types as ggtypes
+
+    client = ggenai.Client(api_key=api_key)
+
+    # Validate the number of images
+    if number_of_images < 1 or number_of_images > 4:
+        raise ValueError("number_of_images must be between 1 and 4.")
+
+    # Generate the image(s)
+    try:
+        response = client.models.generate_image(
+            model=model,
+            prompt=prompt,
+            config=ggtypes.GenerateImageConfig(
+                number_of_images=number_of_images,
+                aspect_ratio=aspect_ratio,
+                safety_filter_level=safety_filter_level,
+                person_generation=person_generation,
+                output_mime_type="image/jpeg",  # Default output format
+            ),
+        )
+
+        # Extract the generated images
+        generated_images = []
+        for image in response.generated_images:
+            # Save the image to a file or return the URL
+            image_path = f"generated_image_{len(generated_images) + 1}.jpg"
+            with open(image_path, "wb") as f:
+                f.write(image.image)
+            generated_images.append(image_path)
+
+        return generated_images
+
+    except Exception as e:
+        print(f"Error generating image: {e}")
+        return []
 
 
 def generate_image_anthropic(prompt: str, model: str, api_key: str) -> str:
@@ -850,6 +975,11 @@ def get_conversation(
         return get_openai_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "anthropic":
         return get_anthropic_conversation(messages, model, npc=npc, **kwargs)
+    elif provider == "gemini":
+        return get_gemini_conversation(messages, model, npc=npc, **kwargs)
+    elif provider == "deepseek":
+        return get_deepseek_conversation(messages, model, npc=npc, **kwargs)
+
     else:
         return "Error: Invalid provider specified."
 
@@ -1079,6 +1209,284 @@ def process_data_output(
         return {"response": f"Processing error: {str(e)}", "code": 400}
 
 
+import google.generativeai as genai
+import base64
+import json
+from typing import List, Dict, Any, Union
+from pydantic import BaseModel
+
+
+def get_gemini_response(
+    prompt: str,
+    model: str,
+    images: List[Dict[str, str]] = None,
+    npc: Any = None,
+    format: Union[str, BaseModel] = None,
+    messages: List[Dict[str, str]] = None,
+    api_key: str = None,
+    **kwargs,
+) -> Dict[str, Any]:
+    """
+    Generates a response using the Gemini API.
+    """
+    # Configure the Gemini API
+    if api_key is None:
+        genai.configure(api_key=gemini_api_key)
+
+    # Prepare the system message
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+    model = genai.GenerativeModel(model, system_instruction=system_message)
+
+    # Extract just the content to send to the model
+    if messages is None or len(messages) == 0:
+        content_to_send = prompt
+    else:
+        # Get the latest message's content
+        latest_message = messages[-1]
+        content_to_send = (
+            latest_message["parts"][0]
+            if "parts" in latest_message
+            else latest_message.get("content", prompt)
+        )
+    history = []
+    if messages:
+        for msg in messages:
+            if "content" in msg:
+                # Convert content to parts format
+                history.append({"role": msg["role"], "parts": [msg["content"]]})
+            else:
+                # Already in parts format
+                history.append(msg)
+    # If no history, create a new message list
+    if not history:
+        history = [{"role": "user", "parts": [prompt]}]
+    elif isinstance(prompt, str):  # Add new prompt to existing history
+        history.append({"role": "user", "parts": [prompt]})
+
+    # Handle images if provided
+    # Handle images by adding them to the last message's parts
+    if images:
+        for image in images:
+            with open(image["file_path"], "rb") as image_file:
+                img = Image.open(image_file)
+                history[-1]["parts"].append(img)
+    # Generate the response
+    try:
+        # Send the entire conversation history to maintain context
+        response = model.generate_content(history)
+        llm_response = response.text
+
+        # Filter out empty parts
+        if isinstance(llm_response, list):
+            llm_response = " ".join([part for part in llm_response if part.strip()])
+        elif not llm_response.strip():
+            llm_response = ""
+
+        # Prepare the return dictionary
+        items_to_return = {"response": llm_response, "messages": history}
+        # print(llm_response, type(llm_response))
+
+        # Handle JSON format if specified
+        if format == "json":
+            if type(llm_response) == str:
+                if llm_response.startswith("```json"):
+                    llm_response = (
+                        llm_response.replace("```json", "").replace("```", "").strip()
+                    )
+            try:
+                items_to_return["response"] = json.loads(llm_response)
+            except json.JSONDecodeError:
+                print(f"Warning: Expected JSON response, but received: {llm_response}")
+                return {"error": "Invalid JSON response"}
+        else:
+            # Append the model's response to the messages
+            history.append({"role": "model", "parts": [llm_response]})
+            items_to_return["messages"] = history
+
+        return items_to_return
+
+    except Exception as e:
+        return {"error": f"Error generating response: {str(e)}"}
+
+
+def get_gemini_conversation(
+    messages: List[Dict[str, str]], model: str, npc: Any = None
+) -> List[Dict[str, str]]:
+    """
+    Function Description:
+        This function generates a conversation using the Gemini API.
+    Args:
+        messages (List[Dict[str, str]]): The list of messages in the conversation.
+        model (str): The model to use for the conversation.
+    Keyword Args:
+        npc (Any): The NPC object.
+    Returns:
+        List[Dict[str, str]]: The list of messages in the conversation.
+    """
+    # Make the API call to Gemini
+
+    # translate content to parts
+    for message in messages:
+        if "content" in message:
+            message["parts"] = [message.pop("content")]
+
+    try:
+        # print(messages[-1])
+        if messages[-1]["role"] == "assistant":
+            messages.pop(-1)
+        response = get_gemini_response(messages, model, messages=messages, npc=npc)
+        # print(response)
+        messages.append(
+            {"role": "assistant", "content": response.get("response", "No response")}
+        )
+
+    except Exception as e:
+        messages.append(
+            {"role": "assistant", "content": f"Error interacting with Gemini: {str(e)}"}
+        )
+
+    return messages
+
+
+def get_deepseek_conversation(
+    messages: List[Dict[str, str]], model: str, npc: Any = None
+) -> List[Dict[str, str]]:
+    """
+    Function Description:
+        This function generates a conversation using the DeepSeek API.
+    Args:
+        messages (List[Dict[str, str]]): The list of messages in the conversation.
+        model (str): The model to use for the conversation.
+    Keyword Args:
+        npc (Any): The NPC object.
+    Returns:
+        List[Dict[str, str]]: The list of messages in the conversation.
+    """
+
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+
+    # Prepare the messages list
+    if messages is None or len(messages) == 0:
+        messages = [{"role": "system", "content": system_message}]
+    elif not any(msg["role"] == "system" for msg in messages):
+        messages.insert(0, {"role": "system", "content": system_message})
+
+    # Make the API call to DeepSeek
+    try:
+        response = get_deepseek_response(
+            messages[-1]["content"], model, messages=messages, npc=npc
+        )
+        messages.append(
+            {"role": "assistant", "content": response.get("response", "No response")}
+        )
+
+    except Exception as e:
+        messages.append(
+            {
+                "role": "assistant",
+                "content": f"Error interacting with DeepSeek: {str(e)}",
+            }
+        )
+
+    return messages
+
+
+def get_deepseek_response(
+    prompt: str,
+    model: str,
+    images: List[Dict[str, str]] = None,
+    npc: Any = None,
+    format: Union[str, BaseModel] = None,
+    messages: List[Dict[str, str]] = None,
+    api_key: str = None,
+    **kwargs,
+) -> Dict[str, Any]:
+    """
+    Function Description:
+        This function generates a response using the DeepSeek API.
+    Args:
+        prompt (str): The prompt for generating the response.
+        model (str): The model to use for generating the response.
+    Keyword Args:
+        images (List[Dict[str, str]]): The list of images.
+        npc (Any): The NPC object.
+        format (str): The format of the response.
+        messages (List[Dict[str, str]]): The list of messages.
+    Returns:
+        Any: The response generated by the DeepSeek API.
+
+
+    """
+    if api_key is None:
+        api_key = os.getenv("DEEPSEEK_API_KEY", None)
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+
+    print(client)
+
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+    if messages is None or len(messages) == 0:
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": [{"type": "text", "text": prompt}]},
+        ]
+    if images:
+        for image in images:
+            # print(f"Image file exists: {os.path.exists(image['file_path'])}")
+
+            with open(image["file_path"], "rb") as image_file:
+                image_data = base64.b64encode(compress_image(image_file.read())).decode(
+                    "utf-8"
+                )
+                messages[-1]["content"].append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_data}",
+                        },
+                    }
+                )
+    print(messages)
+    # print(model)
+    response_format = None if format == "json" else format
+    if response_format is None:
+        completion = client.chat.completions.create(model=model, messages=messages)
+        llm_response = completion.choices[0].message.content
+        items_to_return = {"response": llm_response}
+
+        items_to_return["messages"] = messages
+        # print(llm_response, model)
+        if format == "json":
+            try:
+                items_to_return["response"] = json.loads(llm_response)
+
+                return items_to_return
+            except json.JSONDecodeError:
+                print(f"Warning: Expected JSON response, but received: {llm_response}")
+                return {"error": "Invalid JSON response"}
+        else:
+            items_to_return["messages"].append(
+                {"role": "assistant", "content": llm_response}
+            )
+            return items_to_return
+
+    else:
+        if model in available_reasoning_models:
+            raise NotImplementedError("Reasoning models do not support JSON output.")
+        try:
+            completion = client.beta.chat.completions.parse(
+                model=model, messages=messages, response_format=response_format
+            )
+            items_to_return = {"response": completion.choices[0].message.parsed.dict()}
+            items_to_return["messages"] = messages
+
+            items_to_return["messages"].append(
+                {"role": "assistant", "content": completion.choices[0].message.parsed}
+            )
+            return items_to_return
+        except Exception as e:
+            print("pydantic outputs not yet implemented with deepseek?")
+
+
 def get_ollama_response(
     prompt: str,
     model: str,
@@ -1104,6 +1512,7 @@ def get_ollama_response(
     """
     # try:
     # Prepare the message payload
+
     message = {"role": "user", "content": prompt}
     if images:
         message["images"] = [image["file_path"] for image in images]
@@ -1132,6 +1541,8 @@ def get_ollama_response(
 
     # Handle JSON format if specified
     if format == "json":
+        if model in available_reasoning_models:
+            raise NotImplementedError("Reasoning models do not support JSON output.")
         try:
             result["response"] = json.loads(response_content)
         except json.JSONDecodeError:
@@ -1206,6 +1617,10 @@ def get_openai_response(
         items_to_return["messages"] = messages
         # print(llm_response, model)
         if format == "json":
+            if model in available_reasoning_models:
+                raise NotImplementedError(
+                    "Reasoning models do not support JSON output."
+                )
             try:
                 items_to_return["response"] = json.loads(llm_response)
 
@@ -1371,7 +1786,20 @@ def lookup_provider(model: str) -> str:
     Returns:
         str: The provider based on the model name.
     """
-    ollama_prefixes = ["llama", "llava", "phi", "mistral", "codellama", "gemma"]
+    if model == "deepseek-chat" or model == "deepseek-reasoner":
+        return "deepseek"
+    ollama_prefixes = [
+        "llama",
+        "deepseek",
+        "qwen",
+        "llava",
+        "phi",
+        "mistral",
+        "mixtral",
+        "dolphin",
+        "codellama",
+        "gemma",
+    ]
     if any(model.startswith(prefix) for prefix in ollama_prefixes):
         return "ollama"
 
@@ -1384,7 +1812,7 @@ def lookup_provider(model: str) -> str:
     if model.startswith("claude"):
         return "anthropic"
     if model.startswith("gemini"):
-        return "google"
+        return "gemini"
     if "diffusion" in model:
         return "diffusers"
     return None
@@ -1467,6 +1895,20 @@ def get_llm_response(
             model = "llava:7b"
         # print(model)
         return get_ollama_response(
+            prompt, model, npc=npc, messages=messages, images=images, **kwargs
+        )
+    elif provider == "gemini":
+        if model is None:
+            model = "gemini-1.5-flash"
+        return get_gemini_response(
+            prompt, model, npc=npc, messages=messages, images=images, **kwargs
+        )
+
+    elif provider == "deepseek":
+        if model is None:
+            model = "deepseek-chat"
+        print(prompt, model, provider)
+        return get_deepseek_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
     elif provider == "openai":
@@ -1947,7 +2389,7 @@ def check_llm_command(
         "npc_name": "<npc_name_if_applicable>"
     }}
 
-    Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING.
+    Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING. There should be no prefix 'json'. Start straight with the opening curly brace.
     """
 
     if context:

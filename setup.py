@@ -57,13 +57,15 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.2.28",
+    version="0.2.29",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "anthropic",
         "sentence_transformers",
         "nltk",
         "beautifulsoup4",
+        "google-generativeai",
+        "google-genai",
         "duckduckgo-search",
         "pypdf",
         "PyMuPDF",
