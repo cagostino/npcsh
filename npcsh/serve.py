@@ -20,7 +20,7 @@ from .llm_funcs import (
     get_model_and_provider,
     get_available_models,
 )
-from .helpers import get_valid_npcs, get_npc_path
+from .helpers import get_db_npcs, get_directory_npcs, get_npc_path
 from .npc_compiler import load_npc_from_file
 from .shell_helpers import execute_command
 import base64

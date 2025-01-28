@@ -316,7 +316,7 @@ def set_npcsh_initialized() -> None:
     print("NPCSH initialization flag set in .npcshrc")
 
 
-def get_valid_npcs(db_path: str) -> List[str]:
+def get_directory_npcs(directory: str = None) -> List[str]:
     """
     Function Description:
         This function retrieves a list of valid NPCs from the database.
@@ -327,7 +327,28 @@ def get_valid_npcs(db_path: str) -> List[str]:
     Returns:
         A list of valid NPCs.
     """
+    if directory is None:
+        directory = os.path.expanduser("./npc_team")
+    npcs = []
+    for filename in os.listdir(directory):
+        if filename.endswith(".npc"):
+            npcs.append(filename[:-4])
+    return npcs
 
+
+def get_db_npcs(db_path: str) -> List[str]:
+    """
+    Function Description:
+        This function retrieves a list of valid NPCs from the database.
+    Args:
+        db_path: The path to the database file.
+    Keyword Args:
+        None
+    Returns:
+        A list of valid NPCs.
+    """
+    if "~" in db_path:
+        db_path = os.path.expanduser(db_path)
     db_conn = sqlite3.connect(db_path)
     cursor = db_conn.cursor()
     cursor.execute("SELECT name FROM compiled_npcs")
@@ -600,24 +621,25 @@ def read_file(args: List[str]) -> None:
         print(f"Error reading file: {e}")
 
 
-
 import os
 import json
 from pathlib import Path
 
+
 def get_npcshrc_path_windows():
-    return Path.home() / '.npcshrc'
+    return Path.home() / ".npcshrc"
+
 
 def read_rc_file_windows(path):
     """Read shell-style rc file"""
     config = {}
     if not path.exists():
         return config
-    
+
     with open(path) as f:
         for line in f:
             line = line.strip()
-            if line and not line.startswith('#'):
+            if line and not line.startswith("#"):
                 # Match KEY='value' or KEY="value" format
                 match = re.match(r'^([A-Z_]+)\s*=\s*[\'"](.*?)[\'"]$', line)
                 if match:
@@ -625,11 +647,12 @@ def read_rc_file_windows(path):
                     config[key] = value
     return config
 
+
 def get_setting_windows(key, default=None):
     # Try environment variable first
     if env_value := os.getenv(key):
         return env_value
-    
+
     # Fall back to .npcshrc file
     config = read_rc_file_windows(get_npcshrc_path())
     return config.get(key, default)

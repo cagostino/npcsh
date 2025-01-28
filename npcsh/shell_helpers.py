@@ -46,7 +46,7 @@ from .llm_funcs import (
     search_similar_texts,
     chroma_client,
 )
-from .helpers import get_valid_npcs, get_npc_path
+from .helpers import get_db_npcs,get_directory_npcs, get_npc_path
 from .npc_compiler import NPCCompiler, NPC, load_npc_from_file, PipelineRunner
 
 from .search import rag_search
@@ -1407,7 +1407,7 @@ def execute_command(
         # Rest of the existing logic remains EXACTLY the same
         # print(model_override, provider_override)
         if current_npc is None:
-            valid_npcs = get_valid_npcs(db_path)
+            valid_npcs = get_db_npcs(db_path)
 
             npc_name = get_npc_from_command(command)
             if npc_name is None:
