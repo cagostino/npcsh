@@ -13,6 +13,7 @@ import anthropic
 import re
 from jinja2 import Environment, FileSystemLoader, Template, Undefined
 import PIL
+import numpy as np
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from diffusers import StableDiffusionPipeline
@@ -167,29 +168,108 @@ def delete_embeddings_from_collection(collection, ids):
 
 
 def search_similar_texts(
-    query_embedding: List[float],
+    query: str,
+    docs_to_embed: List[List[str]] = None,
     top_k: int = 5,
     db_path: str = npcsh_vector_db_path,
     embedding_model: str = NPCSH_EMBEDDING_MODEL,
     embedding_provider: str = NPCSH_EMBEDDING_PROVIDER,
 ) -> List[dict]:
     """Search for similar texts in Chroma using KNN."""
-    collection_name = f"{embedding_provider}_{embedding_model}_embeddings"
-    collection = chroma_client.get_collection(collection_name)
 
-    search_results = collection.query(query_embedding, n_results=top_k)
+    embedded_search_term = get_ollama_embeddings([query], embedding_model)[0]
+    embedding_dim = len(embedded_search_term)
 
-    # Now access the results based on the actual keys in the search result
-    return [
-        {"id": result_id, "score": distance, "text": document}
-        for result_id, distance, document in zip(
-            search_results["ids"][
-                0
-            ],  # Get the list of IDs (assuming it's nested in a list)
-            search_results["distances"][0],  # Get the corresponding distances
-            search_results["documents"][0],  # Get the corresponding documents
+
+from typing import List, Dict, Optional
+import numpy as np
+from chromadb import Client
+
+
+def search_similar_texts(
+    query_embedding: str,
+    docs_to_embed: Optional[List[str]] = None,
+    top_k: int = 5,
+    db_path: str = npcsh_vector_db_path,
+    embedding_model: str = NPCSH_EMBEDDING_MODEL,
+    embedding_provider: str = NPCSH_EMBEDDING_PROVIDER,
+) -> List[Dict[str, any]]:
+    """
+    Search for similar texts using either a Chroma database or direct embedding comparison.
+    Now with detailed debugging for embedding failures.
+    """
+    print(f"\nQuery to embed: {query_embedding}")
+    embedded_search_term = get_ollama_embeddings([query_embedding], embedding_model)[0]
+    embedding_dim = len(embedded_search_term)
+    print(f"Query embedding dimension: {embedding_dim}")
+
+    if docs_to_embed is None:
+        collection_name = f"{embedding_provider}_{embedding_model}_embeddings"
+        collection = chroma_client.get_collection(collection_name)
+        results = collection.query(
+            query_embeddings=[embedded_search_term], n_results=top_k
         )
-    ]
+        return [
+            {"id": id, "score": float(distance), "text": document}
+            for id, distance, document in zip(
+                results["ids"][0], results["distances"][0], results["documents"][0]
+            )
+        ]
+    else:
+        print(f"\nNumber of documents to embed: {len(docs_to_embed)}")
+
+        # Get embeddings with debug info
+        print("\nGetting embeddings...")
+        raw_embeddings = get_ollama_embeddings(docs_to_embed, embedding_model)
+        print(f"Got {len(raw_embeddings)} embeddings back")
+
+        # Debug embeddings
+        for idx, emb in enumerate(raw_embeddings):
+            if not isinstance(emb, (list, np.ndarray)) or len(emb) != embedding_dim:
+                print(f"\nInvalid embedding at index {idx}:")
+                print(f"Document: {repr(docs_to_embed[idx])[:100]}...")
+                print(f"Embedding type: {type(emb)}")
+                print(
+                    f"Embedding length: {len(emb) if isinstance(emb, (list, np.ndarray)) else 'N/A'}"
+                )
+                print(f"Expected dimension: {embedding_dim}")
+                raise ValueError(
+                    f"Document {idx} failed to embed properly:\n"
+                    f"Document content: {repr(docs_to_embed[idx])[:100]}...\n"
+                    f"Document type: {type(docs_to_embed[idx])}\n"
+                    f"Document length: {len(docs_to_embed[idx]) if isinstance(docs_to_embed[idx], (str, list, tuple)) else 'N/A'}\n"
+                    f"Embedding type: {type(emb)}\n"
+                    f"Embedding dimension: {len(emb) if isinstance(emb, (list, np.ndarray)) else 'N/A'}\n"
+                    f"Expected dimension: {embedding_dim}"
+                )
+
+        doc_embeddings = np.array(raw_embeddings)
+        query_embedding_array = np.array(embedded_search_term)
+
+        doc_norms = np.linalg.norm(doc_embeddings, axis=1)
+        query_norm = np.linalg.norm(query_embedding_array)
+
+        if np.any(doc_norms == 0) or query_norm == 0:
+            zero_indices = np.where(doc_norms == 0)[0]
+            print("\nZero-length embeddings found at indices:", zero_indices)
+            for idx in zero_indices:
+                print(f"Document at index {idx}: {repr(docs_to_embed[idx])[:100]}...")
+            raise ValueError("Zero-length embedding vectors detected")
+
+        cosine_similarities = np.dot(doc_embeddings, query_embedding_array) / (
+            doc_norms * query_norm
+        )
+
+        top_indices = np.argsort(cosine_similarities)[::-1][:top_k]
+
+        return [
+            {
+                "id": str(idx),
+                "score": float(cosine_similarities[idx]),
+                "text": docs_to_embed[idx],
+            }
+            for idx in top_indices
+        ]
 
 
 def get_embeddings(
@@ -210,16 +290,6 @@ def get_embeddings(
     # Store the embeddings in the relevant Chroma collection
     # store_embeddings_for_model(texts, embeddings, model, provider)
     return embeddings
-
-
-def extract_relevant_data(content: str, search_term: str) -> str:
-    """Extract relevant information based on a search term."""
-    # A naive implementation just to illustrate. This should be improved based on your needs.
-    lines = content.split("\n")
-    relevant_data = "\n".join(
-        [line for line in lines if search_term.lower() in line.lower()]
-    )
-    return relevant_data if relevant_data else "No relevant information found."
 
 
 def get_model_and_provider(command: str, available_models: list) -> tuple:
