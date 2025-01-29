@@ -46,10 +46,10 @@ from .llm_funcs import (
     search_similar_texts,
     chroma_client,
 )
-from .helpers import get_db_npcs,get_directory_npcs, get_npc_path
+from .helpers import get_db_npcs, get_directory_npcs, get_npc_path
 from .npc_compiler import NPCCompiler, NPC, load_npc_from_file, PipelineRunner
 
-from .search import rag_search
+from .search import rag_search, search_web
 from .image import capture_screenshot, analyze_image
 
 from .audio import calibrate_silence, record_audio, speak_text
@@ -737,6 +737,85 @@ def execute_splat_command():
     return
 
 
+def execute_search_command(
+    command: str,
+    command_history: CommandHistory,
+    db_path: str,
+    db_conn: sqlite3.Connection,
+    npc_compiler: NPCCompiler,
+    valid_npcs: list,
+    npc: NPC = None,
+    messages=None,
+    model: str = None,
+    provider: str = None,
+    conversation_id: str = None,
+):
+    """
+    Function Description:
+        Executes a search command.
+    Args:
+        command : str : Command
+        command_history : CommandHistory : Command history
+        db_path : str : Database path
+        npc_compiler : NPCCompiler : NPC compiler
+    Keyword Args:
+        embedding_model : None : Embedding model
+        current_npc : None : Current NPC
+        text_data : None : Text data
+        text_data_embedded : None : Embedded text data
+        messages : None : Messages
+    Returns:
+        dict : dict : Dictionary
+
+    """
+    # search commands will bel ike :
+    # '/search -p default = google "search term" '
+    # '/search -p perplexity ..
+    # '/search -p google ..
+    # extract provider if its there
+    # check for either -p or --p
+
+    search_command = command.split()
+    if any("-p" in s for s in search_command) or any(
+        "--provider" in s for s in search_command
+    ):
+        provider = (
+            search_command[search_command.index("-p") + 1]
+            if "-p" in search_command
+            else search_command[search_command.index("--provider") + 1]
+        )
+    else:
+        provider = None
+    if any("-n" in s for s in search_command) or any(
+        "--num_results" in s for s in search_command
+    ):
+        num_results = (
+            search_command[search_command.index("-n") + 1]
+            if "-n" in search_command
+            else search_command[search_command.index("--num_results") + 1]
+        )
+    else:
+        num_results = 5
+
+    # remove the -p and provider from the command string
+    command = command.replace(f"-p {provider}", "").replace(
+        f"--provider {provider}", ""
+    )
+    result = search_web(command, num_results=num_results, provider=provider)
+    if messages is None:
+        messages = []
+        messages.append({"role": "user", "content": command})
+
+    messages.append(
+        {"role": "assistant", "content": result[0] + f" \n Citation Links: {result[1]}"}
+    )
+
+    return {
+        "messages": messages,
+        "output": result[0] + f"\n\n\n Citation Links: {result[1]}",
+    }
+
+
 def execute_slash_command(
     command: str,
     command_history: CommandHistory,
@@ -821,6 +900,7 @@ def execute_slash_command(
 
             output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
             print(output)
+
     elif command_name == "flush":
         n = float("inf")  # Default to infinite
         for arg in args:
@@ -1077,6 +1157,25 @@ Bash commands and other programs can be executed directly."""
                 "messages": messages,
                 "output": "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' ",
             }
+    elif command_name == "search":
+
+        output = execute_search_command(
+            command,
+            command_history,
+            db_path,
+            db_conn,
+            npc_compiler,
+            valid_npcs,
+            npc=npc,
+            messages=messages,
+            model=model,
+            provider=provider,
+            conversation_id=conversation_id,
+        )
+        messages = output["messages"]
+        #print(output, type(output))
+        output = output["output"]
+        #print(output, type(output))
     elif command_name == "sample":
         output = execute_llm_question(
             " ".join(command.split()[1:]),  # Skip the command name

@@ -348,6 +348,41 @@ npcsh> /exit
 
 Otherwise, here are some more detailed examples of macros that can be used in npcsh:
 
+### Search
+Search can be accomplished through the `/search` macro. You can specify the provider as being "google" or "perplexity" or "duckduckgo".  The default is google.
+
+
+
+```npcsh
+npcsh!> /search -p google  who is the current us president
+
+
+President Donald J. Trump entered office on January 20, 2025. News, issues, and photos of the President Footer Disclaimer This is the official website of the U.S. Mission to the United Nations. External links to other Internet sites should not be construed as an endorsement of the views or privacy policies contained therein.
+
+Citation: https://usun.usmission.gov/our-leaders/the-president-of-the-united-states/
+45th & 47th President of the United States After a landslide election victory in 2024, President Donald J. Trump is returning to the White House to build upon his previous successes and use his mandate to reject the extremist policies of the radical left while providing tangible quality of life improvements for the American people. Vice President of the United States In 2024, President Donald J. Trump extended JD the incredible honor of asking him to serve as the Vice-Presidential Nominee for th...
+Citation: https://www.whitehouse.gov/administration/
+Citation: https://www.instagram.com/potus/?hl=en
+The president of the United States (POTUS)[B] is the head of state and head of government of the United States. The president directs the executive branch of the federal government and is the commander-in-chief of the United States Armed Forces. The power of the presidency has grown substantially[12] since the first president, George Washington, took office in 1789.[6] While presidential power has ebbed and flowed over time, the presidency has played an increasingly significant role in American ...
+Citation: https://en.wikipedia.org/wiki/President_of_the_United_States
+Citation Links: https://usun.usmission.gov/our-leaders/the-president-of-the-united-states/
+https://www.whitehouse.gov/administration/
+https://www.instagram.com/potus/?hl=en
+https://en.wikipedia.org/wiki/President_of_the_United_States
+```
+
+/home/caug/npcww/npcsh:npcsh!> /search -p perplexity who is the current us president
+The current President of the United States is Donald Trump, who assumed office on January 20, 2025, for his second non-consecutive term as the 47th president[1].
+
+Citation Links: ['https://en.wikipedia.org/wiki/List_of_presidents_of_the_United_States',
+'https://en.wikipedia.org/wiki/Joe_Biden',
+'https://www.britannica.com/topic/Presidents-of-the-United-States-1846696',
+'https://news.gallup.com/poll/329384/presidential-approval-ratings-joe-biden.aspx',
+'https://www.usa.gov/presidents']
+```
+
+
+
 ### Spool
 Spool mode allows one to enter into a conversation with a specific LLM or a specific NPC.
 This is used for having distinct interactions from those in the base shell and these will be separately contained.
