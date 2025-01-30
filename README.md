@@ -20,7 +20,7 @@
 
 * **Bash Wrapper:** Execute bash commands directly without leaving the shell. Use your favorite command-line tools like VIM, Emacs, ipython, sqlite3, git, and more without leaving the shell!
 
-Interested to stay in the loop and to hear the latest and greatest about `npcsh` ? Be sure to sign up for the ![npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A)!
+Interested to stay in the loop and to hear the latest and greatest about `npcsh` ? Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A)!
 
 
 ## Star History
@@ -1174,7 +1174,7 @@ If you'd like to explore how to use `npcsh` to help your business, please reach 
 
 ## NPC Studio
 Coming soon! NPC Studio will be a desktop application for managing chats and agents on your own machine.
-Be sure to sign up for the ![npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A) to hear updates!
+Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A) to hear updates!
 
 
 
