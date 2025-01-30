@@ -20,10 +20,13 @@
 
 * **Bash Wrapper:** Execute bash commands directly without leaving the shell. Use your favorite command-line tools like VIM, Emacs, ipython, sqlite3, git, and more without leaving the shell!
 
+Interested to stay in the loop and to hear the latest and greatest about `npcsh` ? Be sure to sign up for the ![npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A)!
+
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=cagostino/npcsh&type=Date)](https://star-history.com/#cagostino/npcsh&Date)
+
 ## Installation
 `npcsh` is available on PyPI and can be installed using pip. Before installing, make sure you have the necessary dependencies installed on your system. Below are the instructions for installing such dependencies on Linux, Mac, and (soon-to-be) Windows. If you find any other dependencies that are needed, please let us know so we can update the installation instructions to be more accommodating.
 
@@ -36,12 +39,15 @@ sudo apt-get install alsa-base alsa-utils
 sudo apt-get install libcairo2-dev
 sudo apt-get install libgirepository1.0-dev
 sudo apt-get install ffmpeg
+
+#And if you don't have ollama installed, use this:
+curl -fsSL https://ollama.com/install.sh | sh
+
+ollama pull llama3.2
+ollama pull llava:7b
 pip install npcsh
 ```
-And if you don't have ollama installed, use this:
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
+
 
 
 
@@ -52,6 +58,8 @@ brew install ffmpeg
 brew install ollama
 brew services start ollama
 brew install pygobject3
+ollama pull llama3.2
+ollama pull llava:7b
 pip install npcsh
 ```
 ### Widows Install
@@ -103,6 +111,7 @@ export OPENAI_API_KEY="your_openai_key"
 export ANTHROPIC_API_KEY="your_anthropic_key"
 export DEEPSEEK_API_KEY='your_deepseek_key'
 export GEMINI_API_KEY='your_gemini_key'
+export PERPLEXITY_API_KEY='your_perplexity_key'
 ```
 
 
@@ -1156,7 +1165,19 @@ print('Tool Output:', output)
 
 
 ## Contributing
-Contributions are welcome! Please submit issues and pull requests on the GitHub repository.
+Contributions are welcome! Please submit issues and pull requests on the GitHub repository. 
+
+## Support
+If you appreciate the work here, consider supporting NPC Worldwide : ![buy me a coffee] (https://buymeacoffee.com/npcworldwide) . 
+If you'd like to explore how to use `npcsh` to help your business, please reach out to info@npcworldwi.de .
+
+
+## NPC Studio
+Coming soon! NPC Studio will be a desktop application for managing chats and agents on your own machine.
+Be sure to sign up for the ![npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A) to hear updates!
+
+
+
 
 ## License
 This project is licensed under the MIT License.
