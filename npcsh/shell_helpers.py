@@ -1278,6 +1278,7 @@ def execute_slash_command(
             user_prompt = input(
                 "Enter a prompt for the LLM about this image (or press Enter to skip): "
             )
+            # print(output["model_kwargs"])
             output = analyze_image(
                 command_history,
                 user_prompt,
@@ -1286,7 +1287,9 @@ def execute_slash_command(
                 npc=npc,
                 **output["model_kwargs"],
             )
-            print(output)
+            messages = output["messages"]
+
+            output = output["response"]
 
         if output:
             if isinstance(output, dict) and "filename" in output:
