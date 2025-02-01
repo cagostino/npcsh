@@ -369,6 +369,7 @@ npcsh> /data
 data> load data.csv as df
 data> df.describe()
 ```
+From  here, you can make use of common numpy, pandas, and matplotlib operations for data analysis.
 
 ### Notes
 Jot down notes and store them within the npcsh database and in the current directory as a text file.
