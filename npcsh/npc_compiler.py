@@ -124,13 +124,17 @@ class Tool:
         # Process Preprocess Steps
         for step in self.preprocess:
             context = self.execute_step(step, context, jinja_env, npc=npc)
+        # import pdb
 
         # Process Prompt
-        context = self.execute_step(self.prompt, context, jinja_env, npc=npc)
+        if len(self.prompt["code"]) > 0:
+            context = self.execute_step(self.prompt, context, jinja_env, npc=npc)
 
         # Process Postprocess Steps
         for step in self.postprocess:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
+            if len(step["code"]) > 0:
+                context = self.execute_step(step, context, jinja_env, npc=npc)
+        # pdb.set_trace()
 
         # Return the final output
         if context.get("output") is not None:
@@ -145,11 +149,12 @@ class Tool:
         code = step.get("code", "")
 
         if engine == "natural":
-            # Create template with debugging
+
             debug_env = Environment(undefined=SilentUndefined)
             template = debug_env.from_string(code)
 
             rendered_text = template.render(**context)  # Unpack context as kwargs
+            # print("EXECUTING:", rendered_text)
             if len(rendered_text.strip()) > 0:
                 llm_response = get_llm_response(rendered_text, npc=npc)
                 if context.get("llm_response") is None:
@@ -161,6 +166,7 @@ class Tool:
 
         elif engine == "python":
             # Execute Python code
+            # print("EXECUTING PYTHON CODE:", code)
             exec_globals = {
                 "__builtins__": __builtins__,
                 "npc": npc,
@@ -231,8 +237,6 @@ def load_tools_from_directory(directory) -> list:
                         tools.append(tool)
                     except yaml.YAMLError as e:
                         print(f"Error parsing tool {filename}: {e}")
-    # else:
-    # print(f"Tools directory not found: {directory}")
     return tools
 
 
@@ -662,6 +666,9 @@ class NPCCompiler:
             undefined=SilentUndefined,
         )
 
+        self.tools_dict = self.load_tools()
+        self.tools = list(self.tools_dict.values())
+
     def generate_tool_script(self, tool: Tool):
         script_content = f"""
     # Auto-generated script for tool: {tool.tool_name}
@@ -717,8 +724,7 @@ class NPCCompiler:
             parsed_content = self.finalize_npc_profile(npc_file)
 
             # Load tools from both global and project directories
-            tools = self.load_tools()
-            parsed_content["tools"] = [tool.to_dict() for tool in tools]
+            parsed_content["tools"] = [tool.to_dict() for tool in self.tools]
 
             self.update_compiled_npcs_table(npc_file, parsed_content)
             return parsed_content
@@ -752,7 +758,7 @@ class NPCCompiler:
                 # Project tools override global tools
                 tool_dict[tool.tool_name] = tool
 
-        return list(tool_dict.values())
+        return tool_dict
 
     def load_tool_from_file(self, tool_path: str) -> Union[dict, None]:
         try:

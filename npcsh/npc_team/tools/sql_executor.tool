@@ -2,20 +2,25 @@ tool_name: sql_executor
 description: Execute SQL queries and display the result
 inputs:
   - sql_query
+  - interpret: "false"  # Note that this is not a boolean, but a string
+
 preprocess:
   - engine: python
     code: |
       import pandas as pd
       df = pd.read_sql_query(inputs['sql_query'], npc.db_conn)
-      context['df'] = df
+      output = df.to_string()
+
 prompt:
   engine: natural
   code: |
-    The result of your SQL query is:
+    {% if inputs['interpret'] == "true" %}
+    Here is the result of the SQL query:
     ```
-    {{ df }}
+    {{ df.to_string() }}  # Convert DataFrame to string for a nicer display
     ```
+    {% endif %}
+
 postprocess:
   - engine: natural
-    code: |
-      {{ llm_response }}
+    code: ""
