@@ -333,6 +333,21 @@ An important facet that makes `npcsh` so powerful is the ability to pipe outputs
 ```npcsh
 npcsh> what is the gdp of russia in 2024? | /vixynt 'generate an image that contains {0}'
 
+### Executing Bash Commands
+You can execute bash commands directly within npcsh. The LLM can also generate and execute bash commands based on your natural language requests.
+For example:
+```npcsh
+npcsh> ls -l
+
+npcsh> cp file1.txt file2.txt
+npcsh> mv file1.txt file2.txt
+npcsh> mkdir new_directory
+npcsh> git status
+npcsh> vim file.txt
+
+```
+
+
 
 ## Macros
 
@@ -347,6 +362,67 @@ npcsh> /exit
 ```
 
 Otherwise, here are some more detailed examples of macros that can be used in npcsh:
+### Data Interaction and analysis
+Enter into data mode to load, manipulate, and query data from various file formats.
+```npcsh
+npcsh> /data
+data> load data.csv as df
+data> df.describe()
+```
+
+### Notes
+Jot down notes and store them within the npcsh database and in the current directory as a text file.
+```npcsh
+npcsh> /notes
+```
+
+
+### Over-the-shoulder: Screenshots and image analysis
+
+Use the /ots macro to take a screenshot and write a prompt for an LLM to answer about the screenshot.
+```npcsh
+npcsh> /ots
+
+Screenshot saved to: /home/caug/.npcsh/screenshots/screenshot_1735015011.png
+
+Enter a prompt for the LLM about this image (or press Enter to skip): describe whats in this image
+
+The image displays a source control graph, likely from a version control system like Git. It features a series of commits represented by colored dots connected by lines, illustrating the project's development history. Each commit message provides a brief description of the changes made, including tasks like fixing issues, merging pull requests, updating README files, and adjusting code or documentation. Notably, several commits mention specific users, particularly "Chris Agostino," indicating collaboration and contributions to the project. The graph visually represents the branching and merging of code changes.
+```
+
+Alternatively, pass an existing image in like :
+```npcsh
+npcsh> /ots test_data/catfight.PNG
+Enter a prompt for the LLM about this image (or press Enter to skip): whats in this ?
+
+The image features two cats, one calico and one orange tabby, playing with traditional Japanese-style toys. They are each holding sticks attached to colorful pom-pom balls, which resemble birds. The background includes stylized waves and a red sun, accentuating a vibrant, artistic style reminiscent of classic Japanese art. The playful interaction between the cats evokes a lively, whimsical scene.
+```
+
+
+### RAG
+
+Use the /rag macro to perform a local rag search.
+If you pass a `-f` flag with a filename or list of filenames (e.g. *.py) then it will embed the documents and perform the cosine similarity scoring.
+
+```npcsh
+npcsh> /rag -f *.py  what is the best way to implement a linked list in Python?
+```
+
+Alternatively , if you want to perform rag on your past conversations, you can do so like this:
+```npcsh
+npcsh> /rag  what is the best way to implement a linked list in Python?
+```
+and it will automatically look through the recorded conversations in the ~/npcsh_history.db
+
+
+### Sample
+Send a one-shot question to the LLM.
+```npcsh
+npcsh> /sample What is the capital of France?
+```
+
+
+
 
 ### Search
 Search can be accomplished through the `/search` macro. You can specify the provider as being "google" or "perplexity" or "duckduckgo".  The default is google.
@@ -369,8 +445,10 @@ Citation Links: https://usun.usmission.gov/our-leaders/the-president-of-the-unit
 https://www.whitehouse.gov/administration/
 https://www.instagram.com/potus/?hl=en
 https://en.wikipedia.org/wiki/President_of_the_United_States
-```
 
+
+
+```npcsh
 /home/caug/npcww/npcsh:npcsh!> /search -p perplexity who is the current us president
 The current President of the United States is Donald Trump, who assumed office on January 20, 2025, for his second non-consecutive term as the 47th president[1].
 
@@ -379,6 +457,13 @@ Citation Links: ['https://en.wikipedia.org/wiki/List_of_presidents_of_the_United
 'https://www.britannica.com/topic/Presidents-of-the-United-States-1846696',
 'https://news.gallup.com/poll/329384/presidential-approval-ratings-joe-biden.aspx',
 'https://www.usa.gov/presidents']
+```
+
+### Set: Changing defaults from within npcsh
+Users can change the default model and provider from within npcsh by using the following commands:
+```npcsh
+npcsh> /set model ollama
+npcsh> /set provider llama3.2
 ```
 
 
@@ -398,7 +483,7 @@ Start the spool mode with a specific npc
 npcsh> /spool npc=foreman
 ```
 
-Start the spool mode with specific files in context that will be referenced through rag searches when relevant.
+Start the spool mode with specific files in context that will be referenced through RAG searches when relevant.
 
 ```npcsh
 npcsh> /spool files=[*.py,*.md] # Load specific files for context
@@ -506,27 +591,6 @@ Start the spool with a specific llm model:
 npcsh> /spool model=llama3.3
 ```
 
-### Over-the-shoulder: Screenshots and image analysis
-
-Use the /ots macro to take a screenshot and write a prompt for an LLM to answer about the screenshot.
-```npcsh
-npcsh> /ots
-
-Screenshot saved to: /home/caug/.npcsh/screenshots/screenshot_1735015011.png
-
-Enter a prompt for the LLM about this image (or press Enter to skip): describe whats in this image
-
-The image displays a source control graph, likely from a version control system like Git. It features a series of commits represented by colored dots connected by lines, illustrating the project's development history. Each commit message provides a brief description of the changes made, including tasks like fixing issues, merging pull requests, updating README files, and adjusting code or documentation. Notably, several commits mention specific users, particularly "Chris Agostino," indicating collaboration and contributions to the project. The graph visually represents the branching and merging of code changes.
-```
-
-Alternatively, pass an existing image in like :
-```npcsh
-npcsh> /ots test_data/catfight.PNG
-Enter a prompt for the LLM about this image (or press Enter to skip): whats in this ?
-
-The image features two cats, one calico and one orange tabby, playing with traditional Japanese-style toys. They are each holding sticks attached to colorful pom-pom balls, which resemble birds. The background includes stylized waves and a red sun, accentuating a vibrant, artistic style reminiscent of classic Japanese art. The playful interaction between the cats evokes a lively, whimsical scene.
-```
-
 
 
 
@@ -546,26 +610,13 @@ npcsh> /vixynt A peaceful landscape @runwayml/stable-diffusion-v1-5
 
 
 
-### Voice Control
+### Whisper: Voice Control
 Enter into a voice-controlled mode to interact with the LLM. This mode can executet commands and use tools just like the basic npcsh shell.
 ```npcsh
 npcsh> /whisper
 ```
 
 
-### Executing Bash Commands
-You can execute bash commands directly within npcsh. The LLM can also generate and execute bash commands based on your natural language requests.
-For example:
-```npcsh
-npcsh> ls -l
-
-npcsh> cp file1.txt file2.txt
-npcsh> mv file1.txt file2.txt
-npcsh> mkdir new_directory
-npcsh> git status
-npcsh> vim file.txt
-
-```
 
 
 ### Compilation and NPC Interaction
@@ -580,26 +631,6 @@ Begin a conversations with a specified NPC by referencing their name
 npcsh> /<npc_name>:
 ```
 
-### Data Interaction and analysis
-Enter into data mode to load, manipulate, and query data from various file formats.
-```npcsh
-npcsh> /data
-data> load data.csv as df
-data> df.describe()
-```
-
-### Notes
-Jot down notes and store them within the npcsh database and in the current directory as a text file.
-```npcsh
-npcsh> /notes
-```
-
-### Changing defaults from within npcsh
-Users can change the default model and provider from within npcsh by using the following commands:
-```npcsh
-npcsh> /set model ollama
-npcsh> /set provider llama3.2
-```
 
 
 ## Creating NPCs

@@ -767,6 +767,7 @@ def execute_rag_command(
         else:  # This is part of the search term
             search_terms.append(part)
 
+    print(params)
     # -top_k  will also be a flaggable param
     if "-top_k" in params:
         top_k = int(params["-top_k"])

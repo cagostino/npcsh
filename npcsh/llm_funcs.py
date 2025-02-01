@@ -43,11 +43,14 @@ import typing_extensions as typing
 
 from pydantic import BaseModel, Field
 
+import google.generativeai as genai
+from typing import List, Dict, Optional
+import numpy as np
+from chromadb import Client
+
 EMBEDDINGS_DB_PATH = os.path.expanduser("~/npcsh_chroma.db")
 
 chroma_client = chromadb.PersistentClient(path=EMBEDDINGS_DB_PATH)
-
-import google.generativeai as genai
 
 
 # Load environment variables from .env file
@@ -167,27 +170,9 @@ def delete_embeddings_from_collection(collection, ids):
         collection.delete(ids=ids)  # Only delete if ids are provided
 
 
+
 def search_similar_texts(
     query: str,
-    docs_to_embed: List[List[str]] = None,
-    top_k: int = 5,
-    db_path: str = npcsh_vector_db_path,
-    embedding_model: str = NPCSH_EMBEDDING_MODEL,
-    embedding_provider: str = NPCSH_EMBEDDING_PROVIDER,
-) -> List[dict]:
-    """Search for similar texts in Chroma using KNN."""
-
-    embedded_search_term = get_ollama_embeddings([query], embedding_model)[0]
-    embedding_dim = len(embedded_search_term)
-
-
-from typing import List, Dict, Optional
-import numpy as np
-from chromadb import Client
-
-
-def search_similar_texts(
-    query_embedding: str,
     docs_to_embed: Optional[List[str]] = None,
     top_k: int = 5,
     db_path: str = npcsh_vector_db_path,
@@ -196,81 +181,67 @@ def search_similar_texts(
 ) -> List[Dict[str, any]]:
     """
     Search for similar texts using either a Chroma database or direct embedding comparison.
-    Now with detailed debugging for embedding failures.
     """
-    print(f"\nQuery to embed: {query_embedding}")
-    embedded_search_term = get_ollama_embeddings([query_embedding], embedding_model)[0]
-    embedding_dim = len(embedded_search_term)
-    print(f"Query embedding dimension: {embedding_dim}")
+
+    print(f"\nQuery to embed: {query}")
+    embedded_search_term = get_ollama_embeddings([query], embedding_model)[0]
+    print(f"Query embedding: {embedded_search_term}")
 
     if docs_to_embed is None:
+        # Fetch from the database if no documents to embed are provided
         collection_name = f"{embedding_provider}_{embedding_model}_embeddings"
         collection = chroma_client.get_collection(collection_name)
         results = collection.query(
             query_embeddings=[embedded_search_term], n_results=top_k
         )
+        # Constructing and returning results
         return [
             {"id": id, "score": float(distance), "text": document}
             for id, distance, document in zip(
                 results["ids"][0], results["distances"][0], results["documents"][0]
             )
         ]
-    else:
-        print(f"\nNumber of documents to embed: {len(docs_to_embed)}")
 
-        # Get embeddings with debug info
-        print("\nGetting embeddings...")
-        raw_embeddings = get_ollama_embeddings(docs_to_embed, embedding_model)
-        print(f"Got {len(raw_embeddings)} embeddings back")
+    print(f"\nNumber of documents to embed: {len(docs_to_embed)}")
 
-        # Debug embeddings
-        for idx, emb in enumerate(raw_embeddings):
-            if not isinstance(emb, (list, np.ndarray)) or len(emb) != embedding_dim:
-                print(f"\nInvalid embedding at index {idx}:")
-                print(f"Document: {repr(docs_to_embed[idx])[:100]}...")
-                print(f"Embedding type: {type(emb)}")
-                print(
-                    f"Embedding length: {len(emb) if isinstance(emb, (list, np.ndarray)) else 'N/A'}"
-                )
-                print(f"Expected dimension: {embedding_dim}")
-                raise ValueError(
-                    f"Document {idx} failed to embed properly:\n"
-                    f"Document content: {repr(docs_to_embed[idx])[:100]}...\n"
-                    f"Document type: {type(docs_to_embed[idx])}\n"
-                    f"Document length: {len(docs_to_embed[idx]) if isinstance(docs_to_embed[idx], (str, list, tuple)) else 'N/A'}\n"
-                    f"Embedding type: {type(emb)}\n"
-                    f"Embedding dimension: {len(emb) if isinstance(emb, (list, np.ndarray)) else 'N/A'}\n"
-                    f"Expected dimension: {embedding_dim}"
-                )
+    # Get embeddings for provided documents
+    raw_embeddings = get_ollama_embeddings(docs_to_embed, embedding_model)
 
-        doc_embeddings = np.array(raw_embeddings)
-        query_embedding_array = np.array(embedded_search_term)
+    output_embeddings = []
+    for idx, emb in enumerate(raw_embeddings):
+        if emb:  # Exclude any empty embeddings
+            output_embeddings.append(emb)
 
-        doc_norms = np.linalg.norm(doc_embeddings, axis=1)
-        query_norm = np.linalg.norm(query_embedding_array)
+    # Convert to numpy arrays for calculations
+    doc_embeddings = np.array(output_embeddings)
+    query_embedding = np.array(embedded_search_term)
 
-        if np.any(doc_norms == 0) or query_norm == 0:
-            zero_indices = np.where(doc_norms == 0)[0]
-            print("\nZero-length embeddings found at indices:", zero_indices)
-            for idx in zero_indices:
-                print(f"Document at index {idx}: {repr(docs_to_embed[idx])[:100]}...")
-            raise ValueError("Zero-length embedding vectors detected")
+    # Check for zero-length embeddings
+    if len(doc_embeddings) == 0:
+        raise ValueError("No valid document embeddings found")
 
-        cosine_similarities = np.dot(doc_embeddings, query_embedding_array) / (
-            doc_norms * query_norm
-        )
+    # Normalize embeddings to avoid division by zeros
+    doc_norms = np.linalg.norm(doc_embeddings, axis=1, keepdims=True)
+    query_norm = np.linalg.norm(query_embedding)
 
-        top_indices = np.argsort(cosine_similarities)[::-1][:top_k]
+    # Ensure no zero vectors are being used in cosine similarity
+    if query_norm == 0:
+        raise ValueError("Query embedding is zero-length")
 
-        return [
-            {
-                "id": str(idx),
-                "score": float(cosine_similarities[idx]),
-                "text": docs_to_embed[idx],
-            }
-            for idx in top_indices
-        ]
+    # Calculate cosine similarities
+    cosine_similarities = np.dot(doc_embeddings, query_embedding) / (doc_norms.flatten() * query_norm)
 
+    # Get indices of top K documents
+    top_indices = np.argsort(cosine_similarities)[::-1][:top_k]
+
+    return [
+        {
+            "id": str(idx),
+            "score": float(cosine_similarities[idx]),
+            "text": docs_to_embed[idx],
+        }
+        for idx in top_indices
+    ]
 
 def get_embeddings(
     texts: List[str],
