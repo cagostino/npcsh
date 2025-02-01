@@ -13,6 +13,7 @@ import anthropic
 import re
 from jinja2 import Environment, FileSystemLoader, Template, Undefined
 import PIL
+import numpy as np
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from diffusers import StableDiffusionPipeline
@@ -42,11 +43,14 @@ import typing_extensions as typing
 
 from pydantic import BaseModel, Field
 
+import google.generativeai as genai
+from typing import List, Dict, Optional
+import numpy as np
+from chromadb import Client
+
 EMBEDDINGS_DB_PATH = os.path.expanduser("~/npcsh_chroma.db")
 
 chroma_client = chromadb.PersistentClient(path=EMBEDDINGS_DB_PATH)
-
-import google.generativeai as genai
 
 
 # Load environment variables from .env file
@@ -166,31 +170,78 @@ def delete_embeddings_from_collection(collection, ids):
         collection.delete(ids=ids)  # Only delete if ids are provided
 
 
+
 def search_similar_texts(
-    query_embedding: List[float],
+    query: str,
+    docs_to_embed: Optional[List[str]] = None,
     top_k: int = 5,
     db_path: str = npcsh_vector_db_path,
     embedding_model: str = NPCSH_EMBEDDING_MODEL,
     embedding_provider: str = NPCSH_EMBEDDING_PROVIDER,
-) -> List[dict]:
-    """Search for similar texts in Chroma using KNN."""
-    collection_name = f"{embedding_provider}_{embedding_model}_embeddings"
-    collection = chroma_client.get_collection(collection_name)
+) -> List[Dict[str, any]]:
+    """
+    Search for similar texts using either a Chroma database or direct embedding comparison.
+    """
 
-    search_results = collection.query(query_embedding, n_results=top_k)
+    print(f"\nQuery to embed: {query}")
+    embedded_search_term = get_ollama_embeddings([query], embedding_model)[0]
+    print(f"Query embedding: {embedded_search_term}")
 
-    # Now access the results based on the actual keys in the search result
-    return [
-        {"id": result_id, "score": distance, "text": document}
-        for result_id, distance, document in zip(
-            search_results["ids"][
-                0
-            ],  # Get the list of IDs (assuming it's nested in a list)
-            search_results["distances"][0],  # Get the corresponding distances
-            search_results["documents"][0],  # Get the corresponding documents
+    if docs_to_embed is None:
+        # Fetch from the database if no documents to embed are provided
+        collection_name = f"{embedding_provider}_{embedding_model}_embeddings"
+        collection = chroma_client.get_collection(collection_name)
+        results = collection.query(
+            query_embeddings=[embedded_search_term], n_results=top_k
         )
-    ]
+        # Constructing and returning results
+        return [
+            {"id": id, "score": float(distance), "text": document}
+            for id, distance, document in zip(
+                results["ids"][0], results["distances"][0], results["documents"][0]
+            )
+        ]
 
+    print(f"\nNumber of documents to embed: {len(docs_to_embed)}")
+
+    # Get embeddings for provided documents
+    raw_embeddings = get_ollama_embeddings(docs_to_embed, embedding_model)
+
+    output_embeddings = []
+    for idx, emb in enumerate(raw_embeddings):
+        if emb:  # Exclude any empty embeddings
+            output_embeddings.append(emb)
+
+    # Convert to numpy arrays for calculations
+    doc_embeddings = np.array(output_embeddings)
+    query_embedding = np.array(embedded_search_term)
+
+    # Check for zero-length embeddings
+    if len(doc_embeddings) == 0:
+        raise ValueError("No valid document embeddings found")
+
+    # Normalize embeddings to avoid division by zeros
+    doc_norms = np.linalg.norm(doc_embeddings, axis=1, keepdims=True)
+    query_norm = np.linalg.norm(query_embedding)
+
+    # Ensure no zero vectors are being used in cosine similarity
+    if query_norm == 0:
+        raise ValueError("Query embedding is zero-length")
+
+    # Calculate cosine similarities
+    cosine_similarities = np.dot(doc_embeddings, query_embedding) / (doc_norms.flatten() * query_norm)
+
+    # Get indices of top K documents
+    top_indices = np.argsort(cosine_similarities)[::-1][:top_k]
+
+    return [
+        {
+            "id": str(idx),
+            "score": float(cosine_similarities[idx]),
+            "text": docs_to_embed[idx],
+        }
+        for idx in top_indices
+    ]
 
 def get_embeddings(
     texts: List[str],
@@ -210,16 +261,6 @@ def get_embeddings(
     # Store the embeddings in the relevant Chroma collection
     # store_embeddings_for_model(texts, embeddings, model, provider)
     return embeddings
-
-
-def extract_relevant_data(content: str, search_term: str) -> str:
-    """Extract relevant information based on a search term."""
-    # A naive implementation just to illustrate. This should be improved based on your needs.
-    lines = content.split("\n")
-    relevant_data = "\n".join(
-        [line for line in lines if search_term.lower() in line.lower()]
-    )
-    return relevant_data if relevant_data else "No relevant information found."
 
 
 def get_model_and_provider(command: str, available_models: list) -> tuple:
