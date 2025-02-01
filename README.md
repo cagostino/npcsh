@@ -337,6 +337,10 @@ and then the associated image :
 
 
 
+
+
+
+
 ### Piping outputs
 An important facet that makes `npcsh` so powerful is the ability to pipe outputs from one tool call to another. This allows for the chaining of commands and the creation of complex workflows. For example, you can use the output of a search to generate an image, or you can use the output of an image analysis to generate a report. Here is an example of how this might look in practice:
 ```npcsh
@@ -360,7 +364,8 @@ npcsh> vim file.txt
 
 ## Macros
 
-While npcsh can decide the best tool to use based on the user's input, the user can also specify certain tools to use with a macro. Macros are commands that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros.
+While npcsh can decide the best option to use based on the user's input, the user can also execute certain actions with a macro. Macros are commands that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros.
+
 To learn about them from within the shell, type:
 ```npcsh
 npcsh> /help
@@ -699,6 +704,22 @@ postprocess:
       Screenshot captured and saved as {{ filename }}.
       Analysis Result: {{ llm_output }}
 ```
+
+
+When you have created a tool, it will be surfaced as a potential option to be used when you ask a question in the base npcsh shell. The LLM will decide if it is the best tool to use based on the user's input. Alternatively, if you'd like, you can call the tools directly, without needing to let the AI decide if it's the right one to use.
+
+  ```npcsh
+  npcsh> /screen_cap_tool <prompt>
+  ```
+  or
+  ```npcsh
+  npcsh> /sql_executor select * from conversation_history limit 1
+
+  ```
+  or
+  ```npcsh
+  npcsh> /calculator 5+6
+  ```
 
 
 ## NPC Pipelines
@@ -1197,10 +1218,10 @@ print('Tool Output:', output)
 
 
 ## Contributing
-Contributions are welcome! Please submit issues and pull requests on the GitHub repository. 
+Contributions are welcome! Please submit issues and pull requests on the GitHub repository.
 
 ## Support
-If you appreciate the work here, consider supporting NPC Worldwide : ![buy me a coffee] (https://buymeacoffee.com/npcworldwide) . 
+If you appreciate the work here, consider supporting NPC Worldwide : ![buy me a coffee] (https://buymeacoffee.com/npcworldwide) .
 If you'd like to explore how to use `npcsh` to help your business, please reach out to info@npcworldwi.de .
 
 
