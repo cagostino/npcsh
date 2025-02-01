@@ -47,7 +47,14 @@ from .llm_funcs import (
     chroma_client,
 )
 from .helpers import get_db_npcs, get_directory_npcs, get_npc_path
-from .npc_compiler import NPCCompiler, NPC, load_npc_from_file, PipelineRunner
+from .npc_compiler import (
+    NPCCompiler,
+    NPC,
+    load_npc_from_file,
+    PipelineRunner,
+    Tool,
+    load_tools_from_directory,
+)
 
 from .search import rag_search, search_web
 from .image import capture_screenshot, analyze_image
@@ -767,7 +774,7 @@ def execute_rag_command(
         else:  # This is part of the search term
             search_terms.append(part)
 
-    print(params)
+    # print(params)
     # -top_k  will also be a flaggable param
     if "-top_k" in params:
         top_k = int(params["-top_k"])
@@ -972,6 +979,84 @@ def execute_search_command(
     }
 
 
+def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
+    inputs = {}
+
+    # Create flag mapping
+    flag_mapping = {}
+    for input_ in tool.inputs:
+        if isinstance(input_, str):
+            flag_mapping[f"-{input_[0]}"] = input_
+            flag_mapping[f"--{input_}"] = input_
+        elif isinstance(input_, dict):
+            key = list(input_.keys())[0]
+            flag_mapping[f"-{key[0]}"] = key
+            flag_mapping[f"--{key}"] = key
+
+    # Process arguments
+    for i, arg in enumerate(args):
+        if arg in flag_mapping:
+            # If flag is found, next argument is its value
+            if i + 1 < len(args):
+                input_name = flag_mapping[arg]
+                inputs[input_name] = args[i + 1]
+            else:
+                print(f"Warning: {arg} flag is missing a value.")
+
+        # If no flags used, combine all args for first input
+        elif not inputs and tool.inputs:
+            first_input = tool.inputs[0]
+            if isinstance(first_input, str):
+                inputs[first_input] = " ".join(args)
+            elif isinstance(first_input, dict):
+                key = list(first_input.keys())[0]
+                inputs[key] = " ".join(args)
+            break
+
+    # Add default values for inputs not provided
+    for input_ in tool.inputs:
+        if isinstance(input_, str):
+            if input_ not in inputs:
+                raise ValueError(f"Missing required input: {input_}")
+        elif isinstance(input_, dict):
+            key = list(input_.keys())[0]
+            if key not in inputs:
+                inputs[key] = input_[key]
+
+    return inputs
+
+
+def execute_tool_command(
+    tool: Tool,
+    args: List[str],
+    npc_compiler: NPCCompiler,
+    db_conn: sqlite3.Connection,
+    messages=None,
+    npc: NPC = None,
+    model: str = None,
+    provider: str = None,
+    conversation_id: str = None,
+) -> Dict[str, Any]:
+    """
+    Execute a tool command with the given arguments.
+    """
+    # Extract inputs for the current tool
+    input_values = extract_tool_inputs(args, tool)
+
+    # print(f"Input values: {input_values}")
+    # Execute the tool with the extracted inputs
+
+    tool_output = tool.execute(
+        input_values,
+        npc_compiler.tools_dict,
+        npc_compiler.jinja_env,
+        tool.tool_name,
+        npc=npc,
+    )
+
+    return {"messages": messages, "output": tool_output}
+
+
 def execute_slash_command(
     command: str,
     command_history: CommandHistory,
@@ -1002,6 +1087,7 @@ def execute_slash_command(
     Returns:
         dict : dict : Dictionary
     """
+    tools = npc_compiler.tools
 
     command = command[1:]
 
@@ -1056,7 +1142,28 @@ def execute_slash_command(
 
             output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
             print(output)
+    elif command_name == "tools":
 
+        output = "Available tools:"
+        for tool in tools:
+            output += f"  {tool.tool_name}"
+            output += f"   Description: {tool.description}"
+            output += f"   Inputs: {tool.inputs}"
+        return {"messages": messages, "output": output}
+    elif command_name in [tool.tool_name for tool in tools]:
+        tool = next((tool for tool in tools if tool.tool_name == command_name), None)
+
+        return execute_tool_command(
+            tool,
+            args,
+            npc_compiler,
+            db_conn,
+            messages,
+            npc=npc,
+            model=model,
+            provider=provider,
+            conversation_id=conversation_id,
+        )
     elif command_name == "flush":
         n = float("inf")  # Default to infinite
         for arg in args:
@@ -1740,8 +1847,7 @@ def execute_command(
                                 colored_line = " ".join(parts[:-1] + [colored_filepath])
                                 colored_output += colored_line + "\n"
                             else:
-                                colored_output += line + "\n"
-
+                                colored_output += line
                         output = colored_output.rstrip()
 
                         if not output and result.returncode == 0:

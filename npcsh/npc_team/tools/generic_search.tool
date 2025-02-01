@@ -1,4 +1,4 @@
-tool_name: "generic_search_tool"
+tool_name: "generic_search"
 description: Searches the web for information based on a query
 inputs:
   - "query"

@@ -55,7 +55,7 @@ from .shell_helpers import (
     execute_command,
     orange,  # For colored prompt
 )
-from .npc_compiler import NPCCompiler
+from .npc_compiler import NPCCompiler, load_tools_from_directory
 
 import argparse
 from .serve import (
