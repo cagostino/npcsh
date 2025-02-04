@@ -7,21 +7,66 @@ import pandas as pd
 import pytest
 import json
 from npcsh.llm_funcs import (
-    get_openai_response,
+    get_stream,
+    get_anthropic_stream,
+    get_anthropic_response,
+    generate_image_anthropic,
+    get_deepseek_response,
+    get_deepseek_stream,
     get_gemini_response,
     generate_image_gemini,
-    get_deepseek_response,
     get_ollama_response,
-    get_anthropic_response,
-    get_openai_like_response,
+    get_ollama_stream,
     generate_image_ollama,
+    get_openai_response,
+    get_openai_stream,
+    get_gemini_stream,
+    get_openai_like_stream,
+    get_openai_like_response,
     generate_image_openai,
-    generate_image_anthropic,
     generate_image_openai_like,
     get_llm_response,
     execute_llm_command,
     check_llm_command,
 )
+import pytest
+from npcsh.llm_funcs import get_stream  # Adjust with your actual import path
+
+# You can define global variables or fixtures if needed
+
+
+def test_get_anthropic_stream():
+    messages = [
+        {
+            "role": "user",
+            "content": "Can you write a script that counts the number of windows in new york city",
+        }
+    ]
+    model = "claude-3-5-haiku-latest"  # Replace with your actual model name
+    response = get_stream(messages, model=model, provider="anthropic")
+    for resp in response:
+        if hasattr(resp, "delta") and hasattr(resp.delta, "text"):
+            print(resp.delta.text, end="", flush=True)
+
+
+def test_get_openai_stream():
+    messages = [{"role": "user", "content": "what is the meaning of a star being red."}]
+    model = "gpt-4o-mini"
+    response = get_stream(messages, model=model, provider="openai")
+    for resp in response:
+        if resp.choices:
+            for choice in resp.choices:
+                if choice.delta.content:
+                    print(choice.delta.content, end="", flush=True)
+
+
+def test_get_ollama_stream():
+    # Define your messages
+    messages = [{"role": "user", "content": "What is the current weather?"}]
+    model = "llama3.2"  # Replace with your actual model name
+
+    # Call the function and check the type of response
+    response = get_stream(messages, model=model, provider="ollama")
 
 
 def test_get_gemini_response():

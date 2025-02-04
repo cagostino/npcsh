@@ -1026,6 +1026,23 @@ def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
     return inputs
 
 
+import math
+from PIL import Image
+
+
+def resize_image_tars(image_path):
+    image = Image.open(image_path)
+    max_pixels = 6000 * 28 * 28
+    if image.width * image.height > max_pixels:
+        max_pixels = 2700 * 28 * 28
+    else:
+        max_pixels = 1340 * 28 * 28
+    resize_factor = math.sqrt(max_pixels / (image.width * image.height))
+    width, height = int(image.width * resize_factor), int(image.height * resize_factor)
+    image = image.resize((width, height))
+    image.save(image_path, format="png")
+
+
 def execute_tool_command(
     tool: Tool,
     args: List[str],
@@ -1055,6 +1072,67 @@ def execute_tool_command(
     )
 
     return {"messages": messages, "output": tool_output}
+
+
+def enter_computer_use_mode(
+    command,
+    command_history,
+    db_path,
+    npc_compiler,
+    npc,
+    messages=None,
+    model=None,
+    provider=None,
+    conversation_id=None,
+):
+    """
+    Function Description:
+        Enters computer use mode.
+    Args:
+        command : str : Command
+        command_history : CommandHistory : Command history
+        db_path : str : Database path
+        npc_compiler : NPCCompiler : NPC compiler
+        npc : NPC : NPC
+    Keyword Args:
+        messages : None : Messages
+        model : None : Model
+        provider : None : Provider
+        conversation_id : None : Conversation ID
+    Returns:
+        dict : dict : Dictionary
+    """
+    # start the tars model
+
+    # set up the tars prompt
+    prompt = r"""You are a GUI agent.
+                 You are given a task and your action history,
+                 with screenshots.
+                 You need to perform the next action to complete the task.
+
+
+
+
+        ## Action Space
+        click(start_box='<|box_start|>(x1,y1)<|box_end|>')
+        left_double(start_box='<|box_start|>(x1,y1)<|box_end|>')
+        right_single(start_box='<|box_start|>(x1,y1)<|box_end|>')
+        drag(start_box='<|box_start|>(x1,y1)<|box_end|>', end_box='<|box_start|>(x3,y3)<|box_end|>')
+        hotkey(key='')
+        type(content='') #If you want to submit your input, use \"\
+        \" at the end of `content`.
+        scroll(start_box='<|box_start|>(x1,y1)<|box_end|>', direction='down or up or right or left')
+        wait() #Sleep for 5s and take a screenshot to check for any changes.
+        finished()
+        call_user() # Submit the task and call the user when the task is unsolvable, or when you need the user's help.
+        ## Note
+
+        - Summarize your intended action (with its target element) with a list of actions.
+        The fewer the better, only use multiple in one go if you feel it will work without
+        failure.
+
+
+        """
 
 
 def execute_slash_command(

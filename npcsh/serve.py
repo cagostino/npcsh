@@ -1,10 +1,14 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import os
 import sqlite3
 from datetime import datetime
 import json
 from pathlib import Path
+
+from flask_sse import sse
+
+import redis
 
 # compress the image
 from PIL import Image
@@ -18,6 +22,7 @@ from .npc_compiler import NPCCompiler
 from .llm_funcs import (
     check_llm_command,
     get_model_and_provider,
+    get_stream,
     get_available_models,
 )
 from .helpers import get_db_npcs, get_directory_npcs, get_npc_path
@@ -34,12 +39,35 @@ project_npc_directory = os.path.abspath("./npc_team")
 npc_compiler = NPCCompiler(project_npc_directory, db_path)
 
 app = Flask(__name__)
+app.config["REDIS_URL"] = "redis://localhost:6379"
+app.register_blueprint(sse, url_prefix="/stream")
+
+redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+
 CORS(
     app,
     allow_headers=["Content-Type", "Authorization"],
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     supports_credentials=True,
 )
+
+
+@app.route("/api/stream", methods=["POST"])
+def stream():
+    """SSE stream that takes messages, model, and provider from frontend."""
+    data = request.json
+    messages = data.get("messages", [])
+    model = data.get("model", None)
+    provider = data.get("provider", None)
+
+    if not messages:
+        return jsonify({"error": "No messages provided"}), 400
+
+    def event_stream():
+        for response_chunk in get_stream(messages, model=model, provider=provider):
+            yield response_chunk
+
+    return Response(event_stream(), mimetype="text/event-stream")
 
 
 @app.after_request

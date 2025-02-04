@@ -57,10 +57,13 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.2.33",
+    version="0.2.34",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
+        "redis",
+        "flask_sse",
         "anthropic",
+        "screeninfo",
         "sentence_transformers",
         "nltk",
         "beautifulsoup4",

@@ -15,7 +15,7 @@ from jinja2 import Environment, FileSystemLoader, Template, Undefined
 import PIL
 import numpy as np
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Generator
 from diffusers import StableDiffusionPipeline
 import base64
 import subprocess
@@ -170,7 +170,6 @@ def delete_embeddings_from_collection(collection, ids):
         collection.delete(ids=ids)  # Only delete if ids are provided
 
 
-
 def search_similar_texts(
     query: str,
     docs_to_embed: Optional[List[str]] = None,
@@ -229,7 +228,9 @@ def search_similar_texts(
         raise ValueError("Query embedding is zero-length")
 
     # Calculate cosine similarities
-    cosine_similarities = np.dot(doc_embeddings, query_embedding) / (doc_norms.flatten() * query_norm)
+    cosine_similarities = np.dot(doc_embeddings, query_embedding) / (
+        doc_norms.flatten() * query_norm
+    )
 
     # Get indices of top K documents
     top_indices = np.argsort(cosine_similarities)[::-1][:top_k]
@@ -242,6 +243,7 @@ def search_similar_texts(
         }
         for idx in top_indices
     ]
+
 
 def get_embeddings(
     texts: List[str],
@@ -754,7 +756,9 @@ def get_system_message(npc: Any) -> str:
 
 
 def get_ollama_conversation(
-    messages: List[Dict[str, str]], model: str, npc: Any = None
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -778,6 +782,192 @@ def get_ollama_conversation(
     messages_copy.append(response["message"])
     return messages_copy
 
+
+def get_anthropic_stream(
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    api_key: str = None,
+    **kwargs,
+) -> Generator[str, None, None]:
+    """Streams responses from Anthropic, yielding raw text chunks."""
+    messages_copy = messages.copy()
+
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+    if api_key is None:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    response = client.messages.create(
+        model=model,
+        system=system_message,
+        messages=messages,
+        max_tokens=8192,
+        stream=True,
+    )
+    for chunk in response:
+        if hasattr(chunk, "delta") and hasattr(chunk.delta, "text"):
+            yield chunk.delta.text  # Extracts raw text
+
+
+def get_ollama_stream(
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    **kwargs,
+) -> Generator[str, None, None]:
+    """Streams responses from Ollama, yielding raw text chunks."""
+    messages_copy = messages.copy()
+    if messages_copy[0]["role"] != "system":
+        if npc is not None:
+            system_message = get_system_message(npc)
+            messages_copy.insert(0, {"role": "system", "content": system_message})
+
+    response = ollama.chat(model=model, messages=messages_copy, stream=True)
+
+    for chunk in response:
+        if isinstance(chunk, dict) and "message" in chunk:
+            yield chunk["message"]  # Extracts raw text
+
+
+def get_openai_stream(
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    api_key: str = None,
+) -> Generator[str, None, None]:
+    """Streams responses from OpenAI, yielding raw text chunks."""
+    if api_key is None:
+        api_key = os.environ["OPENAI_API_KEY"]
+    client = OpenAI(api_key=api_key)
+
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+
+    if messages is None:
+        messages = []
+    if not any(msg["role"] == "system" for msg in messages):
+        messages.insert(0, {"role": "system", "content": system_message})
+
+    completion = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        stream=True,
+    )
+
+    for chunk in completion:
+        if chunk.choices:
+            for choice in chunk.choices:
+                if choice.delta.content:
+                    yield choice.delta.content  # Extracts raw text
+
+
+def get_openai_like_stream(
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    api_key: str = None,
+    api_url: str = None,
+) -> List[Dict[str, str]]:
+    """
+    Function Description:
+        This function generates a conversation using the OpenAI API.
+    Args:
+        messages (List[Dict[str, str]]): The list of messages in the conversation.
+        model (str): The model to use for the conversation.
+    Keyword Args:
+        npc (Any): The NPC object.
+        api_key (str): The API key for accessing the OpenAI API.
+    Returns:
+        List[Dict[str, str]]: The list of messages in the conversation.
+    """
+
+    client = OpenAI(api_key=api_key, base_url=api_url)
+
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+
+    if messages is None:
+        messages = []
+
+    # Ensure the system message is at the beginning
+    if not any(msg["role"] == "system" for msg in messages):
+        messages.insert(0, {"role": "system", "content": system_message})
+
+    # messages should already include the user's latest message
+
+    # Make the API call with the messages including the latest user input
+    completion = client.chat.completions.create(
+        model=model, messages=messages, stream=True, **kwargs
+    )
+
+    for chunk in completion:
+        yield chunk
+
+
+def get_deepseek_stream(
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    api_key: str = None,
+    **kwargs,
+) -> List[Dict[str, str]]:
+    """
+    Function Description:
+        This function generates a conversation using the Deepseek API.
+    Args:
+        messages (List[Dict[str, str]]): The list of messages in the conversation.
+        model (str): The model to use for the conversation.
+    Keyword Args:
+        npc (Any): The NPC object.
+        api_key (str): The API key for accessing the Deepseek API.
+    Returns:
+        List[Dict[str, str]]: The list of messages in the conversation.
+    """
+    if api_key is None:
+        api_key = os.environ["DEEPSEEK_API_KEY"]
+    client = deepseek.Deepseek(api_key=api_key)
+
+    system_message = get_system_message(npc) if npc else ""
+
+    messages_copy = messages.copy()
+    if messages_copy[0]["role"] != "system":
+        messages_copy.insert(0, {"role": "system", "content": system_message})
+
+    completion = client.messages.create(
+        model=model,
+        max_tokens=1024,
+        messages=messages_copy,
+        stream = True,
+        **kwargs,  # Include any additional keyword arguments
+    )
+
+    for response in completion:
+        yield response
+
+
+
+def get_gemini_stream(
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    api_key: str = None,
+    **kwargs,
+) -> List[Dict[str, str]]:
+    """
+    Function Description:
+        This function generates a conversation using the Gemini API.
+    Args:
+        messages (List[Dict[str, str]]): The list of messages in the conversation.
+        model (str): The model to use for the conversation.
+    Keyword Args:
+        npc (Any): The NPC object.
+        api_key (str): The API key for accessing the Gemini API.
+    Returns:
+        List[Dict[str, str]]: The list of messages in the conversation.
+
+    """
+
+    return
 
 def get_openai_conversation(
     messages: List[Dict[str, str]],
@@ -1021,6 +1211,62 @@ def get_conversation(
     elif provider == "deepseek":
         return get_deepseek_conversation(messages, model, npc=npc, **kwargs)
 
+    else:
+        return "Error: Invalid provider specified."
+
+
+def get_stream(
+    messages: List[Dict[str, str]],
+    provider: str = npcsh_provider,
+    model: str = npcsh_model,
+    npc: Any = None,
+    api_url: str = None,
+    api_key: str = None,
+    **kwargs,
+) -> List[Dict[str, str]]:
+    """
+    Function Description:
+        This function generates a streaming response using the specified provider and model
+    Args:
+        messages (List[Dict[str, str]]): The list of messages in the conversation.
+    Keyword Args:
+        provider (str): The provider to use for the conversation.
+        model (str): The model to use for the conversation.
+        npc (Any): The NPC object.
+        api_url (str): The URL of the API endpoint.
+        api_key (str): The API key for accessing the API.
+    Returns:
+        List[Dict[str, str]]: The list of messages in the conversation.
+    """
+    if model is not None and provider is not None:
+        pass
+    elif model is not None and provider is None:
+        provider = lookup_provider(model)
+    elif npc is not None:
+        if npc.provider is not None:
+            provider = npc.provider
+        if npc.model is not None:
+            model = npc.model
+        if npc.api_url is not None:
+            api_url = npc.api_url
+    else:
+        provider = "ollama"
+        model = "llama3.2"
+    print(model, provider)
+    if provider == "ollama":
+        return get_ollama_stream(messages, model, npc=npc, **kwargs)
+    elif provider == "openai":
+        return get_openai_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
+    elif provider == "anthropic":
+        return get_anthropic_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
+    elif provider == "openai-like":
+        return get_openai_like_stream(
+            messages, model, npc=npc, api_url=api_url, api_key=api_key, **kwargs
+        )
+    elif provider == "deepseek":
+        return get_deepseek_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
+    elif provider == "gemini":
+        return get_gemini_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
     else:
         return "Error: Invalid provider specified."
 
@@ -1351,7 +1597,9 @@ def get_gemini_response(
 
 
 def get_gemini_conversation(
-    messages: List[Dict[str, str]], model: str, npc: Any = None
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
