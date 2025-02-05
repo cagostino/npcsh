@@ -57,7 +57,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.2.34",
+    version="0.2.35",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "redis",
@@ -86,7 +86,7 @@ setup(
         "PyYAML",
         "langchain",
         "langchain_community",
-        "openai-whisper",
+        # "openai-whisper",
         "pyaudio",
         "pygments",
         "pyttsx3",
