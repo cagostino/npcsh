@@ -57,7 +57,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.2.35",
+    version="0.2.36",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "redis",
@@ -73,7 +73,6 @@ setup(
         "pypdf",
         "PyMuPDF",
         "opencv-python",
-        "librosa",
         "openai",
         "jinja2",
         "pyautogui",
@@ -86,6 +85,7 @@ setup(
         "PyYAML",
         "langchain",
         "langchain_community",
+        # "librosa",
         # "openai-whisper",
         "pyaudio",
         "pygments",
