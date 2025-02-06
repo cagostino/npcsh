@@ -1023,6 +1023,12 @@ When npcsh is installed, it comes with the `npc` cli as well. The `npc` cli has 
 
 ### Serving
 To serve an NPC project, navigate to the project directory and run:
+sudo apt update && sudo apt install redis-server  # Ubuntu/Debian
+
+redis-server
+
+
+
 ```bash
 npc serve
 ```
@@ -1033,6 +1039,7 @@ npc serve -p 5337
 or with the `--port` flag:
 ```bash
 npc serve --port 5337
+
 ```
 
 Once the server is up and running, you can access the API endpoints at `http://localhost:5337/api/`. Here are some example curl commands to test the endpoints:
