@@ -1258,8 +1258,7 @@ SELECT debate(['logician','magician'], 'Analyze the sentiment of the customer fe
 Contributions are welcome! Please submit issues and pull requests on the GitHub repository.
 
 ## Support
-If you appreciate the work here, consider supporting NPC Worldwide : ![buy me a coffee] (https://buymeacoffee.com/npcworldwide) .
-If you'd like to explore how to use `npcsh` to help your business, please reach out to info@npcworldwi.de .
+If you appreciate the work here, [consider supporting NPC Worldwide](https://buymeacoffee.com/npcworldwide). If you'd like to explore how to use `npcsh` to help your business, please reach out to info@npcworldwi.de .
 
 
 ## NPC Studio
