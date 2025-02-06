@@ -20,7 +20,8 @@
 
 * **Bash Wrapper:** Execute bash commands directly without leaving the shell. Use your favorite command-line tools like VIM, Emacs, ipython, sqlite3, git, and more without leaving the shell!
 
-* **Computer Use:** Use Plonk
+* **Computer Use:** Use Plonk to allow an LLM to control your computer.
+
 
 
 Interested to stay in the loop and to hear the latest and greatest about `npcsh` ? Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A)!
@@ -414,6 +415,12 @@ npcsh> /ots test_data/catfight.PNG
 Enter a prompt for the LLM about this image (or press Enter to skip): whats in this ?
 
 The image features two cats, one calico and one orange tabby, playing with traditional Japanese-style toys. They are each holding sticks attached to colorful pom-pom balls, which resemble birds. The background includes stylized waves and a red sun, accentuating a vibrant, artistic style reminiscent of classic Japanese art. The playful interaction between the cats evokes a lively, whimsical scene.
+```
+
+### Plonk : Computer Control
+Use the /plonk macro to allow the LLM to control your computer.
+```npcsh
+npcsh> /plonk go to a web browser and  go to wikipedia and find out information about simon bolivar
 ```
 
 
