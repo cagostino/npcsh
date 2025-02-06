@@ -27,6 +27,10 @@ Interested to stay in the loop and to hear the latest and greatest about `npcsh`
 
 [![Star History Chart](https://api.star-history.com/svg?repos=cagostino/npcsh&type=Date)](https://star-history.com/#cagostino/npcsh&Date)
 
+## Docs
+Check out the docs at [npcsh.readthedocs.io](https://npcsh.readthedocs.io/en/latest/)
+
+
 ## Installation
 `npcsh` is available on PyPI and can be installed using pip. Before installing, make sure you have the necessary dependencies installed on your system. Below are the instructions for installing such dependencies on Linux, Mac, and (soon-to-be) Windows. If you find any other dependencies that are needed, please let us know so we can update the installation instructions to be more accommodating.
 
