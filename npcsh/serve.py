@@ -25,6 +25,7 @@ from .llm_funcs import (
     get_stream,
     get_available_models,
 )
+from .image import capture_screenshot
 from .helpers import get_db_npcs, get_directory_npcs, get_npc_path
 from .npc_compiler import load_npc_from_file
 from .shell_helpers import execute_command
@@ -50,6 +51,19 @@ CORS(
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     supports_credentials=True,
 )
+
+
+@app.route("/api/capture_screenshot", methods=["GET"])
+def capture():
+    # Capture screenshot using NPC-based method
+    screenshot = capture_screenshot(None, full=True)
+
+    # Ensure screenshot was captured successfully
+    if not screenshot:
+        print("Screenshot capture failed")
+        return None
+
+    return jsonify({"screenshot": screenshot})
 
 
 @app.route("/api/stream", methods=["POST"])

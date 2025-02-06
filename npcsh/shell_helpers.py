@@ -46,6 +46,7 @@ from .llm_funcs import (
     search_similar_texts,
     chroma_client,
 )
+from .plonk import plonk, perform_action, action_space
 from .helpers import get_db_npcs, get_directory_npcs, get_npc_path
 from .npc_compiler import (
     NPCCompiler,
@@ -824,7 +825,6 @@ def execute_rag_command(
                 ".doc",
                 ".xls",
             ]:
-
                 if extension == ".csv":
                     df = pd.read_csv(filename)
                     file_texts = df.apply(
@@ -1221,13 +1221,18 @@ def execute_slash_command(
             output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
             print(output)
     elif command_name == "tools":
-
         output = "Available tools:"
         for tool in tools:
             output += f"  {tool.tool_name}"
             output += f"   Description: {tool.description}"
             output += f"   Inputs: {tool.inputs}"
         return {"messages": messages, "output": output}
+    elif command_name == "plonk":
+        request = " ".join(args)
+        plonk_call = plonk(
+            request, action_space, model=model, provider=provider, npc=npc
+        )
+        return {"messages": messages, "output": plonk_call}
     elif command_name in [tool.tool_name for tool in tools]:
         tool = next((tool for tool in tools if tool.tool_name == command_name), None)
 
@@ -1456,7 +1461,6 @@ Bash commands and other programs can be executed directly."""
                 "output": "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' ",
             }
     elif command_name == "search":
-
         output = execute_search_command(
             command,
             command_history,

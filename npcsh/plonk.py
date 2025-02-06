@@ -6,6 +6,28 @@ from .image import capture_screenshot
 from .llm_funcs import get_llm_response
 
 import subprocess
+import os
+import pyautogui
+import time
+from typing import Any
+
+action_space = {
+    "hotkey": {"key": "string"},  # For pressing hotkeys
+    "click": {
+        "x": "int between 0 and 100",
+        "y": "int between 0 and 100",
+    },  # For clicking
+    "drag": {
+        "x": "int between 0 and 100",
+        "y": "int between 0 and 100",
+        "duration": "int",
+    },  # For dragging
+    "wait": {"duration": "int"},  # For waiting
+    "type": {"text": "string"},
+    "right_click": {"x": "int between 0 and 100", "y": "int between 0 and 100"},
+    "double_click": {"x": "int between 0 and 100", "y": "int between 0 and 100"},
+    "bash": {"command": "string"},
+}
 
 
 def perform_action(action):
@@ -35,13 +57,13 @@ def perform_action(action):
             )
 
         elif action["type"] == "type":
-            text = action.get("parameters", "")
+            text = action.get("text", "")
             if isinstance(text, dict):
                 text = text.get("text", "")
             pyautogui.typewrite(text)
 
         elif action["type"] == "hotkey":
-            keys = action.get("parameters", "")
+            keys = action.get("text", "")
             print(f"Hotkey action: {keys}")  # Debug print
             if isinstance(keys, str):
                 keys = [keys]
@@ -73,7 +95,7 @@ def plonk(request, action_space, model=None, provider=None, npc=None):
 
     Args:
         request (str): The task to be performed
-        action_space (list): Available action types
+        action_space (dict): Available action types and the inputs they require
         npc (optional): NPC object for context and screenshot
         **kwargs: Additional arguments for LLM response
     """
@@ -103,7 +125,7 @@ def plonk(request, action_space, model=None, provider=None, npc=None):
             "actions": [
                 {{"type":"bash", "command":"firefox &"}},
                 {{"type": "click", "x": 5, "y": 5}},
-                {{'type': 'type', 'parameters': 'https://www.google.com'}}
+                {{'type': 'type', 'text': 'https://www.google.com'}}
                 ]
                 }}
 
@@ -154,28 +176,11 @@ def plonk(request, action_space, model=None, provider=None, npc=None):
         time.sleep(1)
 
 
-import os
-import pyautogui
-import time
-from typing import Any
-
-
 def test_open_reddit(npc: Any = None):
     """
     Test function to open a web browser and navigate to Reddit using plonk
     """
     # Define the action space for web navigation
-    action_space = [
-        "hotkey",  # For keyboard shortcuts
-        "type",  # For typing URLs
-        "click",  # For mouse clicks
-        "drag",  # For mouse drags
-        "wait",  # For waiting
-        "type",
-        "right_click",
-        "double_click",
-        "bash",
-    ]
 
     # Request to navigate to Reddit
     request = "Open a web browser and go to reddit.com"
