@@ -6,21 +6,19 @@
 # npcsh
 
 
-- `npcsh` is a python-based command-line tool designed to integrate Large Language Models (LLMs) into one's daily workflow by making them available through the command line shell.
+- `npcsh` is a python-based command-line tool designed to integrate Large Language Models (LLMs) and Agents into one's daily workflow by making them available and easily configurable through the command line shell.
 
 - **Smart Interpreter**: `npcsh` leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web.
 
-- **Macros**: `npcsh` provides macros to accomplish common tasks with LLMs like voice control (`/whisper`), image generation (`/vixynt`), screenshot capture and analysis (`/ots`), one-shot questions (`/sample`), and more.
+- **Macros**: `npcsh` provides macros to accomplish common tasks with LLMs like voice control (`/whisper`), image generation (`/vixynt`), screenshot capture and analysis (`/ots`), one-shot questions (`/sample`), computer use (`/plonk`),  retrieval augmented generation (`/rag`), search (`/search`) and more.
 
-- **NPC-Driven Interactions**: `npcsh` allows users to coordinate agents (i.e. NPCs) to form assembly lines that can reliably accomplish complicated multi-step procedures. Define custom "NPCs" (Non-Player Characters) with specific personalities, directives, and tools. This allows for tailored interactions based on the task at hand.
+- **NPC-Driven Interactions**: `npcsh` allows users to take advantage of agents (i.e. NPCs) through a managed system. Users build a directory of NPCs and associated tools that can be used to accomplish complex tasks and workflows. NPCs can be tailored to specific tasks and have unique personalities, directives, and tools. Users can combine NPCs and tools in assembly line like workflows or use them in SQL-style models.
 
-* **Tool Use:** Define custom tools for your NPCs to use, expanding their capabilities beyond simple commands and questions. Some example tools include: image generation, local file search, data analysis, web search, local file search, bash command execution, and more.
+* **Extensible with Python:**  `npcsh`'s python package provides useful functions for interacting with LLMs, including explicit coverage for popular providers like ollama, anthropic, openai, gemini, deepseek, and openai-like providers. Each macro has a corresponding function and these can be used in python scripts. `npcsh`'s functions are purpose-built to simplify NPC interactions but NPCs are not required for them to work if you don't see the need.
 
-* **Extensible with Python:**  Write your own tools and extend `npcsh`'s functionality using Python or use our functionis to simplify interactions with LLMs in your projects.
+* **Simple, Powerful CLI:**  Use the `npc` CLI commands to set up a flask server so you can expose your NPC team for use as a backend service. You can also use the `npc` CLI to run SQL models defined in your project, execute assembly lines, and verify the integrity of your NPC team's interrelations. `npcsh`'s NPCs take advantage of jinja templating to reference other NPCs and tools in their properties, and the `npc` CLI can be used to verify these references.
 
-* **Bash Wrapper:** Execute bash commands directly without leaving the shell. Use your favorite command-line tools like VIM, Emacs, ipython, sqlite3, git, and more without leaving the shell!
-
-* **Computer Use:** Use Plonk to allow an LLM to control your computer.
+* **Shell Strengths:** Execute bash commands directly. Use your favorite command-line tools like VIM, Emacs, ipython, sqlite3, git. Pipe the output of these commands to LLMs or pass LLM results to bash commands.
 
 
 
@@ -474,7 +472,7 @@ https://en.wikipedia.org/wiki/President_of_the_United_States
 
 
 ```npcsh
-/home/caug/npcww/npcsh:npcsh!> /search -p perplexity who is the current us president
+npcsh> /search -p perplexity who is the current us president
 The current President of the United States is Donald Trump, who assumed office on January 20, 2025, for his second non-consecutive term as the 47th president[1].
 
 Citation Links: ['https://en.wikipedia.org/wiki/List_of_presidents_of_the_United_States',
@@ -1029,12 +1027,20 @@ Note, in the future we will aim to separate compilation and running so that we w
 When npcsh is installed, it comes with the `npc` cli as well. The `npc` cli has various command to make initializing and serving NPC projects easier.
 
 ### Serving
-To serve an NPC project, navigate to the project directory and run:
-sudo apt update && sudo apt install redis-server  # Ubuntu/Debian
+To serve an NPC project, first install redis-server and start it
 
+on Ubuntu:
+```bash
+sudo apt update && sudo apt install redis-server
 redis-server
+```
 
-
+on macOS:
+```bash
+brew install redis
+redis-server
+```
+Then navigate to the project directory and run:
 
 ```bash
 npc serve
@@ -1067,6 +1073,12 @@ echo -e "\nTesting conversation messages endpoint..."
 curl -s http://localhost:5337/api/conversation/test123/messages | jq '.'
 ```
 
+
+* **Planned:** -npc scripts
+-npc run select +sql_model   <run up>
+-npc run select +sql_model+  <run up and down>
+-npc run select sql_model+  <run down>
+-npc run line <assembly_line>
 
 
 ## Python Examples
@@ -1231,7 +1243,15 @@ print('Tool Output:', output)
 
 ## npcsql: SQL Integration and pipelines (UNDER CONSTRUCTION)
 
-- to be filled in soon
+
+In addition to NPCs being used in `npcsh` and through the python package, users may wish to take advantage of agentic interactions in SQL-like pipelines.
+`npcsh` contains a pseudo-SQL interpreter that processes SQL models which lets users write queries containing LLM-function calls that reference specific NPCs. `npcsh` interprets these queries, renders any jinja template references through its python implementation, and then executes them accordingly.
+
+Here is an example of a SQL-like query that uses NPCs to analyze data:
+```sql
+SELECT debate(['logician','magician'], 'Analyze the sentiment of the customer feedback.') AS sentiment_analysis
+```
+
 
 
 ## Contributing
