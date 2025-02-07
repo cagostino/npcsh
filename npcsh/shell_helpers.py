@@ -24,7 +24,6 @@ import select
 import signal
 import time
 
-
 import whisper
 
 try:
@@ -46,15 +45,15 @@ from .llm_funcs import (
     search_similar_texts,
     chroma_client,
 )
-from .plonk import plonk, perform_action, action_space
-from .helpers import get_db_npcs, get_directory_npcs, get_npc_path
+from .plonk import plonk, action_space
+from .helpers import get_db_npcs, get_npc_path, initialize_npc_project
+
 from .npc_compiler import (
     NPCCompiler,
     NPC,
     load_npc_from_file,
     PipelineRunner,
     Tool,
-    load_tools_from_directory,
 )
 from .command_history import CommandHistory, save_conversation_message
 
@@ -81,6 +80,9 @@ interactive_commands = {
     "r": ["R", "--interactive"],
 }
 BASH_COMMANDS = [
+    "npc",
+    "npm",
+    "npx",
     "open",
     "alias",
     "bg",
@@ -1154,6 +1156,7 @@ def execute_slash_command(
             output += f"   Description: {tool.description}"
             output += f"   Inputs: {tool.inputs}"
         return {"messages": messages, "output": output}
+
     elif command_name == "plonk":
         request = " ".join(args)
         plonk_call = plonk(
@@ -1237,16 +1240,6 @@ def execute_slash_command(
         except sqlite3.Error as e:
             output = f"Database error: {str(e)}"
             return {"messages": messages, "output": output}
-    elif command_name == "list":
-        output = list_directory()
-    elif command_name == "read":
-        if len(args) == 0:
-            return {
-                "messages": messages,
-                "output": "Error: read command requires a filename argument",
-            }
-        filename = args[0]
-        output = read_file(filename, npc=npc)
     elif command_name == "init":
         output = initialize_npc_project()
         return {"messages": messages, "output": output}
@@ -1318,37 +1311,42 @@ def execute_slash_command(
     elif command_name == "help":  # New help command
         output = """# Available Commands
 
-/compile [npc_file1.npc npc_file2.npc ...] #Compiles specified NPC profile(s). If no arguments are provided, compiles all NPCs in the npc_profiles directory.
+/com [npc_file1.npc npc_file2.npc ...] # Alias for /compile.
 
-/com [npc_file1.npc npc_file2.npc ...] #Alias for /compile.
+/compile [npc_file1.npc npc_file2.npc ...] # Compiles specified NPC profile(s). If no arguments are provided, compiles all NPCs in the npc_profi
 
-/whisper   # Enter whisper mode.
+/exit or /quit # Exits the current NPC mode or the npcsh shell.
+
+/help # Displays this help message.
+
+/init # Initializes a new NPC project.
+
+/list # Lists files in the current directory.
 
 /notes # Enter notes mode.
 
-/data # Enter data mode.
+/ots [filename] # Analyzes an image from a specified filename or captures a screenshot for analysis.
 
-/cmd <command/> #Execute a command using the current NPC's LLM.
+/rag <search_term> # Performs a RAG (Retrieval-Augmented Generation) search based on the search term provided.
 
-/command <command/> #Alias for /cmd.
+/sample <question> # Asks the current NPC a question.
 
-/set <model|provider|db_path> <value> #Sets the specified parameter. Enclose the value in quotes.
+/set <model|provider|db_path> <value> # Sets the specified parameter. Enclose the value in quotes.
 
-/sample <question> #Asks the current NPC a question.
+/sp [inherit_last=<n>] # Alias for /spool.
 
-/spool [inherit_last=<n>] #Enters spool mode. Optionally inherits the last <n> messages.
+/spool [inherit_last=<n>] # Enters spool mode. Optionally inherits the last <n> messages.
 
-/sp [inherit_last=<n>] #Alias for /spool.
+/vixynt [filename=<filename>] <prompt> # Captures a screenshot and generates an image with the specified prompt.
 
-/vixynt [filename=<filename>] <prompt> #Captures a screenshot and generates an image with the specified prompt.
-/<npc_name> #Enters the specified NPC's mode.
+/<subcommand> # Enters the specified NPC's mode.
 
-/help #Displays this help message.
+/cmd <command/> # Execute a command using the current NPC's LLM.
 
-/exit or /quit #Exits the current NPC mode or the npcsh shell.
+/command <command/> # Alias for /cmd.
 
 # Note
-Bash commands and other programs can be executed directly."""
+Bash commands and other programs can be executed directly. """
 
         return {
             "messages": messages,
