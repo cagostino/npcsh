@@ -1321,8 +1321,6 @@ def execute_slash_command(
 
 /init # Initializes a new NPC project.
 
-/list # Lists files in the current directory.
-
 /notes # Enter notes mode.
 
 /ots [filename] # Analyzes an image from a specified filename or captures a screenshot for analysis.
@@ -1344,6 +1342,9 @@ def execute_slash_command(
 /cmd <command/> # Execute a command using the current NPC's LLM.
 
 /command <command/> # Alias for /cmd.
+
+Tools within your npc_team directory can also be used as macro commands.
+
 
 # Note
 Bash commands and other programs can be executed directly. """

@@ -10,7 +10,8 @@
 
 - **Smart Interpreter**: `npcsh` leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web.
 
-- **Macros**: `npcsh` provides macros to accomplish common tasks with LLMs like voice control (`/whisper`), image generation (`/vixynt`), screenshot capture and analysis (`/ots`), one-shot questions (`/sample`), computer use (`/plonk`),  retrieval augmented generation (`/rag`), search (`/search`) and more.
+- **Macros**: `npcsh` provides macros to accomplish common tasks with LLMs like voice control (`/whisper`), image generation (`/vixynt`), screenshot capture and analysis (`/ots`), one-shot questions (`/sample`), computer use (`/plonk`),  retrieval augmented generation (`/rag`), search (`/search`) and more. Users can also build their own tools and call them like macros from the shell.
+
 
 - **NPC-Driven Interactions**: `npcsh` allows users to take advantage of agents (i.e. NPCs) through a managed system. Users build a directory of NPCs and associated tools that can be used to accomplish complex tasks and workflows. NPCs can be tailored to specific tasks and have unique personalities, directives, and tools. Users can combine NPCs and tools in assembly line like workflows or use them in SQL-style models.
 
