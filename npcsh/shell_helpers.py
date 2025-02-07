@@ -56,6 +56,7 @@ from .npc_compiler import (
     Tool,
     load_tools_from_directory,
 )
+from .command_history import CommandHistory, save_conversation_message
 
 from .search import rag_search, search_web
 from .image import capture_screenshot, analyze_image
@@ -64,7 +65,6 @@ from .audio import calibrate_silence, record_audio, speak_text
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.syntax import Syntax
-from .command_history import CommandHistory
 import warnings
 
 warnings.filterwarnings("ignore", module="whisper.transcribe")
@@ -902,16 +902,8 @@ def filter_by_date(
 
 def execute_search_command(
     command: str,
-    command_history: CommandHistory,
-    db_path: str,
-    db_conn: sqlite3.Connection,
-    npc_compiler: NPCCompiler,
-    valid_npcs: list,
-    npc: NPC = None,
     messages=None,
-    model: str = None,
     provider: str = None,
-    conversation_id: str = None,
 ):
     """
     Function Description:
@@ -1047,12 +1039,8 @@ def execute_tool_command(
     tool: Tool,
     args: List[str],
     npc_compiler: NPCCompiler,
-    db_conn: sqlite3.Connection,
     messages=None,
     npc: NPC = None,
-    model: str = None,
-    provider: str = None,
-    conversation_id: str = None,
 ) -> Dict[str, Any]:
     """
     Execute a tool command with the given arguments.
@@ -1072,67 +1060,6 @@ def execute_tool_command(
     )
 
     return {"messages": messages, "output": tool_output}
-
-
-def enter_computer_use_mode(
-    command,
-    command_history,
-    db_path,
-    npc_compiler,
-    npc,
-    messages=None,
-    model=None,
-    provider=None,
-    conversation_id=None,
-):
-    """
-    Function Description:
-        Enters computer use mode.
-    Args:
-        command : str : Command
-        command_history : CommandHistory : Command history
-        db_path : str : Database path
-        npc_compiler : NPCCompiler : NPC compiler
-        npc : NPC : NPC
-    Keyword Args:
-        messages : None : Messages
-        model : None : Model
-        provider : None : Provider
-        conversation_id : None : Conversation ID
-    Returns:
-        dict : dict : Dictionary
-    """
-    # start the tars model
-
-    # set up the tars prompt
-    prompt = r"""You are a GUI agent.
-                 You are given a task and your action history,
-                 with screenshots.
-                 You need to perform the next action to complete the task.
-
-
-
-
-        ## Action Space
-        click(start_box='<|box_start|>(x1,y1)<|box_end|>')
-        left_double(start_box='<|box_start|>(x1,y1)<|box_end|>')
-        right_single(start_box='<|box_start|>(x1,y1)<|box_end|>')
-        drag(start_box='<|box_start|>(x1,y1)<|box_end|>', end_box='<|box_start|>(x3,y3)<|box_end|>')
-        hotkey(key='')
-        type(content='') #If you want to submit your input, use \"\
-        \" at the end of `content`.
-        scroll(start_box='<|box_start|>(x1,y1)<|box_end|>', direction='down or up or right or left')
-        wait() #Sleep for 5s and take a screenshot to check for any changes.
-        finished()
-        call_user() # Submit the task and call the user when the task is unsolvable, or when you need the user's help.
-        ## Note
-
-        - Summarize your intended action (with its target element) with a list of actions.
-        The fewer the better, only use multiple in one go if you feel it will work without
-        failure.
-
-
-        """
 
 
 def execute_slash_command(
@@ -1264,7 +1191,9 @@ def execute_slash_command(
 
     # Handle /rehash command
     elif command_name == "rehash":
-        rehash_result = rehash_last_message(command_history, conversation_id)
+        rehash_result = rehash_last_message(
+            command_history, conversation_id, model=model, provider=provider, npc=npc
+        )
         return rehash_result  # Return the result of rehashing last message
 
     elif command_name == "pipe":
@@ -1463,16 +1392,7 @@ Bash commands and other programs can be executed directly."""
     elif command_name == "search":
         output = execute_search_command(
             command,
-            command_history,
-            db_path,
-            db_conn,
-            npc_compiler,
-            valid_npcs,
-            npc=npc,
             messages=messages,
-            model=model,
-            provider=provider,
-            conversation_id=conversation_id,
         )
         messages = output["messages"]
         # print(output, type(output))
@@ -1535,6 +1455,7 @@ Bash commands and other programs can be executed directly."""
                     rag_similarity_threshold=rag_similarity_threshold,
                     device=device,
                     messages=spool_context,
+                    conversation_id=conversation_id,
                 )
                 return {"messages": output["messages"], "output": output}
 
@@ -1548,6 +1469,7 @@ Bash commands and other programs can be executed directly."""
             npc=npc,
             rag_similarity_threshold=rag_similarity_threshold,
             device=device,
+            conversation_id=conversation_id,
         )
         return {"messages": output["messages"], "output": output}
 
@@ -1556,9 +1478,6 @@ Bash commands and other programs can be executed directly."""
 
     subcommands = [f"/{command}"]
     return {"messages": messages, "output": output, "subcommands": subcommands}
-
-
-## flush  the current shell context
 
 
 def execute_set_command(command: str, value: str) -> str:
@@ -1629,32 +1548,29 @@ def flush_messages(n: int, messages: list) -> dict:
     }
 
 
-def rehash_last_message(command_history: CommandHistory, conversation_id: str) -> dict:
+def rehash_last_message(
+    command_history: CommandHistory,
+    conversation_id: str,
+    model: str,
+    provider: str,
+    npc: Any = None,
+) -> dict:
     # Fetch the last message or command related to this conversation ID
-    last_conversation = command_history.get_last_conversation(conversation_id)
 
-    if last_conversation:
-        user_command = last_conversation[3]  # Assuming content is in the 4th column
-        output = check_llm_command(
-            user_command, command_history, messages=None
-        )  # Adjust parameters as needed
+    last_message = command_history.get_last_conversation(conversation_id)
+    if last_message is None:
+        convo_id = command_history.get_most_recent_conversation_id()[0]
+        last_message = command_history.get_last_conversation(convo_id)
 
-        return {
-            "output": f"Rehashed conversation message: {user_command}\nResponse: {output}",
-        }
-
-    last_command = command_history.get_last_command()
-    if last_command:
-        user_command = last_command[2]  # Assuming command is in the 3rd column
-        output = check_llm_command(
-            user_command, command_history, messages=None
-        )  # Adjust parameters as needed
-
-        return {
-            "output": f"Rehashed command: {user_command}\nResponse: {output}",
-        }
-
-    return {"output": "No last message or command found to rehash."}
+    user_command = last_message[3]  # Assuming content is in the 4th column
+    return check_llm_command(
+        user_command,
+        command_history,
+        model=model,
+        provider=provider,
+        npc=npc,
+        messages=None,
+    )
 
 
 def get_npc_from_command(command: str) -> Optional[str]:
@@ -2458,11 +2374,14 @@ def enter_data_mode(command_history: Any, npc: Any = None) -> None:
 def enter_spool_mode(
     command_history: Any,
     inherit_last: int = 0,
+    model: str = None,
+    provider: str = None,
     npc: Any = None,
     files: List[str] = None,  # New files parameter
     rag_similarity_threshold: float = 0.3,
     device: str = "cpu",
     messages: List[Dict] = None,
+    conversation_id: str = None,
 ) -> Dict:
     """
     Function Description:
@@ -2526,7 +2445,18 @@ def enter_spool_mode(
                 break
             if user_input.lower() == "/rehash":  # Check for whisper command
                 # send the most recent message
-                output = rehash_last_message(command_history, npc.name)
+                print("Rehashing last message...")
+                output = rehash_last_message(
+                    command_history,
+                    conversation_id,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
+                )
+                print(output["output"])
+                messages = output.get("messages", [])
+                output = output.get("output", "")
+
             if user_input.lower() == "/whisper":  # Check for whisper command
                 messages = enter_whisper_mode(command_history, spool_context, npc)
                 print(messages)  # Optionally print output from whisper mode
@@ -2644,6 +2574,12 @@ def enter_spool_mode(
                 ["spool", npc.name if npc else ""],
                 assistant_reply,
                 os.getcwd(),
+            )
+            save_conversation_message(
+                command_history, conversation_id, "user", user_input
+            )
+            save_conversation_message(
+                command_history, conversation_id, "assistant", assistant_reply
             )
 
             # sometimes claude responds with unfinished markdown notation. so we need to check if there are two sets

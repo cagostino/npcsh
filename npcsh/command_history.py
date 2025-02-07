@@ -121,10 +121,20 @@ class CommandHistory:
     def close(self):
         self.conn.close()
 
+    def get_most_recent_conversation_id(self):
+        self.cursor.execute(
+            """
+        SELECT conversation_id FROM conversation_history
+        ORDER BY id DESC LIMIT 1
+        """
+        )
+        return self.cursor.fetchone()
+
     def get_last_conversation(self, conversation_id):
         self.cursor.execute(
             """
-        SELECT * FROM conversation_history WHERE conversation_id = ? ORDER BY id DESC LIMIT 1
+        SELECT * FROM conversation_history WHERE conversation_id = ? and role = 'user'
+        ORDER BY id DESC LIMIT 1
         """,
             (conversation_id,),
         )
