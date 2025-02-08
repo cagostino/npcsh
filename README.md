@@ -10,7 +10,8 @@
 
 - **Smart Interpreter**: `npcsh` leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web.
 
-- **Macros**: `npcsh` provides macros to accomplish common tasks with LLMs like voice control (`/whisper`), image generation (`/vixynt`), screenshot capture and analysis (`/ots`), one-shot questions (`/sample`), computer use (`/plonk`),  retrieval augmented generation (`/rag`), search (`/search`) and more.
+- **Macros**: `npcsh` provides macros to accomplish common tasks with LLMs like voice control (`/whisper`), image generation (`/vixynt`), screenshot capture and analysis (`/ots`), one-shot questions (`/sample`), computer use (`/plonk`),  retrieval augmented generation (`/rag`), search (`/search`) and more. Users can also build their own tools and call them like macros from the shell.
+
 
 - **NPC-Driven Interactions**: `npcsh` allows users to take advantage of agents (i.e. NPCs) through a managed system. Users build a directory of NPCs and associated tools that can be used to accomplish complex tasks and workflows. NPCs can be tailored to specific tasks and have unique personalities, directives, and tools. Users can combine NPCs and tools in assembly line like workflows or use them in SQL-style models.
 
@@ -30,7 +31,7 @@ Interested to stay in the loop and to hear the latest and greatest about `npcsh`
 [![Star History Chart](https://api.star-history.com/svg?repos=cagostino/npcsh&type=Date)](https://star-history.com/#cagostino/npcsh&Date)
 
 ## Installation
-`npcsh` is available on PyPI and can be installed using pip. Before installing, make sure you have the necessary dependencies installed on your system. Below are the instructions for installing such dependencies on Linux, Mac, and (soon-to-be) Windows. If you find any other dependencies that are needed, please let us know so we can update the installation instructions to be more accommodating.
+`npcsh` is available on PyPI and can be installed using pip. Before installing, make sure you have the necessary dependencies installed on your system. Below are the instructions for installing such dependencies on Linux, Mac, and Windows. If you find any other dependencies that are needed, please let us know so we can update the installation instructions to be more accommodating.
 
 ### Linux install
 ```bash
@@ -79,7 +80,6 @@ ollama pull nomic-embed-text
 pip install npcsh
 ```
 As of now, npcsh appears to work well with some of the core functionalities like /ots and /whisper.
-Haven't figured out the command execution parts with windows yet but will make an issue.
 
 
 ### Fedora Install (under construction)
@@ -387,14 +387,21 @@ npcsh> /exit
 ```
 
 Otherwise, here are some more detailed examples of macros that can be used in npcsh:
-### Data Interaction and analysis
-Enter into data mode to load, manipulate, and query data from various file formats.
+### Conjure (under construction)
+Use the `/conjure` macro to generate an NPC, a NPC tool, an assembly line, a job, or an SQL model
+
+### Data Interaction and analysis (under construction)
+
+
+### Debate (under construction)
+Use the `/debate` macro to have two or more NPCs debate a topic, problem, or question.
+
+For example:
 ```npcsh
-npcsh> /data
-data> load data.csv as df
-data> df.describe()
+npcsh> /debate Should humans colonize Mars? npcs = ['sibiji', 'mark', 'ted']
 ```
-From  here, you can make use of common numpy, pandas, and matplotlib operations for data analysis.
+
+
 
 ### Notes
 Jot down notes and store them within the npcsh database and in the current directory as a text file.
@@ -424,6 +431,12 @@ Enter a prompt for the LLM about this image (or press Enter to skip): whats in t
 The image features two cats, one calico and one orange tabby, playing with traditional Japanese-style toys. They are each holding sticks attached to colorful pom-pom balls, which resemble birds. The background includes stylized waves and a red sun, accentuating a vibrant, artistic style reminiscent of classic Japanese art. The playful interaction between the cats evokes a lively, whimsical scene.
 ```
 
+### Plan : Schedule tasks to be run at regular intervals (under construction)
+Use the /plan macro to schedule tasks to be run at regular intervals.
+```npcsh
+npcsh> /plan run a rag search on the files in the current directory every 5 minutes
+```
+
 ### Plonk : Computer Control
 Use the /plonk macro to allow the LLM to control your computer.
 ```npcsh
@@ -446,6 +459,13 @@ npcsh> /rag  what is the best way to implement a linked list in Python?
 ```
 and it will automatically look through the recorded conversations in the ~/npcsh_history.db
 
+
+### Rehash
+
+Use the /rehash macro to re-send the last message to the LLM.
+```npcsh
+npcsh> /rehash
+```
 
 ### Sample
 Send a one-shot question to the LLM.
@@ -497,6 +517,15 @@ Users can change the default model and provider from within npcsh by using the f
 npcsh> /set model ollama
 npcsh> /set provider llama3.2
 ```
+
+
+### Sleep : a method for creating and updating a knowledge graph (under construction)
+
+Use the `/sleep` macro to create or update a knowledge graph. A knowledge graph is a structured representation of facts about you as a user that the NPCs can determine based on the conversations you have had with it.
+```npcsh
+npcsh> /sleep
+```
+
 
 
 
@@ -1261,6 +1290,16 @@ Here is an example of a SQL-like query that uses NPCs to analyze data:
 SELECT debate(['logician','magician'], 'Analyze the sentiment of the customer feedback.') AS sentiment_analysis
 ```
 
+### squish
+squish is an aggregate NPC LLM function that compresses information contained in whole columns or grouped chunks of data based on the SQL aggregation.
+
+### splat
+Splat is a row-wise NPC LLM function that allows for the application of an LLM function on each row of a dataset or a re-sampling
+
+
+
+
+
 
 
 ## Contributing
@@ -1273,9 +1312,6 @@ If you appreciate the work here, [consider supporting NPC Worldwide](https://buy
 ## NPC Studio
 Coming soon! NPC Studio will be a desktop application for managing chats and agents on your own machine.
 Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A) to hear updates!
-
-
-
 
 ## License
 This project is licensed under the MIT License.
