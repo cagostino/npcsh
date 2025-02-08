@@ -113,6 +113,7 @@ BASH_COMMANDS = [
     "let",
     "local",
     "logout",
+    "ollama",
     "popd",
     "printf",
     "pushd",
@@ -1370,7 +1371,7 @@ def execute_slash_command(
                 npc=npc,
                 **output["model_kwargs"],
             )
-            messages = output["messages"]
+            # messages = output["messages"]
 
             output = output["response"]
 
@@ -1798,7 +1799,7 @@ def execute_command(
         # print(messages)
 
         model_override, provider_override, command = get_model_and_provider(
-            single_command, available_models
+            single_command, available_models[0]
         )
         if model_override is None:
             model_override = os.getenv("NPCSH_MODEL")
