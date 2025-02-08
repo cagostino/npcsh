@@ -47,6 +47,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ollama pull llama3.2
 ollama pull llava:7b
+ollama pull nomic-embed-text
 pip install npcsh
 ```
 
@@ -62,6 +63,7 @@ brew services start ollama
 brew install pygobject3
 ollama pull llama3.2
 ollama pull llava:7b
+ollama pull nomic-embed-text
 pip install npcsh
 ```
 ### Widows Install
@@ -73,11 +75,18 @@ Then, in a powershell. Download and install ffmpeg.
 ```
 ollama pull llama3.2
 ollama pull llava:7b
+ollama pull nomic-embed-text
 pip install npcsh
 ```
 As of now, npcsh appears to work well with some of the core functionalities like /ots and /whisper.
 Haven't figured out the command execution parts with windows yet but will make an issue.
 
+
+### Fedora Install (under construction)
+
+python3-dev (fixes hnswlib issues with chroma db)
+xhost +  (pyautogui)
+python-tkinter (pyautogui)
 
 ## Startup Configuration and Project Structure
 After it has been pip installed, `npcsh` can be used as a command line tool. Start it by typing:
