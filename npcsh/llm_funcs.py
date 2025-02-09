@@ -937,13 +937,12 @@ def get_deepseek_stream(
         model=model,
         max_tokens=1024,
         messages=messages_copy,
-        stream = True,
+        stream=True,
         **kwargs,  # Include any additional keyword arguments
     )
 
     for response in completion:
         yield response
-
 
 
 def get_gemini_stream(
@@ -968,6 +967,7 @@ def get_gemini_stream(
     """
 
     return
+
 
 def get_openai_conversation(
     messages: List[Dict[str, str]],
@@ -1558,42 +1558,42 @@ def get_gemini_response(
                 img = Image.open(image_file)
                 history[-1]["parts"].append(img)
     # Generate the response
-    try:
-        # Send the entire conversation history to maintain context
-        response = model.generate_content(history)
-        llm_response = response.text
+    # try:
+    # Send the entire conversation history to maintain context
+    response = model.generate_content(history)
+    llm_response = response.text
 
-        # Filter out empty parts
-        if isinstance(llm_response, list):
-            llm_response = " ".join([part for part in llm_response if part.strip()])
-        elif not llm_response.strip():
-            llm_response = ""
+    # Filter out empty parts
+    if isinstance(llm_response, list):
+        llm_response = " ".join([part for part in llm_response if part.strip()])
+    elif not llm_response.strip():
+        llm_response = ""
 
-        # Prepare the return dictionary
-        items_to_return = {"response": llm_response, "messages": history}
-        # print(llm_response, type(llm_response))
+    # Prepare the return dictionary
+    items_to_return = {"response": llm_response, "messages": history}
+    # print(llm_response, type(llm_response))
 
-        # Handle JSON format if specified
-        if format == "json":
-            if type(llm_response) == str:
-                if llm_response.startswith("```json"):
-                    llm_response = (
-                        llm_response.replace("```json", "").replace("```", "").strip()
-                    )
-            try:
-                items_to_return["response"] = json.loads(llm_response)
-            except json.JSONDecodeError:
-                print(f"Warning: Expected JSON response, but received: {llm_response}")
-                return {"error": "Invalid JSON response"}
-        else:
-            # Append the model's response to the messages
-            history.append({"role": "model", "parts": [llm_response]})
-            items_to_return["messages"] = history
+    # Handle JSON format if specified
+    if format == "json":
+        if type(llm_response) == str:
+            if llm_response.startswith("```json"):
+                llm_response = (
+                    llm_response.replace("```json", "").replace("```", "").strip()
+                )
+        try:
+            items_to_return["response"] = json.loads(llm_response)
+        except json.JSONDecodeError:
+            print(f"Warning: Expected JSON response, but received: {llm_response}")
+            return {"error": "Invalid JSON response"}
+    else:
+        # Append the model's response to the messages
+        history.append({"role": "model", "parts": [llm_response]})
+        items_to_return["messages"] = history
 
-        return items_to_return
+    return items_to_return
 
-    except Exception as e:
-        return {"error": f"Error generating response: {str(e)}"}
+    # except Exception as e:
+    #    return {"error": f"Error generating response: {str(e)}"}
 
 
 def get_gemini_conversation(
@@ -1614,27 +1614,12 @@ def get_gemini_conversation(
     """
     # Make the API call to Gemini
 
-    # translate content to parts
-    for message in messages:
-        if "content" in message:
-            message["parts"] = [message.pop("content")]
-
-    try:
-        # print(messages[-1])
-        if messages[-1]["role"] == "assistant":
-            messages.pop(-1)
-        response = get_gemini_response(messages, model, messages=messages, npc=npc)
-        # print(response)
-        messages.append(
-            {"role": "assistant", "content": response.get("response", "No response")}
-        )
-
-    except Exception as e:
-        messages.append(
-            {"role": "assistant", "content": f"Error interacting with Gemini: {str(e)}"}
-        )
-
-    return messages
+    #print(messages)
+    response = get_gemini_response(
+        messages[-1]["content"], model, messages=messages[1:], npc=npc
+    )
+    #print(response)
+    return response.get("messages", [])
 
 
 def get_deepseek_conversation(

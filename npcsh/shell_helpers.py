@@ -2435,6 +2435,12 @@ def enter_spool_mode(
             spool_context.append({"role": "user", "content": cmd[2]})
             spool_context.append({"role": "assistant", "content": cmd[4]})
 
+    if npc is not None:
+        if model is None:
+            model = npc.model
+        if provider is None:
+            provider = npc.provider
+
     while True:
         try:
             user_input = input("spool> ").strip()
@@ -2561,9 +2567,16 @@ def enter_spool_mode(
 
             # Extract assistant's reply, handling potential KeyError
             try:
-                assistant_reply = spool_context[-1]["content"]
+                # print(spool_context[-1])
+                # print(provider)
+                if provider == "gemini":
+                    assistant_reply = spool_context[-1]["parts"][0]
+                else:
+                    assistant_reply = spool_context[-1]["content"]
+
             except (KeyError, IndexError) as e:
                 print(f"Error extracting assistant's reply: {e}")
+                print(spool_context[-1])
                 print(
                     f"Conversation result: {conversation_result}"
                 )  # Print for debugging
