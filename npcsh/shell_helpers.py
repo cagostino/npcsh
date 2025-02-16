@@ -1038,6 +1038,21 @@ def resize_image_tars(image_path):
     image.save(image_path, format="png")
 
 
+def enter_wander_mode(args, messages, npc_compiler, npc, model, provider):
+    """
+    Wander mode is an exploratory mode where an LLM is given a task and they begin to wander through space.
+    As they wander, they drift in between conscious thought and popcorn-like subconscious thought
+    The former is triggered by external stimuli andw when these stimuli come we will capture the recent high entropy
+    infromation from the subconscious popcorn thoughts and then consider them with respect to the initial problem at hand.
+
+    The conscious evaluator will attempt to connect them, thus functionalizing the verse-jumping algorithm
+    outlined by Everything Everywhere All at Once.
+
+
+    """
+    return
+
+
 def execute_tool_command(
     tool: Tool,
     args: List[str],
@@ -1111,6 +1126,7 @@ def execute_slash_command(
         output = f"Switched to NPC: {current_npc.name}"
         print(output)
         return {"messages": messages, "output": output, "current_npc": current_npc}
+
     if command_name == "compile" or command_name == "com":
         try:
             if len(args) > 0:  # Specific NPC file(s) provided
@@ -1164,6 +1180,9 @@ def execute_slash_command(
             request, action_space, model=model, provider=provider, npc=npc
         )
         return {"messages": messages, "output": plonk_call}
+    elif command_name == "wander":
+        return enter_wander_mode(args, messages, npc_compiler, npc, model, provider)
+
     elif command_name in [tool.tool_name for tool in tools]:
         tool = next((tool for tool in tools if tool.tool_name == command_name), None)
 

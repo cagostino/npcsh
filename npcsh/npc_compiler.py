@@ -85,18 +85,14 @@ class Tool:
         self.inputs = tool_data.get("inputs", [])
         self.description = tool_data.get("description", "")
         # Parse steps with engines
-        self.preprocess = self.parse_steps(tool_data.get("preprocess", []))
-        self.prompt = self.parse_step(tool_data.get("prompt", {}))
-        self.postprocess = self.parse_steps(tool_data.get("postprocess", []))
+        self.steps = self.parse_steps(tool_data.get("steps", []))
 
     def parse_step(self, step: Union[dict, str]) -> dict:
         if isinstance(step, dict):
             return {
-                "engine": step.get("engine", "natural"),
+                "engine": step.get("engine", None),
                 "code": step.get("code", ""),
             }
-        elif isinstance(step, str):  # For backward compatibility
-            return {"engine": "natural", "code": step}
         else:
             raise ValueError("Invalid step format")
 
@@ -122,20 +118,8 @@ class Tool:
             }
         )
         # Process Preprocess Steps
-        for step in self.preprocess:
+        for step in self.steps:
             context = self.execute_step(step, context, jinja_env, npc=npc)
-        # import pdb
-
-        # Process Prompt
-        if len(self.prompt["code"]) > 0:
-            context = self.execute_step(self.prompt, context, jinja_env, npc=npc)
-
-        # Process Postprocess Steps
-        for step in self.postprocess:
-            if len(step["code"]) > 0:
-                context = self.execute_step(step, context, jinja_env, npc=npc)
-        # pdb.set_trace()
-
         # Return the final output
         if context.get("output") is not None:
             return context.get("output")
@@ -203,9 +187,7 @@ class Tool:
         return {
             "tool_name": self.tool_name,
             "inputs": self.inputs,
-            "preprocess": [self.step_to_dict(step) for step in self.preprocess],
-            "prompt": self.step_to_dict(self.prompt),
-            "postprocess": [self.step_to_dict(step) for step in self.postprocess],
+            "steps": [self.step_to_dict(step) for step in self.steps],
         }
 
     def step_to_dict(self, step):
@@ -246,13 +228,12 @@ class NPC:
         db_conn: sqlite3.Connection,
         name: str,
         primary_directive: str = None,
-        suggested_tools_to_use: list = None,
-        restrictions: list = None,
+        tools: list = None,  # from the npc profile
         model: str = None,
         provider: str = None,
         api_url: str = None,
-        tools: list = None,
-        use_default_tools: bool = True,
+        all_tools: list = None,  # all available tools in global and project, this is an anti pattern i need to solve eventually but for now it works
+        use_global_tools: bool = True,
         use_npc_network: bool = True,
         global_npc_directory: str = None,
         project_npc_directory: str = None,
@@ -289,8 +270,8 @@ class NPC:
 
         self.name = name
         self.primary_directive = primary_directive
-        self.suggested_tools_to_use = suggested_tools_to_use or []
-        self.restrictions = restrictions
+        self.tools = tools or []
+
         self.model = model
         self.db_conn = db_conn
         self.tables = self.db_conn.execute(
@@ -298,11 +279,11 @@ class NPC:
         ).fetchall()
         self.provider = provider
         self.api_url = api_url
-        self.tools = tools or []
-        self.tools_dict = {tool.tool_name: tool for tool in self.tools}
-        if self.suggested_tools_to_use:
-            self.suggested_tools = self.load_suggested_tools(
-                suggested_tools_to_use,
+        self.all_tools = all_tools or []
+        self.all_tools_dict = {tool.tool_name: tool for tool in self.all_tools}
+        if self.tools:
+            self.tools = self.load_suggested_tools(
+                tools,
                 self.global_tools_directory,
                 self.project_tools_directory,
             )
@@ -311,11 +292,11 @@ class NPC:
             "current_data": None,
             "computation_results": {},
         }
-        self.use_default_tools = use_default_tools
+        self.use_global_tools = use_global_tools
         self.use_npc_network = use_npc_network
 
         # Load tools if flag is set
-        if self.use_default_tools:
+        if self.use_global_tools:
             self.default_tools = self.load_tools()
         else:
             self.default_tools = []
@@ -452,7 +433,7 @@ class NPC:
             print(tool_name)
             print(tool_data)
             tool = Tool(tool_data)
-            self.tools.append(tool)
+            self.all_tools.append(tool)
             self.tools_dict[tool.tool_name] = tool
             suggested_tools.append(tool)
         return suggested_tools
@@ -1016,14 +997,14 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         name = npc_data["name"]
 
         primary_directive = npc_data.get("primary_directive")
-        suggested_tools_to_use = npc_data.get("suggested_tools_to_use")
-        restrictions = npc_data.get("restrictions", [])
+        tools = npc_data.get("tools")
         model = npc_data.get("model", os.environ.get("NPCSH_MODEL", "llama3.2"))
         provider = npc_data.get("provider", os.environ.get("NPCSH_PROVIDER", "ollama"))
         api_url = npc_data.get("api_url", os.environ.get("NPCSH_API_URL", None))
-
+        use_global_tools = npc_data.get("use_global_tools", True)
+        print(use_global_tools)
         # Load tools from global and project-specific directories
-        tools = []
+        all_tools = []
         # 1. Load tools defined within the NPC profile
         if "tools" in npc_data:
             for tool_data in npc_data["tools"]:
@@ -1032,29 +1013,29 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         # 2. Load global tools from ~/.npcsh/npc_team/tools
         user_home = os.path.expanduser("~")
         global_tools_directory = os.path.join(user_home, ".npcsh", "npc_team", "tools")
-        tools.extend(load_tools_from_directory(global_tools_directory))
+        all_tools.extend(load_tools_from_directory(global_tools_directory))
         # 3. Load project-specific tools from ./npc_team/tools
         project_tools_directory = os.path.abspath("./npc_team/tools")
-        tools.extend(load_tools_from_directory(project_tools_directory))
+        all_tools.extend(load_tools_from_directory(project_tools_directory))
 
         # Remove duplicates, giving precedence to project-specific tools
         tool_dict = {}
-        for tool in tools:
+        for tool in all_tools:
             tool_dict[tool.tool_name] = tool  # Project tools overwrite global tools
 
-        tools = list(tool_dict.values())
+        all_tools = list(tool_dict.values())
 
         # Initialize and return the NPC object
         return NPC(
             db_conn,
             name,
             primary_directive=primary_directive,
-            suggested_tools_to_use=suggested_tools_to_use,
-            restrictions=restrictions,
+            tools=tools,
+            use_global_tools=use_global_tools,
             model=model,
             provider=provider,
             api_url=api_url,
-            tools=tools,  # Pass the tools
+            all_tools=all_tools,  # Pass the tools
         )
 
     except FileNotFoundError:

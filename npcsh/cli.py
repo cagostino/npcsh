@@ -32,10 +32,30 @@ def main():
 
     args = parser.parse_args()
 
+    new_parser = subparsers.add_parser(
+        "new", help="Create a new [NPC, tool, assembly_line, ]"
+    )
+    new_parser.add_argument(
+        "type",
+        help="Type of object to create",
+        choices=["npc", "tool", "assembly_line"],
+    )
+    # depending on what it is we will have different possible arguments and a different flow
+    # the args will be optional for the cli call bbut they will trigger an input sequence where
+    # the user specifies the relevant args
+
+    ### ALLOW ALL MACRO COMMANDS TO BE RUN AS CLI COMMANDS
+    # E.G. npc vixynt 'prompt' -m 'dall-e-3' -p 'openai'
+    # npc ots
+    # npc spool
+
     if args.command == "serve":
         start_flask_server(port=args.port if args.port else 5337)
     elif args.command == "init":
         initialize_npc_project(args.directory)
+    elif args.command == "new":
+        # create a new npc, tool, or assembly line
+        pass
     else:
         parser.print_help()
 

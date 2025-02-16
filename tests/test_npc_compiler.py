@@ -105,7 +105,7 @@ def test_npc_init(mock_db_conn):
     )
     assert npc.name == "Test NPC"
     assert npc.primary_directive == "Test directive"
-    assert npc.suggested_tools_to_use == ["tool1", "tool2"]
+    assert npc.tools == ["tool1", "tool2"]
     assert npc.restrictions == []
     assert npc.model == "gpt-3.5-turbo"
     assert npc.provider == "openai"
