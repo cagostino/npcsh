@@ -32,18 +32,17 @@ except:
     print("Could not load the sentence-transformers package.")
 
 from .load_data import load_pdf, load_csv, load_json, load_excel, load_txt, load_image
+from .npc_sysenv import get_model_and_provider, get_available_models, get_system_message
+from .embeddings import search_similar_texts,  chroma_client
+
 from .llm_funcs import (
-    get_available_models,
-    get_model_and_provider,
     execute_llm_command,
     execute_llm_question,
     get_conversation,
-    get_system_message,
     check_llm_command,
     generate_image,
     get_embeddings,
-    search_similar_texts,
-    chroma_client,
+
 )
 from .plonk import plonk, action_space
 from .helpers import get_db_npcs, get_npc_path, initialize_npc_project
@@ -1518,8 +1517,8 @@ def execute_set_command(command: str, value: str) -> str:
 
     # Map command to environment variable name
     var_map = {
-        "model": "NPCSH_MODEL",
-        "provider": "NPCSH_PROVIDER",
+        "model": "NPCSH_CHAT_MODEL",
+        "provider": "NPCSH_CHAT_PROVIDER",
         "db_path": "NPCSH_DB_PATH",
     }
 
@@ -1743,9 +1742,9 @@ def execute_command(
                 single_command, available_models[0]
             )
             if model_override is None:
-                model_override = os.getenv("NPCSH_MODEL")
+                model_override = os.getenv("NPCSH_CHAT_MODEL")
             if provider_override is None:
-                provider_override = os.getenv("NPCSH_PROVIDER")
+                provider_override = os.getenv("NPCSH_CHAT_PROVIDER")
         else:
             model_override = model
             provider_override = provider

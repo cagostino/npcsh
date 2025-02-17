@@ -1,3 +1,25 @@
+from typing import Any, Dict, Generator, List, Union
+from pydantic import BaseModel
+import os
+import anthropic
+import ollama  # Add to setup.py if missing
+from openai import OpenAI
+from diffusers import StableDiffusionPipeline
+from google.generativeai import types
+import google.generativeai as genai
+from .npc_sysenv import (
+    get_system_message,
+    compress_image,
+    available_chat_models,
+    available_reasoning_models,
+)
+
+import json
+import requests
+import base64
+from PIL import Image
+
+
 def get_deepseek_response(
     prompt: str,
     model: str,

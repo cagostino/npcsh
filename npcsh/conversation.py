@@ -4,6 +4,15 @@
 ########
 ######## CONVERSATION
 ########
+from typing import Any, Dict, Generator, List
+import os
+import anthropic
+import ollama  # Add to setup.py if missing
+from openai import OpenAI
+from diffusers import StableDiffusionPipeline
+from google.generativeai import types
+import google.generativeai as genai
+from .npc_sysenv import get_system_message
 
 
 def get_ollama_conversation(

@@ -4,10 +4,21 @@
 #######
 ####### EMBEDDINGS
 #######
+from typing import List, Dict, Optional
+import numpy as np
+from npcsh.npc_sysenv import (
+    npcsh_vector_db_path,
+    NPCSH_EMBEDDING_MODEL,
+    NPCSH_EMBEDDING_PROVIDER,
+    chroma_client,
+)
+import ollama
+from openai import OpenAI
+import anthropic
 
 
 def get_ollama_embeddings(
-    texts: List[str], model: str = NPCSH_EMBEDDING_MODEL
+    texts: List[str], model: str = "nomic-embed-text"
 ) -> List[List[float]]:
     """Generate embeddings using Ollama."""
     embeddings = []

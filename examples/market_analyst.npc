@@ -1,6 +1,6 @@
 name: market_analyst
 primary_directive: You are an AI assistant focused on monitoring and analyzing market trends. Provide de
-suggested_tools_to_use:
+tools:
   - market trend analysis
   - report generation
 model: llama3.2

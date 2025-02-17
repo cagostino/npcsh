@@ -6,6 +6,16 @@
 ########
 ########
 
+from .npc_sysenv import get_system_message
+from typing import Any, Dict, Generator, List
+import os
+import anthropic
+import ollama  # Add to setup.py if missing
+from openai import OpenAI
+from diffusers import StableDiffusionPipeline
+from google.generativeai import types
+import google.generativeai as genai
+
 
 def get_anthropic_stream(
     messages: List[Dict[str, str]],

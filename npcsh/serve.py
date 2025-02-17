@@ -19,11 +19,11 @@ from .command_history import (
     save_conversation_message,
 )
 from .npc_compiler import NPCCompiler
+from .npc_sysenv import get_model_and_provider, get_available_models, get_system_message
+
 from .llm_funcs import (
     check_llm_command,
-    get_model_and_provider,
     get_stream,
-    get_available_models,
 )
 from .image import capture_screenshot
 from .helpers import get_db_npcs, get_directory_npcs, get_npc_path
