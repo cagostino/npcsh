@@ -973,7 +973,6 @@ def execute_search_command(
         "output": result[0] + f"\n\n\n Citation Links: {result[1]}",
     }
 
-
 def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
     inputs = {}
 
@@ -989,37 +988,42 @@ def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
             flag_mapping[f"--{key}"] = key
 
     # Process arguments
+    used_args = set()
     for i, arg in enumerate(args):
         if arg in flag_mapping:
             # If flag is found, next argument is its value
             if i + 1 < len(args):
                 input_name = flag_mapping[arg]
                 inputs[input_name] = args[i + 1]
+                used_args.add(i)
+                used_args.add(i + 1)
             else:
                 print(f"Warning: {arg} flag is missing a value.")
 
-        # If no flags used, combine all args for first input
-        elif not inputs and tool.inputs:
-            first_input = tool.inputs[0]
-            if isinstance(first_input, str):
-                inputs[first_input] = " ".join(args)
-            elif isinstance(first_input, dict):
-                key = list(first_input.keys())[0]
-                inputs[key] = " ".join(args)
-            break
+    # If no flags used, combine remaining args for first input
+    unused_args = [arg for i, arg in enumerate(args) if i not in used_args]
+    if unused_args and tool.inputs:
+        first_input = tool.inputs[0]
+        if isinstance(first_input, str):
+            inputs[first_input] = " ".join(unused_args)
+        elif isinstance(first_input, dict):
+            key = list(first_input.keys())[0]
+            inputs[key] = " ".join(unused_args)
 
     # Add default values for inputs not provided
     for input_ in tool.inputs:
         if isinstance(input_, str):
             if input_ not in inputs:
-                raise ValueError(f"Missing required input: {input_}")
+                if any(args):  # If we have any arguments at all
+                    raise ValueError(f"Missing required input: {input_}")
+                else:
+                    inputs[input_] = None  # Allow None for completely empty calls
         elif isinstance(input_, dict):
             key = list(input_.keys())[0]
             if key not in inputs:
                 inputs[key] = input_[key]
 
     return inputs
-
 
 import math
 from PIL import Image
@@ -1036,6 +1040,21 @@ def resize_image_tars(image_path):
     width, height = int(image.width * resize_factor), int(image.height * resize_factor)
     image = image.resize((width, height))
     image.save(image_path, format="png")
+
+
+def enter_wander_mode(args, messages, npc_compiler, npc, model, provider):
+    """
+    Wander mode is an exploratory mode where an LLM is given a task and they begin to wander through space.
+    As they wander, they drift in between conscious thought and popcorn-like subconscious thought
+    The former is triggered by external stimuli andw when these stimuli come we will capture the recent high entropy
+    infromation from the subconscious popcorn thoughts and then consider them with respect to the initial problem at hand.
+
+    The conscious evaluator will attempt to connect them, thus functionalizing the verse-jumping algorithm
+    outlined by Everything Everywhere All at Once.
+
+
+    """
+    return
 
 
 def execute_tool_command(
@@ -1056,7 +1075,7 @@ def execute_tool_command(
 
     tool_output = tool.execute(
         input_values,
-        npc_compiler.tools_dict,
+        npc_compiler.all_tools_dict,
         npc_compiler.jinja_env,
         tool.tool_name,
         npc=npc,
@@ -1095,7 +1114,7 @@ def execute_slash_command(
     Returns:
         dict : dict : Dictionary
     """
-    tools = npc_compiler.tools
+    tools = npc_compiler.all_tools
 
     command = command[1:]
 
@@ -1111,6 +1130,7 @@ def execute_slash_command(
         output = f"Switched to NPC: {current_npc.name}"
         print(output)
         return {"messages": messages, "output": output, "current_npc": current_npc}
+
     if command_name == "compile" or command_name == "com":
         try:
             if len(args) > 0:  # Specific NPC file(s) provided
@@ -1164,6 +1184,9 @@ def execute_slash_command(
             request, action_space, model=model, provider=provider, npc=npc
         )
         return {"messages": messages, "output": plonk_call}
+    elif command_name == "wander":
+        return enter_wander_mode(args, messages, npc_compiler, npc, model, provider)
+
     elif command_name in [tool.tool_name for tool in tools]:
         tool = next((tool for tool in tools if tool.tool_name == command_name), None)
 
@@ -1171,12 +1194,8 @@ def execute_slash_command(
             tool,
             args,
             npc_compiler,
-            db_conn,
             messages,
             npc=npc,
-            model=model,
-            provider=provider,
-            conversation_id=conversation_id,
         )
     elif command_name == "flush":
         n = float("inf")  # Default to infinite

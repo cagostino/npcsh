@@ -526,6 +526,9 @@ Use the `/sleep` macro to create or update a knowledge graph. A knowledge graph 
 npcsh> /sleep
 ```
 
+### breathe: a method for condensing context on a regular cadence (# messages, len(context), etc) (under construction)
+-every 10 messages/7500 characters, condense the conversation into lessons learned. write the lessons learned down by the np
+for the day, then the npc will see the lessons they have learned that day in that folder as part of the context.
 
 
 
@@ -702,7 +705,7 @@ Here is a typical NPC file:
 ```yaml
 name: sibiji
 primary_directive: You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately.
-suggested_tools_to_use:
+tools:
   - simple data retrieval
 model: llama3.2
 provider: ollama

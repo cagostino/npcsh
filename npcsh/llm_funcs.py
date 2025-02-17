@@ -824,7 +824,7 @@ def get_ollama_stream(
             system_message = get_system_message(npc)
             messages_copy.insert(0, {"role": "system", "content": system_message})
 
-    response = ollama.chat(model=model, messages=messages_copy, stream=True)
+    response = ollama.chat(model=model, messages=messages_copy, stream=True, **kwargs)
 
     for chunk in response:
         if isinstance(chunk, dict) and "message" in chunk:
@@ -836,23 +836,21 @@ def get_openai_stream(
     model: str,
     npc: Any = None,
     api_key: str = None,
+    **kwargs,
 ) -> Generator[str, None, None]:
     """Streams responses from OpenAI, yielding raw text chunks."""
     if api_key is None:
         api_key = os.environ["OPENAI_API_KEY"]
     client = OpenAI(api_key=api_key)
-
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
-
-    if messages is None:
-        messages = []
-    if not any(msg["role"] == "system" for msg in messages):
-        messages.insert(0, {"role": "system", "content": system_message})
+    if messages is None or len(messages) == 0:
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": [{"type": "text", "text": prompt}]},
+        ]
 
     completion = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        stream=True,
+        model=model, messages=messages, stream=True, **kwargs
     )
 
     for chunk in completion:
@@ -1614,11 +1612,11 @@ def get_gemini_conversation(
     """
     # Make the API call to Gemini
 
-    #print(messages)
+    # print(messages)
     response = get_gemini_response(
         messages[-1]["content"], model, messages=messages[1:], npc=npc
     )
-    #print(response)
+    # print(response)
     return response.get("messages", [])
 
 
@@ -2616,10 +2614,10 @@ def check_llm_command(
 
     Available tools:
     """
-    if npc.tools_dict is None:
+    if npc.all_tools_dict is None:
         prompt += "No tools available."
     else:
-        for tool_name, tool in npc.tools_dict.items():
+        for tool_name, tool in npc.all_tools_dict.items():
             prompt += f"""
             {tool_name} : {tool.description} \n
         """
