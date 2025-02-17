@@ -81,10 +81,10 @@ class Tool:
             raise ValueError("Invalid tool data provided.")
         if "tool_name" not in tool_data:
             raise KeyError("Missing 'tool_name' in tool definition.")
+
         self.tool_name = tool_data.get("tool_name")
         self.inputs = tool_data.get("inputs", [])
         self.description = tool_data.get("description", "")
-        # Parse steps with engines
         self.steps = self.parse_steps(tool_data.get("steps", []))
 
     def parse_step(self, step: Union[dict, str]) -> dict:
@@ -107,19 +107,22 @@ class Tool:
         command: str,
         npc=None,
     ):
-        context = npc.shared_context
+        # Create the context with input values at top level for Jinja access
+        context = npc.shared_context.copy() if npc else {}
+        context.update(input_values)  # Spread input values directly in context
         context.update(
             {
-                "inputs": input_values,
                 "tools": tools_dict,
                 "llm_response": None,
                 "output": None,
                 "command": command,
             }
         )
-        # Process Preprocess Steps
+
+        # Process Steps
         for step in self.steps:
             context = self.execute_step(step, context, jinja_env, npc=npc)
+
         # Return the final output
         if context.get("output") is not None:
             return context.get("output")
@@ -132,25 +135,24 @@ class Tool:
         engine = step.get("engine", "natural")
         code = step.get("code", "")
 
+        # Render template with all context variables
+        try:
+            template = jinja_env.from_string(code)
+            rendered_code = template.render(**context)
+        except Exception as e:
+            print(f"Error rendering template: {e}")
+            rendered_code = code
+
         if engine == "natural":
-
-            debug_env = Environment(undefined=SilentUndefined)
-            template = debug_env.from_string(code)
-
-            rendered_text = template.render(**context)  # Unpack context as kwargs
-            # print("EXECUTING:", rendered_text)
-            if len(rendered_text.strip()) > 0:
-                llm_response = get_llm_response(rendered_text, npc=npc)
-                if context.get("llm_response") is None:
-                    # This is the prompt step
-                    context["llm_response"] = llm_response.get("response", "")
-                else:
-                    # This is a postprocess step; set output
-                    context["output"] = llm_response.get("response", "")
+            if len(rendered_code.strip()) > 0:
+                # print(f"Executing natural language step: {rendered_code}")
+                llm_response = get_llm_response(rendered_code, npc=npc)
+                response_text = llm_response.get("response", "")
+                # Store both in context for reference
+                context["llm_response"] = response_text
+                context["results"] = response_text
 
         elif engine == "python":
-            # Execute Python code
-            # print("EXECUTING PYTHON CODE:", code)
             exec_globals = {
                 "__builtins__": __builtins__,
                 "npc": npc,
@@ -175,17 +177,24 @@ class Tool:
                 "pathlib": pathlib,
                 "subprocess": subprocess,
             }
+            new_locals = {}
             exec_env = context.copy()
-            exec(code, exec_globals, exec_env)
+            exec(rendered_code, exec_globals, new_locals)
+            exec_env.update(new_locals)
+
             context.update(exec_env)
-        else:
-            raise ValueError(f"Unsupported engine '{engine}'")
+
+            # If output is set, also set it as results
+            if "output" in exec_env:
+                if exec_env["output"] is not None:
+                    context["results"] = exec_env["output"]
 
         return context
 
     def to_dict(self):
         return {
             "tool_name": self.tool_name,
+            "description": self.description,
             "inputs": self.inputs,
             "steps": [self.step_to_dict(step) for step in self.steps],
         }
@@ -246,12 +255,18 @@ class NPC:
             self.global_tools_directory = os.path.join(
                 user_home, ".npcsh", "npc_team", "tools"
             )
+        else:
+            self.global_tools_directory = global_tools_directory
 
         if project_tools_directory is None:
             self.project_tools_directory = os.path.abspath("./npc_team/tools")
+        else:
+            self.project_tools_directory = project_tools_directory
 
         if global_npc_directory is None:
             self.global_npc_directory = os.path.join(user_home, ".npcsh", "npc_team")
+        else:
+            self.global_npc_directory = global_npc_directory
 
         if project_npc_directory is None:
             self.project_npc_directory = os.path.abspath("./npc_team")
@@ -1899,9 +1914,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df["ai_analysis"] = (
-                        synthesized_df  # Adjust as per what synthesize returns
-                    )
+                    df[
+                        "ai_analysis"
+                    ] = synthesized_df  # Adjust as per what synthesize returns
 
             return df
 

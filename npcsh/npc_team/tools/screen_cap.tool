@@ -2,7 +2,7 @@ tool_name: "screen_capture_analysis_tool"
 description: Captures the whole screen and sends the image for analysis
 inputs:
   - "prompt"
-preprocess:
+steps:
   - engine: "python"
     code: |
       # Capture the screen
@@ -25,10 +25,3 @@ preprocess:
           llm_response = llm_response.get('response', 'No response from image analysis')
       else:
           llm_response = 'No response from image analysis'
-
-prompt:
-  engine: "natural"
-  code: ""
-postprocess:
-  - engine: "natural"
-    code: ""

@@ -973,7 +973,6 @@ def execute_search_command(
         "output": result[0] + f"\n\n\n Citation Links: {result[1]}",
     }
 
-
 def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
     inputs = {}
 
@@ -989,37 +988,42 @@ def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
             flag_mapping[f"--{key}"] = key
 
     # Process arguments
+    used_args = set()
     for i, arg in enumerate(args):
         if arg in flag_mapping:
             # If flag is found, next argument is its value
             if i + 1 < len(args):
                 input_name = flag_mapping[arg]
                 inputs[input_name] = args[i + 1]
+                used_args.add(i)
+                used_args.add(i + 1)
             else:
                 print(f"Warning: {arg} flag is missing a value.")
 
-        # If no flags used, combine all args for first input
-        elif not inputs and tool.inputs:
-            first_input = tool.inputs[0]
-            if isinstance(first_input, str):
-                inputs[first_input] = " ".join(args)
-            elif isinstance(first_input, dict):
-                key = list(first_input.keys())[0]
-                inputs[key] = " ".join(args)
-            break
+    # If no flags used, combine remaining args for first input
+    unused_args = [arg for i, arg in enumerate(args) if i not in used_args]
+    if unused_args and tool.inputs:
+        first_input = tool.inputs[0]
+        if isinstance(first_input, str):
+            inputs[first_input] = " ".join(unused_args)
+        elif isinstance(first_input, dict):
+            key = list(first_input.keys())[0]
+            inputs[key] = " ".join(unused_args)
 
     # Add default values for inputs not provided
     for input_ in tool.inputs:
         if isinstance(input_, str):
             if input_ not in inputs:
-                raise ValueError(f"Missing required input: {input_}")
+                if any(args):  # If we have any arguments at all
+                    raise ValueError(f"Missing required input: {input_}")
+                else:
+                    inputs[input_] = None  # Allow None for completely empty calls
         elif isinstance(input_, dict):
             key = list(input_.keys())[0]
             if key not in inputs:
                 inputs[key] = input_[key]
 
     return inputs
-
 
 import math
 from PIL import Image
@@ -1190,12 +1194,8 @@ def execute_slash_command(
             tool,
             args,
             npc_compiler,
-            db_conn,
             messages,
             npc=npc,
-            model=model,
-            provider=provider,
-            conversation_id=conversation_id,
         )
     elif command_name == "flush":
         n = float("inf")  # Default to infinite

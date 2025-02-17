@@ -4,7 +4,7 @@ inputs:
   - table_name
   - operation
   - filters
-preprocess:
+steps:
   - engine: python
     code: |
 
@@ -152,19 +152,13 @@ preprocess:
                   print("Maximum retries reached. Exiting.")
                   raise  # Re-raise the exception after max retries
               inputs = fix_inputs(str(e), inputs, df)
+  - engine: python
+    code: |
 
-prompt:
-  engine: natural
-  code: |
+        A user made this request:
+        {{command}}
 
-    A user made this request:
-    {{command}}
+        Based on the calculation results:
+        {{stats}}
 
-    Based on the calculation results:
-    {{stats}}
-
-    Please write a response to the user. Make it succinct and clear.
-
-postprocess:
-  - engine: natural
-    code: ""
+        Please write a response to the user. Make it succinct and clear.

@@ -66,6 +66,7 @@ setup(
         "screeninfo",
         "sentence_transformers",
         "nltk",
+        "thefuzz",
         "beautifulsoup4",
         "google-generativeai",
         "google-genai",

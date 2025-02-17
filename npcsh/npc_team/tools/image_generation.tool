@@ -3,7 +3,7 @@ description: |
   Generates images based on a text prompt.
 inputs:
   - "prompt"
-preprocess:
+steps:
   - engine: "python"
     code: |
       # Clean and prepare the prompt
@@ -21,10 +21,6 @@ preprocess:
           image_generated = True
       else:
           image_generated = False
-prompt:
-  engine: "natural"
-  code: ""
-postprocess:
   - engine: "natural"
     code: |
       {% if image_generated %}
