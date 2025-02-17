@@ -98,10 +98,19 @@ npcsh_db_path = os.path.expanduser(
 npcsh_vector_db_path = os.path.expanduser(
     os.environ.get("NPCSH_VECTOR_DB_PATH", "~/npcsh_chroma.db")
 )
+NPCSH_VISION_MODEL = os.environ.get("NPCSH_VISION_MODEL", "llava7b")
+NPCSH_VISION_PROVIDER = os.environ.get("NPCSH_VISION_PROVIDER", "ollama")
+
+NPCSH_IMAGE_GEN_MODEL = os.environ.get(
+    "NPCSH_IMAGE_GEN_MODEL", "runwayml/stable-diffusion-v1-5"
+)
+NPCSH_IMAGE_GEN_PROVIDER = os.environ.get("NPCSH_IMAGE_GEN_PROVIDER", "diffusers")
 
 NPCSH_EMBEDDING_MODEL = os.environ.get("NPCSH_EMBEDDING_MODEL", "nomic-embed-text")
 NPCSH_EMBEDDING_PROVIDER = os.environ.get("NPCSH_EMBEDDING_PROVIDER", "ollama")
+
 NPCSH_REASONING_MODEL = os.environ.get("NPCSH_REASONING_MODEL", "deepseek-r1")
+NPCSH_REASONING_PROVIDER = os.environ.get("NPCSH_REASONING_PROVIDER", "ollama")
 
 
 def get_ollama_embeddings(
@@ -615,8 +624,8 @@ def generate_image_hf_diffusion(
 
 def generate_image(
     prompt: str,
-    model: str = npcsh_model,
-    provider: str = npcsh_provider,
+    model: str = NPCSH_IMAGE_GEN_MODEL,
+    provider: str = NPCSH_IMAGE_GEN_PROVIDER,
     filename: str = None,
     npc: Any = None,
 ):
@@ -2134,7 +2143,7 @@ def get_llm_response(
             model = "llava:7b"
         else:
             model = "llama3.2"
-
+    print(provider, model)
     # print(provider, model)
     if provider == "ollama":
         if model is None:
@@ -2171,7 +2180,7 @@ def get_llm_response(
         )
     elif provider == "gemini":
         if model is None:
-            model = "gemini-1.5-flash"
+            model = "gemini-2.0-flash"
         return get_gemini_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )

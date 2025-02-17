@@ -973,6 +973,7 @@ def execute_search_command(
         "output": result[0] + f"\n\n\n Citation Links: {result[1]}",
     }
 
+
 def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
     inputs = {}
 
@@ -1024,6 +1025,7 @@ def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
                 inputs[key] = input_[key]
 
     return inputs
+
 
 import math
 from PIL import Image
@@ -1683,6 +1685,8 @@ def execute_command(
     npc_compiler: NPCCompiler,
     embedding_model: Union[SentenceTransformer, Any] = None,
     current_npc: NPC = None,
+    model: str = None,
+    provider: str = None,
     messages: list = None,
     conversation_id: str = None,
 ):
@@ -1732,13 +1736,19 @@ def execute_command(
         messages.append({"role": "user", "content": single_command})
         # print(messages)
 
-        model_override, provider_override, command = get_model_and_provider(
-            single_command, available_models[0]
-        )
-        if model_override is None:
-            model_override = os.getenv("NPCSH_MODEL")
-        if provider_override is None:
-            provider_override = os.getenv("NPCSH_PROVIDER")
+        if model is None:
+            # note the only situation where id expect this to take precedent is when a frontend is specifying the model
+            # to pass through at each time
+            model_override, provider_override, command = get_model_and_provider(
+                single_command, available_models[0]
+            )
+            if model_override is None:
+                model_override = os.getenv("NPCSH_MODEL")
+            if provider_override is None:
+                provider_override = os.getenv("NPCSH_PROVIDER")
+        else:
+            model_override = model
+            provider_override = provider
 
         # Rest of the existing logic remains EXACTLY the same
         # print(model_override, provider_override)
