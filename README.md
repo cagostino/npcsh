@@ -98,8 +98,8 @@ Here is an example of what the .npcshrc file might look like after this has been
 ```bash
 # NPCSH Configuration File
 export NPCSH_INITIALIZED=1
-export NPCSH_PROVIDER='ollama'
-export NPCSH_MODEL='llama3.2'
+export NPCSH_CHAT_PROVIDER='ollama'
+export NPCSH_CHAT_MODEL='llama3.2'
 export NPCSH_DB_PATH='~/npcsh_history.db'
 ```
 `npcsh` also comes with a set of tools and NPCs that are used in processing. It will generate a folder at ~/.npcsh/ that contains the tools and NPCs that are used in the shell and these will be used in the absence of other project-specific ones. Additionally, `npcsh` records interactions and compiled information about npcs within a local SQLite database at the path specified in the .npcshrc file. This will default to ~/npcsh_history.db if not specified. When the data mode is used to load or analyze data in CSVs or PDFs, these data will be stored in the same database for future reference.
