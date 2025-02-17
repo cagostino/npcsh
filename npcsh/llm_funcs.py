@@ -2614,10 +2614,10 @@ def check_llm_command(
 
     Available tools:
     """
-    if npc.tools_dict is None:
+    if npc.all_tools_dict is None:
         prompt += "No tools available."
     else:
-        for tool_name, tool in npc.tools_dict.items():
+        for tool_name, tool in npc.all_tools_dict.items():
             prompt += f"""
             {tool_name} : {tool.description} \n
         """

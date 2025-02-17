@@ -449,7 +449,7 @@ class NPC:
             print(tool_data)
             tool = Tool(tool_data)
             self.all_tools.append(tool)
-            self.tools_dict[tool.tool_name] = tool
+            self.all_tools_dict[tool.tool_name] = tool
             suggested_tools.append(tool)
         return suggested_tools
 
@@ -662,8 +662,8 @@ class NPCCompiler:
             undefined=SilentUndefined,
         )
 
-        self.tools_dict = self.load_tools()
-        self.tools = list(self.tools_dict.values())
+        self.all_tools_dict = self.load_tools()
+        self.all_tools = list(self.all_tools_dict.values())
 
     def generate_tool_script(self, tool: Tool):
         script_content = f"""
@@ -720,7 +720,7 @@ class NPCCompiler:
             parsed_content = self.finalize_npc_profile(npc_file)
 
             # Load tools from both global and project directories
-            parsed_content["tools"] = [tool.to_dict() for tool in self.tools]
+            parsed_content["tools"] = [tool.to_dict() for tool in self.all_tools]
 
             self.update_compiled_npcs_table(npc_file, parsed_content)
             return parsed_content

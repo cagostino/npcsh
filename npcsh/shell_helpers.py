@@ -1075,7 +1075,7 @@ def execute_tool_command(
 
     tool_output = tool.execute(
         input_values,
-        npc_compiler.tools_dict,
+        npc_compiler.all_tools_dict,
         npc_compiler.jinja_env,
         tool.tool_name,
         npc=npc,
@@ -1114,7 +1114,7 @@ def execute_slash_command(
     Returns:
         dict : dict : Dictionary
     """
-    tools = npc_compiler.tools
+    tools = npc_compiler.all_tools
 
     command = command[1:]
 
