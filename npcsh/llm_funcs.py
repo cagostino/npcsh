@@ -42,6 +42,7 @@ from .npc_sysenv import (
     lookup_provider,
     NPCSH_CHAT_PROVIDER,
     NPCSH_CHAT_MODEL,
+    NPCSH_API_URL,
     EMBEDDINGS_DB_PATH,
     NPCSH_EMBEDDING_MODEL,
     NPCSH_EMBEDDING_PROVIDER,
@@ -185,7 +186,8 @@ def get_llm_response(
     images: List[Dict[str, str]] = None,
     npc: Any = None,
     messages: List[Dict[str, str]] = None,
-    api_url: str = None,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     **kwargs,
 ):
     """
@@ -282,7 +284,7 @@ def get_llm_response(
         if api_url is None:
             raise ValueError("api_url is required for openai-like provider")
         return get_openai_like_response(
-            prompt, model, api_url, npc=npc, messages=messages, images=images, **kwargs
+            prompt, model, api_url,api_key, npc=npc, messages=messages, images=images, **kwargs
         )
 
     elif provider == "anthropic":
@@ -392,6 +394,10 @@ def get_conversation(
         return get_ollama_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "openai":
         return get_openai_conversation(messages, model, npc=npc, **kwargs)
+    elif provider == "openai-like":
+        return get_openai_like_conversation(messages, model, npc=npc,api_url=api_url,  **kwargs)
+
+ 
     elif provider == "anthropic":
         return get_anthropic_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "gemini":
@@ -409,6 +415,8 @@ def execute_llm_question(
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
     npc: Any = None,
+    api_url=None,
+    api_key=None, 
     messages: List[Dict[str, str]] = None,
     retrieved_docs=None,
     n_docs: int = 5,
@@ -452,7 +460,7 @@ def execute_llm_question(
         # messages.append({"role": "assistant", "content": output})
 
     else:
-        response = get_conversation(messages, model=model, provider=provider, npc=npc)
+        response = get_conversation(messages, model=model, provider=provider, npc=npc, api_url = api_url)
 
     # Print response from get_conversation for debugging
     # print("Response from get_conversation:", response)
@@ -479,6 +487,8 @@ def execute_llm_command(
     model: Optional[str] = None,
     provider: Optional[str] = None,
     npc: Optional[Any] = None,
+    api_url =None, 
+    api_key =None,
     messages: Optional[List[Dict[str, str]]] = None,
     retrieved_docs=None,
     n_docs=5,
@@ -678,6 +688,8 @@ def check_llm_command(
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
     npc: Any = None,
+    api_url : str =None, 
+    api_key : str =None,
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
     n_docs=5,
@@ -787,10 +799,13 @@ def check_llm_command(
         model=model,
         provider=provider,
         npc=npc,
+        api_url=api_url, 
+        api_key=api_key,
         format="json",
         messages=[],
     )
-    # print(action_response)
+    
+    #print(action_response)
     if "Error" in action_response:
         print(f"LLM Error: {action_response['error']}")
         return action_response["error"]
@@ -822,6 +837,8 @@ def check_llm_command(
             provider=provider,
             messages=[],
             npc=npc,
+            api_key=api_key, 
+            api_url=api_url, 
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
@@ -856,6 +873,7 @@ def check_llm_command(
             provider=provider,
             messages=messages,
             npc=npc,
+            api_url = api_url, 
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
@@ -912,6 +930,8 @@ def handle_tool_call(
     provider: str = NPCSH_CHAT_PROVIDER,
     messages: List[Dict[str, str]] = None,
     npc: Any = None,
+    api_url = None,
+    api_key = None,
     retrieved_docs=None,
     n_docs: int = 5,
     stream=False,
@@ -980,6 +1000,8 @@ def handle_tool_call(
         model=model,
         provider=provider,
         npc=npc,
+        api_key = api_key, 
+        api_url = api_url
     )
     try:
         # Clean the response of markdown formatting

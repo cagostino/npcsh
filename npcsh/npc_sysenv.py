@@ -374,4 +374,6 @@ NPCSH_EMBEDDING_PROVIDER = os.environ.get("NPCSH_EMBEDDING_PROVIDER", "ollama")
 NPCSH_REASONING_MODEL = os.environ.get("NPCSH_REASONING_MODEL", "deepseek-r1")
 NPCSH_REASONING_PROVIDER = os.environ.get("NPCSH_REASONING_PROVIDER", "ollama")
 
+NPCSH_API_URL = os.environ.get("NPCSH_API_URL","https://localhost:123")
+
 NPCSH_STREAM_OUTPUT = os.environ.get("NPCSH_STREAM_OUTPUT", 0)

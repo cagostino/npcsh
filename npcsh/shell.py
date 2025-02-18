@@ -25,7 +25,8 @@ try:
 except:
     print("Could not load the sentence-transformers package.")
 # Local imports
-from .npc_sysenv import get_system_message, lookup_provider, NPCSH_STREAM_OUTPUT
+from .npc_sysenv import get_system_message, lookup_provider, NPCSH_STREAM_OUTPUT, NPCSH_API_URL, NPCSH_CHAT_MODEL, NPCSH_CHAT_PROVIDER
+print(f'using api at : {NPCSH_API_URL}')
 from .command_history import (
     CommandHistory,
     start_new_conversation,
@@ -194,6 +195,9 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 messages=messages,
                 conversation_id=current_conversation_id,
                 stream=NPCSH_STREAM_OUTPUT,
+                api_url = NPCSH_API_URL, 
+                model = NPCSH_CHAT_MODEL, 
+                provider = NPCSH_CHAT_PROVIDER
             )
 
             messages = result.get("messages", messages)

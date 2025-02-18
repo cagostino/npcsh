@@ -120,46 +120,34 @@ def get_openai_like_conversation(
         List[Dict[str, str]]: The list of messages in the conversation.
     """
 
-    try:
-        if api_url is None:
-            raise ValueError("api_url is required for openai-like provider")
+    
 
-        system_message = get_system_message(npc) if npc else ""
-        messages_copy = messages.copy()
-        if messages_copy[0]["role"] != "system":
-            messages_copy.insert(0, {"role": "system", "content": system_message})
-        last_user_message = None
-        for msg in reversed(messages_copy):
-            if msg["role"] == "user":
-                last_user_message = msg["content"]
-                break
-        if last_user_message is None:
-            raise ValueError("No user message found in the conversation history.")
-        request_data = {
-            "model": model,
-            "messages": messages_copy,
-            **kwargs,  # Include any additional keyword arguments
-        }
-        headers = {"Content-Type": "application/json"}  # Set Content-Type header
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        response = requests.post(api_url, headers=headers, json=request_data)
-        response.raise_for_status()
-        response_json = response.json()
-        llm_response = (
-            response_json.get("choices", [{}])[0].get("message", {}).get("content")
+    if api_url is None:
+        raise ValueError("api_url is required for openai-like provider")
+    if api_key is None:
+        api_key = 'dummy_api_key'
+    client = OpenAI(api_key=api_key, base_url=api_url)
+    system_message = (
+            get_system_message(npc) if npc else "You are a helpful assistant."
         )
-        if llm_response is None:
-            raise ValueError(
-                "Invalid response format from the API. Could not extract 'choices[0].message.content'."
-            )
-        messages_copy.append({"role": "assistant", "content": llm_response})
-        return messages_copy
-    except requests.exceptions.RequestException as e:
-        return f"Error making API request: {e}"
-    except Exception as e:
-        return f"Error interacting with API: {e}"
 
+    if messages is None:
+        messages = []
+
+        # Ensure the system message is at the beginning
+    if not any(msg["role"] == "system" for msg in messages):
+        messages.insert(0, {"role": "system", "content": system_message})
+
+        # messages should already include the user's latest message
+
+        # Make the API call with the messages including the latest user input
+    completion = client.chat.completions.create(
+            model=model, messages=messages, **kwargs
+        )
+    response_message = completion.choices[0].message
+    messages.append({"role": "assistant", "content": response_message.content})
+
+    return messages
 
 def get_anthropic_conversation(
     messages: List[Dict[str, str]],
