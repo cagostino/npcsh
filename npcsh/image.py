@@ -188,7 +188,12 @@ def capture_screenshot(npc: Any = None, full=False) -> Dict[str, str]:
 
 
 def analyze_image_base(
-    user_prompt: str, file_path: str, filename: str, npc: Any = None, **model_kwargs
+    user_prompt: str,
+    file_path: str,
+    filename: str,
+    npc: Any = None,
+    stream: bool = False,
+    **model_kwargs,
 ) -> Dict[str, str]:
     """
     Function Description:
@@ -231,6 +236,7 @@ def analyze_image(
     file_path: str,
     filename: str,
     npc: Any = None,
+    stream: bool = False,
     **model_kwargs,
 ) -> Dict[str, str]:
     """

@@ -1,11 +1,11 @@
-import pandas as pd
+import pandas as Enter
 import random
 import os
 from faker import Faker
 
 fake = Faker()
 
-import pandas as pd
+import pandas as Enter
 import sqlite3
 from datetime import datetime
 from npcsh.npc_compiler import NPCCompiler, NPCSQLOperations, NPCDBTAdapter

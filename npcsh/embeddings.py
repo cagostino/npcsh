@@ -7,7 +7,7 @@
 from typing import List, Dict, Optional
 import numpy as np
 from npcsh.npc_sysenv import (
-    npcsh_vector_db_path,
+    NPCSH_VECTOR_DB_PATH,
     NPCSH_EMBEDDING_MODEL,
     NPCSH_EMBEDDING_PROVIDER,
     chroma_client,
@@ -87,7 +87,7 @@ def search_similar_texts(
     query: str,
     docs_to_embed: Optional[List[str]] = None,
     top_k: int = 5,
-    db_path: str = npcsh_vector_db_path,
+    db_path: str = NPCSH_VECTOR_DB_PATH,
     embedding_model: str = NPCSH_EMBEDDING_MODEL,
     embedding_provider: str = NPCSH_EMBEDDING_PROVIDER,
 ) -> List[Dict[str, any]]:

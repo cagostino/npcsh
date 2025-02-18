@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from typing import Any
 import os
+import io
 import chromadb
 
 from dotenv import load_dotenv
@@ -356,7 +357,7 @@ NPCSH_CHAT_PROVIDER = os.environ.get("NPCSH_CHAT_PROVIDER", "ollama")
 npcsh_db_path = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
-npcsh_vector_db_path = os.path.expanduser(
+NPCSH_VECTOR_DB_PATH = os.path.expanduser(
     os.environ.get("NPCSH_VECTOR_DB_PATH", "~/npcsh_chroma.db")
 )
 NPCSH_VISION_MODEL = os.environ.get("NPCSH_VISION_MODEL", "llava7b")
@@ -372,3 +373,5 @@ NPCSH_EMBEDDING_PROVIDER = os.environ.get("NPCSH_EMBEDDING_PROVIDER", "ollama")
 
 NPCSH_REASONING_MODEL = os.environ.get("NPCSH_REASONING_MODEL", "deepseek-r1")
 NPCSH_REASONING_PROVIDER = os.environ.get("NPCSH_REASONING_PROVIDER", "ollama")
+
+NPCSH_STREAM_OUTPUT = os.environ.get("NPCSH_STREAM_OUTPUT", 0)

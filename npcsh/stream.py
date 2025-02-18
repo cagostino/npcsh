@@ -40,9 +40,7 @@ def get_anthropic_stream(
         max_tokens=8192,
         stream=True,
     )
-    for chunk in response:
-        if hasattr(chunk, "delta") and hasattr(chunk.delta, "text"):
-            yield chunk.delta.text  # Extracts raw text
+    return response
 
 
 def get_ollama_stream(
@@ -58,11 +56,7 @@ def get_ollama_stream(
             system_message = get_system_message(npc)
             messages_copy.insert(0, {"role": "system", "content": system_message})
 
-    response = ollama.chat(model=model, messages=messages_copy, stream=True, **kwargs)
-
-    for chunk in response:
-        if isinstance(chunk, dict) and "message" in chunk:
-            yield chunk["message"]  # Extracts raw text
+    return ollama.chat(model=model, messages=messages_copy, stream=True, **kwargs)
 
 
 def get_openai_stream(
@@ -83,15 +77,9 @@ def get_openai_stream(
             {"role": "user", "content": [{"type": "text", "text": prompt}]},
         ]
 
-    completion = client.chat.completions.create(
+    return client.chat.completions.create(
         model=model, messages=messages, stream=True, **kwargs
     )
-
-    for chunk in completion:
-        if chunk.choices:
-            for choice in chunk.choices:
-                if choice.delta.content:
-                    yield choice.delta.content  # Extracts raw text
 
 
 def get_openai_like_stream(

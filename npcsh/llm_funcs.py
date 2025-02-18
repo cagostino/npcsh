@@ -267,7 +267,7 @@ def get_llm_response(
     elif provider == "deepseek":
         if model is None:
             model = "deepseek-chat"
-        print(prompt, model, provider)
+        # print(prompt, model, provider)
         return get_deepseek_response(
             prompt, model, npc=npc, messages=messages, images=images, **kwargs
         )
@@ -412,6 +412,7 @@ def execute_llm_question(
     messages: List[Dict[str, str]] = None,
     retrieved_docs=None,
     n_docs: int = 5,
+    stream: bool = False,
 ):
     location = os.getcwd()
     if messages is None or len(messages) == 0:
@@ -436,7 +437,22 @@ def execute_llm_question(
     # print("Messages before get_conversation:", messages)
 
     # Use the existing messages list
-    response = get_conversation(messages, model=model, provider=provider, npc=npc)
+    if stream:
+        print("beginning stream")
+        response = get_stream(messages, model=model, provider=provider, npc=npc)
+        # let streamer deal with the diff response data and messages
+        return response
+        # print("Response from get_stream:", response)
+        # full_response = ""
+        # for chunk in response:
+        #    full_response += chunk
+        #    print(chunk, end="")
+        # print("end of stream")
+        # output = full_response
+        # messages.append({"role": "assistant", "content": output})
+
+    else:
+        response = get_conversation(messages, model=model, provider=provider, npc=npc)
 
     # Print response from get_conversation for debugging
     # print("Response from get_conversation:", response)
@@ -574,15 +590,23 @@ def execute_llm_command(
 
                 {context}
                 """
+            if stream:
+                response = get_stream(
+                    messages,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
+                )
 
-            response = get_llm_response(
-                prompt,
-                model=model,
-                provider=provider,
-                npc=npc,
-                messages=messages,
-            )
+            else:
 
+                response = get_llm_response(
+                    prompt,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
+                    messages=messages,
+                )
             output = response.get("response", "")
 
             # render_markdown(output)
@@ -657,6 +681,7 @@ def check_llm_command(
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
     n_docs=5,
+    stream=False,
 ):
     """
     Function Description:
@@ -755,59 +780,107 @@ def check_llm_command(
         """
     # print(prompt)
 
-    try:
-        # For action determination, we don't need to pass the conversation messages to avoid confusion
-        # print(npc, model, provider)
-        action_response = get_llm_response(
-            prompt,
+    # For action determination, we don't need to pass the conversation messages to avoid confusion
+    # print(npc, model, provider)
+    action_response = get_llm_response(
+        prompt,
+        model=model,
+        provider=provider,
+        npc=npc,
+        format="json",
+        messages=[],
+    )
+    # print(action_response)
+    if "Error" in action_response:
+        print(f"LLM Error: {action_response['error']}")
+        return action_response["error"]
+
+    response_content = action_response.get("response", {})
+
+    if isinstance(response_content, str):
+        try:
+            response_content_parsed = json.loads(response_content)
+        except json.JSONDecodeError as e:
+            print(
+                f"Invalid JSON received from LLM: {e}. Response was: {response_content}"
+            )
+            return f"Error: Invalid JSON from LLM: {response_content}"
+    else:
+        response_content_parsed = response_content
+
+    # Proceed according to the action specified
+    action = response_content_parsed.get("action")
+
+    # Include the user's command in the conversation messages
+
+    if action == "execute_command":
+        # Pass messages to execute_llm_command
+        result = execute_llm_command(
+            command,
+            command_history,
             model=model,
             provider=provider,
-            npc=npc,
-            format="json",
             messages=[],
+            npc=npc,
+            retrieved_docs=retrieved_docs,
+            stream=stream,
         )
-        # print(action_response)
-        if "Error" in action_response:
-            print(f"LLM Error: {action_response['error']}")
-            return action_response["error"]
 
-        response_content = action_response.get("response", {})
+        output = result.get("output", "")
+        messages = result.get("messages", messages)
+        return {"messages": messages, "output": output}
 
-        if isinstance(response_content, str):
-            try:
-                response_content_parsed = json.loads(response_content)
-            except json.JSONDecodeError as e:
-                print(
-                    f"Invalid JSON received from LLM: {e}. Response was: {response_content}"
-                )
-                return f"Error: Invalid JSON from LLM: {response_content}"
-        else:
-            response_content_parsed = response_content
+    elif action == "invoke_tool":
+        tool_name = response_content_parsed.get("tool_name")
+        # print(npc)
+        result = handle_tool_call(
+            command,
+            tool_name,
+            command_history,
+            model=model,
+            provider=provider,
+            messages=messages,
+            npc=npc,
+            retrieved_docs=retrieved_docs,
+            stream=stream,
+        )
+        messages = result.get("messages", messages)
+        output = result.get("output", "")
+        return {"messages": messages, "output": output}
 
-        # Proceed according to the action specified
-        action = response_content_parsed.get("action")
+    elif action == "answer_question":
+        result = execute_llm_question(
+            command,
+            command_history,
+            model=model,
+            provider=provider,
+            messages=messages,
+            npc=npc,
+            retrieved_docs=retrieved_docs,
+            stream=stream,
+        )
+        if stream:
+            return result
+        messages = result.get("messages", messages)
+        output = result.get("output", "")
+        return {"messages": messages, "output": output}
+    elif action == "pass_to_npc":
+        npc_to_pass = response_content_parsed.get("npc_name")
+        # print(npc)
 
-        # Include the user's command in the conversation messages
-
-        if action == "execute_command":
-            # Pass messages to execute_llm_command
-            result = execute_llm_command(
-                command,
-                command_history,
-                model=model,
-                provider=provider,
-                messages=[],
-                npc=npc,
-                retrieved_docs=retrieved_docs,
-            )
-
-            output = result.get("output", "")
-            messages = result.get("messages", messages)
-            return {"messages": messages, "output": output}
-
-        elif action == "invoke_tool":
-            tool_name = response_content_parsed.get("tool_name")
-            # print(npc)
+        return npc.handle_agent_pass(
+            npc_to_pass,
+            command,
+            command_history,
+            messages=messages,
+            retrieved_docs=retrieved_docs,
+            n_docs=n_docs,
+        )
+    elif action == "execute_sequence":
+        tool_names = response_content_parsed.get("tool_name")
+        output = ""
+        results_tool_calls = []
+        for tool_name in tool_names:
             result = handle_tool_call(
                 command,
                 tool_name,
@@ -817,67 +890,18 @@ def check_llm_command(
                 messages=messages,
                 npc=npc,
                 retrieved_docs=retrieved_docs,
+                stream=stream,
             )
+            results_tool_calls.append(result)
             messages = result.get("messages", messages)
-            output = result.get("output", "")
-            return {"messages": messages, "output": output}
+            output += result.get("output", "")
+        # import pdb
 
-        elif action == "answer_question":
-            result = execute_llm_question(
-                command,
-                command_history,
-                model=model,
-                provider=provider,
-                messages=messages,
-                npc=npc,
-                retrieved_docs=retrieved_docs,
-            )
-            messages = result.get("messages", messages)
-            output = result.get("output", "")
-            return {"messages": messages, "output": output}
-        elif action == "pass_to_npc":
-            npc_to_pass = response_content_parsed.get("npc_name")
-            # print(npc)
-
-            return npc.handle_agent_pass(
-                npc_to_pass,
-                command,
-                command_history,
-                messages=messages,
-                retrieved_docs=retrieved_docs,
-                n_docs=n_docs,
-            )
-        elif action == "execute_sequence":
-            tool_names = response_content_parsed.get("tool_name")
-            output = ""
-            results_tool_calls = []
-            for tool_name in tool_names:
-                result = handle_tool_call(
-                    command,
-                    tool_name,
-                    command_history,
-                    model=model,
-                    provider=provider,
-                    messages=messages,
-                    npc=npc,
-                    retrieved_docs=retrieved_docs,
-                )
-                results_tool_calls.append(result)
-                messages = result.get("messages", messages)
-                output += result.get("output", "")
-            # import pdb
-
-            # pdb.set_trace()
-            return {"messages": messages, "output": output}
-        else:
-            print("Error: Invalid action in LLM response")
-            return "Error: Invalid action in LLM response"
-
-    except Exception as e:
-        print(result)
-        print(type(result))
-        print(f"Error in check_llm_command: {e}")
-        return f"Error: {e}"
+        # pdb.set_trace()
+        return {"messages": messages, "output": output}
+    else:
+        print("Error: Invalid action in LLM response")
+        return "Error: Invalid action in LLM response"
 
 
 def handle_tool_call(
@@ -890,6 +914,7 @@ def handle_tool_call(
     npc: Any = None,
     retrieved_docs=None,
     n_docs: int = 5,
+    stream=False,
 ) -> Union[str, Dict[str, Any]]:
     """
     Function Description:
@@ -948,6 +973,7 @@ def handle_tool_call(
             """
 
     # print(f"Tool prompt: {prompt}")
+
     response = get_llm_response(
         prompt,
         format="json",

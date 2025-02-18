@@ -1013,8 +1013,10 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
 
         primary_directive = npc_data.get("primary_directive")
         tools = npc_data.get("tools")
-        model = npc_data.get("model", os.environ.get("NPCSH_MODEL", "llama3.2"))
-        provider = npc_data.get("provider", os.environ.get("NPCSH_PROVIDER", "ollama"))
+        model = npc_data.get("model", os.environ.get("NPCSH_CHAT_MODEL", "llama3.2"))
+        provider = npc_data.get(
+            "provider", os.environ.get("NPCSH_CHAT_PROVIDER", "ollama")
+        )
         api_url = npc_data.get("api_url", os.environ.get("NPCSH_API_URL", None))
         use_global_tools = npc_data.get("use_global_tools", True)
         print(use_global_tools)
@@ -1914,9 +1916,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df[
-                        "ai_analysis"
-                    ] = synthesized_df  # Adjust as per what synthesize returns
+                    df["ai_analysis"] = (
+                        synthesized_df  # Adjust as per what synthesize returns
+                    )
 
             return df
 

@@ -25,6 +25,7 @@ try:
 except:
     print("Could not load the sentence-transformers package.")
 # Local imports
+from .npc_sysenv import get_system_message, lookup_provider, NPCSH_STREAM_OUTPUT
 from .command_history import (
     CommandHistory,
     start_new_conversation,
@@ -34,7 +35,6 @@ from .llm_funcs import (
     execute_llm_command,
     execute_llm_question,
     generate_image,
-    lookup_provider,
     check_llm_command,
     get_conversation,
     get_system_message,
@@ -193,6 +193,7 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 current_npc,
                 messages=messages,
                 conversation_id=current_conversation_id,
+                stream=NPCSH_STREAM_OUTPUT,
             )
 
             messages = result.get("messages", messages)

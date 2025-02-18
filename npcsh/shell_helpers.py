@@ -32,8 +32,14 @@ except:
     print("Could not load the sentence-transformers package.")
 
 from .load_data import load_pdf, load_csv, load_json, load_excel, load_txt, load_image
-from .npc_sysenv import get_model_and_provider, get_available_models, get_system_message
-from .embeddings import search_similar_texts,  chroma_client
+from .npc_sysenv import (
+    get_model_and_provider,
+    get_available_models,
+    get_system_message,
+    NPCSH_STREAM_OUTPUT,
+)
+
+from .embeddings import search_similar_texts, chroma_client
 
 from .llm_funcs import (
     execute_llm_command,
@@ -42,7 +48,6 @@ from .llm_funcs import (
     check_llm_command,
     generate_image,
     get_embeddings,
-
 )
 from .plonk import plonk, action_space
 from .helpers import get_db_npcs, get_npc_path, initialize_npc_project
@@ -1097,6 +1102,7 @@ def execute_slash_command(
     model: str = None,
     provider: str = None,
     conversation_id: str = None,
+    stream: bool = False,
 ):
     """
     Function Description:
@@ -1391,9 +1397,7 @@ Bash commands and other programs can be executed directly. """
         # output = enter_observation_mode(command_history, npc=npc)
     elif command_name == "cmd" or command_name == "command":
         output = execute_llm_command(
-            command,
-            command_history,
-            npc=npc,
+            command, command_history, npc=npc, stream=NPCSH_STREAM_OUTPUT
         )
     elif command_name == "rag":
         output = execute_rag_command(command, command_history, messages=messages)
@@ -1426,6 +1430,7 @@ Bash commands and other programs can be executed directly. """
             messages=[],
             model=model,
             provider=provider,
+            stream=stream,
         )
     elif command_name == "spool" or command_name == "sp":
         inherit_last = 0
@@ -1476,6 +1481,7 @@ Bash commands and other programs can be executed directly. """
                     device=device,
                     messages=spool_context,
                     conversation_id=conversation_id,
+                    stream=stream,
                 )
                 return {"messages": output["messages"], "output": output}
 
@@ -1490,6 +1496,7 @@ Bash commands and other programs can be executed directly. """
             rag_similarity_threshold=rag_similarity_threshold,
             device=device,
             conversation_id=conversation_id,
+            stream=stream,
         )
         return {"messages": output["messages"], "output": output}
 
@@ -1574,6 +1581,7 @@ def rehash_last_message(
     model: str,
     provider: str,
     npc: Any = None,
+    stream: bool = False,
 ) -> dict:
     # Fetch the last message or command related to this conversation ID
 
@@ -1590,6 +1598,7 @@ def rehash_last_message(
         provider=provider,
         npc=npc,
         messages=None,
+        stream=stream,
     )
 
 
@@ -1688,6 +1697,7 @@ def execute_command(
     provider: str = None,
     messages: list = None,
     conversation_id: str = None,
+    stream: bool = False,
 ):
     """
     Function Description:
@@ -1775,7 +1785,10 @@ def execute_command(
                 model=model_override,
                 provider=provider_override,
                 conversation_id=conversation_id,
+                stream=stream,
             )
+            ## deal with stream here
+
             output = result.get("output", "")
             new_messages = result.get("messages", None)
             subcommands = result.get("subcommands", [])
@@ -1827,7 +1840,10 @@ def execute_command(
                             messages=messages,
                             model=model_override,
                             provider=provider_override,
+                            stream=stream,
                         )
+                        ## deal with stream here
+
                     else:
                         # ALL THE EXISTING SUBPROCESS AND SPECIFIC COMMAND CHECKS REMAIN
                         try:
@@ -1897,7 +1913,9 @@ def execute_command(
                     messages=messages,
                     model=model_override,
                     provider=provider_override,
+                    stream=stream,
                 )
+                ## deal with stream here
 
             # Capture output for next piped command
         if isinstance(output, dict):
@@ -1909,10 +1927,13 @@ def execute_command(
 
         # Only render markdown once, at the end
         if output:
-            try:
-                render_markdown(output)
-            except AttributeError:
-                print(output)
+            ## deal with stream output here.
+
+            if not stream:
+                try:
+                    render_markdown(output)
+                except AttributeError:
+                    print(output)
 
             piped_outputs.append(f'"{output}"')
 
@@ -1972,12 +1993,117 @@ def execute_command(
     return {"messages": messages, "output": output}
 
 
+def execute_command_stream(
+    command: str,
+    command_history: CommandHistory,
+    db_path: str,
+    npc_compiler: NPCCompiler,
+    embedding_model: Union[SentenceTransformer, Any] = None,
+    current_npc: NPC = None,
+    model: str = None,
+    provider: str = None,
+    messages: list = None,
+    conversation_id: str = None,
+):
+    """
+    Function Description:
+        Executes a command, with support for piping outputs between commands.
+    Args:
+        command : str : Command
+        command_history : CommandHistory : Command history
+        db_path : str : Database path
+        npc_compiler : NPCCompiler : NPC compiler
+    Keyword Args:
+        embedding_model : Union[SentenceTransformer, Any] : Embedding model
+        current_npc : NPC : Current NPC
+        messages : list : Messages
+    Returns:stream
+        dict : dict : Dictionary
+    """
+    subcommands = []
+    output = ""
+    location = os.getcwd()
+    db_conn = sqlite3.connect(db_path)
+
+    # Split commands by pipe, preserving the original parsing logic
+    commands = command.split("|")
+    available_models = get_available_models()
+
+    # Track piped output between commands
+    piped_outputs = []
+
+    for idx, single_command in enumerate(commands):
+        # Modify command if there's piped output from previous command
+        if idx > 0:
+            single_command, additional_args = parse_piped_command(single_command)
+            if len(piped_outputs) > 0:
+                single_command = replace_pipe_outputs(
+                    single_command, piped_outputs, idx
+                )
+            if len(additional_args) > 0:
+                single_command = f"{single_command} {' '.join(additional_args)}"
+        messages.append({"role": "user", "content": single_command})
+        if model is None:
+            # note the only situation where id expect this to take precedent is when a frontend is specifying the model
+            # to pass through at each time
+            model_override, provider_override, command = get_model_and_provider(
+                single_command, available_models[0]
+            )
+            if model_override is None:
+                model_override = os.getenv("NPCSH_CHAT_MODEL")
+            if provider_override is None:
+                provider_override = os.getenv("NPCSH_CHAT_PROVIDER")
+        else:
+            model_override = model
+            provider_override = provider
+
+        # Rest of the existing logic remains EXACTLY the same
+        # print(model_override, provider_override)
+        if current_npc is None:
+            valid_npcs = get_db_npcs(db_path)
+
+            npc_name = get_npc_from_command(command)
+            if npc_name is None:
+                npc_name = "sibiji"  # Default NPC
+            npc_path = get_npc_path(npc_name, db_path)
+            npc = load_npc_from_file(npc_path, db_conn)
+        else:
+            npc = current_npc
+        # print(single_command.startswith("/"))
+        if single_command.startswith("/"):
+            return execute_slash_command(
+                single_command,
+                command_history,
+                db_path,
+                db_conn,
+                npc_compiler,
+                valid_npcs,
+                npc=npc,
+                messages=messages,
+                model=model_override,
+                provider=provider_override,
+                conversation_id=conversation_id,
+                stream=True,
+            )
+        else:  # LLM command processing with existing logic
+            return check_llm_command(
+                single_command,
+                command_history,
+                npc=npc,
+                messages=messages,
+                model=model_override,
+                provider=provider_override,
+                stream=True,
+            )
+
+
 def enter_whisper_mode(
     command_history: Any,
     messages: list = None,
     npc: Any = None,
     spool=False,
     continuous=False,
+    stream=False,
 ) -> str:
     """
     Function Description:
@@ -2041,15 +2167,26 @@ def enter_whisper_mode(
             break
         if not spool:
             llm_response = check_llm_command(
-                text, command_history, npc=npc, messages=messages
+                text, command_history, npc=npc, messages=messages, stream=stream
             )  # Use
 
             messages = llm_response["messages"]
             output = llm_response["output"]
         else:
-            messages = get_conversation(
-                messages, model=model, provider=provider, npc=npc
-            )
+            if stream:
+                messages = get_stream(
+                    messages,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
+                )
+            else:
+                messages = get_conversation(
+                    messages,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
+                )
 
             output = messages[-1]["content"]
         print(output)
@@ -2410,6 +2547,7 @@ def enter_spool_mode(
     device: str = "cpu",
     messages: List[Dict] = None,
     conversation_id: str = None,
+    stream: bool = False,
 ) -> Dict:
     """
     Function Description:
@@ -2486,6 +2624,7 @@ def enter_spool_mode(
                     model=model,
                     provider=provider,
                     npc=npc,
+                    stream=stream,
                 )
                 print(output["output"])
                 messages = output.get("messages", [])
@@ -2512,6 +2651,7 @@ def enter_spool_mode(
                         file_path,
                         filename,
                         npc=npc,
+                        stream=stream,
                     )
 
                 else:
@@ -2525,6 +2665,7 @@ def enter_spool_mode(
                         output["file_path"],
                         output["filename"],
                         npc=npc,
+                        stream=stream,
                         **output["model_kwargs"],
                     )
                 if output:
@@ -2578,7 +2719,13 @@ def enter_spool_mode(
             spool_context.append({"role": "user", "content": user_input})
 
             # Get the conversation
-            conversation_result = get_conversation(spool_context, **kwargs_to_pass)
+            if stream:
+                conversation_result = ""
+                output = get_conversation(spool_context, **kwargs_to_pass)
+                for chunk in output:
+                    print(chunk)
+            else:
+                conversation_result = get_stream(spool_context, **kwargs_to_pass)
 
             # Handle potential errors in conversation_result
             if isinstance(conversation_result, str) and "Error" in conversation_result:
