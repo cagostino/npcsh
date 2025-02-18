@@ -19,6 +19,7 @@ def get_ollama_conversation(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -47,6 +48,7 @@ def get_openai_conversation(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:
@@ -99,6 +101,7 @@ def get_openai_like_conversation(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     api_url: str = None,
     api_key: str = None,
     **kwargs,
@@ -162,6 +165,7 @@ def get_anthropic_conversation(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:
@@ -216,6 +220,8 @@ def get_gemini_conversation(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
+    api_key: str = None,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -239,7 +245,11 @@ def get_gemini_conversation(
 
 
 def get_deepseek_conversation(
-    messages: List[Dict[str, str]], model: str, npc: Any = None
+    messages: List[Dict[str, str]],
+    model: str,
+    npc: Any = None,
+    tools: list = None,
+    api_key: str = None,
 ) -> List[Dict[str, str]]:
     """
     Function Description:

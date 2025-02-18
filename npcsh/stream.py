@@ -21,6 +21,7 @@ def get_anthropic_stream(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     api_key: str = None,
     **kwargs,
 ) -> Generator[str, None, None]:
@@ -47,6 +48,7 @@ def get_ollama_stream(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     **kwargs,
 ) -> Generator[str, None, None]:
     """Streams responses from Ollama, yielding raw text chunks."""
@@ -63,6 +65,7 @@ def get_openai_stream(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     api_key: str = None,
     **kwargs,
 ) -> Generator[str, None, None]:
@@ -86,6 +89,7 @@ def get_openai_like_stream(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     api_key: str = None,
     api_url: str = None,
 ) -> List[Dict[str, str]]:
@@ -128,6 +132,7 @@ def get_deepseek_stream(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:
@@ -169,6 +174,7 @@ def get_gemini_stream(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    tools: list = None,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:

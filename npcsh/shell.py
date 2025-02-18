@@ -198,6 +198,10 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
 
             messages = result.get("messages", messages)
 
+            # need to adjust the output for the messages to all have
+            # model, provider, npc, timestamp, role, content
+            # also messages
+
             if "current_npc" in result:
                 current_npc = result["current_npc"]
 
