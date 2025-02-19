@@ -44,6 +44,7 @@ from .embeddings import search_similar_texts, chroma_client
 from .llm_funcs import (
     execute_llm_command,
     execute_llm_question,
+    get_stream,
     get_conversation,
     check_llm_command,
     generate_image,
