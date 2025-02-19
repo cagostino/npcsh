@@ -2690,6 +2690,7 @@ def enter_spool_mode(
                 kwargs_to_pass["npc"] = npc
                 if npc.model:
                     kwargs_to_pass["model"] = npc.model
+
                 if npc.provider:
                     kwargs_to_pass["provider"] = npc.provider
 

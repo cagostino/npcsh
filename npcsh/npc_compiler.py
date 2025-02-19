@@ -19,6 +19,7 @@ from collections import defaultdict, deque
 # Importing functions
 from .llm_funcs import (
     get_llm_response,
+    get_stream,
     process_data_output,
     get_data_response,
     generate_image,
@@ -105,7 +106,11 @@ class Tool:
         tools_dict: dict,
         jinja_env: Environment,
         command: str,
+        model: str = None,
+        provider: str = None,
         npc=None,
+        stream: bool = False,
+        messages: List[Dict[str, str]] = None,
     ):
         # Create the context with input values at top level for Jinja access
         context = npc.shared_context.copy() if npc else {}
@@ -120,9 +125,21 @@ class Tool:
         )
 
         # Process Steps
-        for step in self.steps:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
-
+        for i, step in enumerate(self.steps):
+            context = self.execute_step(
+                step,
+                context,
+                jinja_env,
+                model=model,
+                provider=provider,
+                npc=npc,
+                stream=stream,
+                messages=messages,
+            )
+            # if i is the last step and the user has reuqested a streaming output
+            # then we should return the stream
+            if i == len(self.steps) - 1:
+                return context
         # Return the final output
         if context.get("output") is not None:
             return context.get("output")
@@ -130,7 +147,15 @@ class Tool:
             return context.get("llm_response")
 
     def execute_step(
-        self, step: dict, context: dict, jinja_env: Environment, npc: Any = None
+        self,
+        step: dict,
+        context: dict,
+        jinja_env: Environment,
+        npc: Any = None,
+        model: str = None,
+        provider: str = None,
+        stream: bool = False,
+        messages: List[Dict[str, str]] = None,
     ):
         engine = step.get("engine", "natural")
         code = step.get("code", "")
@@ -146,11 +171,21 @@ class Tool:
         if engine == "natural":
             if len(rendered_code.strip()) > 0:
                 # print(f"Executing natural language step: {rendered_code}")
-                llm_response = get_llm_response(rendered_code, npc=npc)
-                response_text = llm_response.get("response", "")
-                # Store both in context for reference
-                context["llm_response"] = response_text
-                context["results"] = response_text
+                if stream:
+                    messages = messages.copy() if messages else []
+                    messages.append({"role": "user", "content": rendered_code})
+                    return get_stream(
+                        messages, model=model, provider=provider, npc=npc
+                    )
+
+                else:
+                    llm_response = get_llm_response(
+                        rendered_code, model=model, provider=provider, npc=npc
+                    )
+                    response_text = llm_response.get("response", "")
+                    # Store both in context for reference
+                    context["llm_response"] = response_text
+                    context["results"] = response_text
 
         elif engine == "python":
             exec_globals = {
@@ -183,7 +218,7 @@ class Tool:
             exec_env.update(new_locals)
 
             context.update(exec_env)
-
+            print(context)
             # If output is set, also set it as results
             if "output" in exec_env:
                 if exec_env["output"] is not None:
@@ -1916,9 +1951,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df["ai_analysis"] = (
-                        synthesized_df  # Adjust as per what synthesize returns
-                    )
+                    df[
+                        "ai_analysis"
+                    ] = synthesized_df  # Adjust as per what synthesize returns
 
             return df
 

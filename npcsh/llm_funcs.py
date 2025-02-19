@@ -599,7 +599,6 @@ def execute_llm_command(
                 )
 
             else:
-
                 response = get_llm_response(
                     prompt,
                     model=model,
@@ -844,6 +843,8 @@ def check_llm_command(
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
+        if stream:
+            return result
         messages = result.get("messages", messages)
         output = result.get("output", "")
         return {"messages": messages, "output": output}
@@ -937,21 +938,21 @@ def handle_tool_call(
     """
     print(f"handle_tool_call invoked with tool_name: {tool_name}")
     # print(npc)
-    if not npc or not npc.tools_dict:
+    if not npc or not npc.all_tools_dict:
         print("not available")
-        available_tools = npc.tools_dict if npc else None
+        available_tools = npc.all_tools_dict if npc else None
         print(
             f"No tools available for NPC '{npc.name}' or tools_dict is empty. Available tools: {available_tools}"
         )
         return f"No tools are available for NPC '{npc.name or 'default'}'."
 
-    if tool_name not in npc.tools_dict:
+    if tool_name not in npc.all_tools_dict:
         print("not available")
         print(f"Tool '{tool_name}' not found in NPC's tools_dict.")
-        print("available tools", npc.tools_dict)
+        print("available tools", npc.all_tools_dict)
         return f"Tool '{tool_name}' not found."
 
-    tool = npc.tools_dict[tool_name]
+    tool = npc.all_tools_dict[tool_name]
     print(f"Tool found: {tool.tool_name}")
     jinja_env = Environment(loader=FileSystemLoader("."), undefined=Undefined)
 
@@ -1012,8 +1013,18 @@ def handle_tool_call(
 
     # try:
     tool_output = tool.execute(
-        input_values, npc.tools_dict, jinja_env, command, npc=npc
+        input_values,
+        npc.all_tools_dict,
+        jinja_env,
+        command,
+        model=model,
+        provider=provider,
+        npc=npc,
+        stream=stream,
+        messages=messages,
     )
+    if stream:
+        return tool_output
     # print(f"Tool output: {tool_output}")
     # render_markdown(str(tool_output))
     if messages is not None:  # Check if messages is not None

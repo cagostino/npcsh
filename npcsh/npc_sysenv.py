@@ -6,6 +6,7 @@ import io
 import chromadb
 
 from dotenv import load_dotenv
+from PIL import Image
 
 
 def get_model_and_provider(command: str, available_models: list) -> tuple:

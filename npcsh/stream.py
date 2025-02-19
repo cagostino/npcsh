@@ -24,8 +24,9 @@ def get_anthropic_stream(
     tools: list = None,
     api_key: str = None,
     **kwargs,
-) -> Generator[str, None, None]:
+) -> Generator:
     """Streams responses from Anthropic, yielding raw text chunks."""
+    print(messages)
     messages_copy = messages.copy()
 
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
@@ -37,10 +38,11 @@ def get_anthropic_stream(
     response = client.messages.create(
         model=model,
         system=system_message,
-        messages=messages,
+        messages=messages_copy,
         max_tokens=8192,
         stream=True,
     )
+    print(response, type(response))
     return response
 
 
@@ -50,7 +52,7 @@ def get_ollama_stream(
     npc: Any = None,
     tools: list = None,
     **kwargs,
-) -> Generator[str, None, None]:
+) -> Generator:
     """Streams responses from Ollama, yielding raw text chunks."""
     messages_copy = messages.copy()
     if messages_copy[0]["role"] != "system":
@@ -68,7 +70,7 @@ def get_openai_stream(
     tools: list = None,
     api_key: str = None,
     **kwargs,
-) -> Generator[str, None, None]:
+) -> Generator:
     """Streams responses from OpenAI, yielding raw text chunks."""
     if api_key is None:
         api_key = os.environ["OPENAI_API_KEY"]
