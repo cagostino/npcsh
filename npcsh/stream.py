@@ -42,7 +42,7 @@ def get_anthropic_stream(
         max_tokens=8192,
         stream=True,
     )
-    print(response, type(response))
+    # print(response, type(response))
     return response
 
 

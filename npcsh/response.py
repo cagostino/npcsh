@@ -194,6 +194,7 @@ def get_openai_response(
     format: Union[str, BaseModel] = None,
     api_key: str = None,
     messages: List[Dict[str, str]] = None,
+    **kwargs,
 ):
     """
     Function Description:

@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 import subprocess
 from typing import Dict, Any, List, Optional
 
+
 try:
     from sentence_transformers import SentenceTransformer
 except:
@@ -30,6 +31,7 @@ from .command_history import (
     CommandHistory,
     start_new_conversation,
     save_conversation_message,
+    save_attachment_to_message,
 )
 from .llm_funcs import (
     execute_llm_command,
@@ -206,15 +208,37 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 current_npc = result["current_npc"]
 
             output = result.get("output")
-            save_conversation_message(
-                command_history, current_conversation_id, "user", user_input
+            conversation_id = result.get("conversation_id")
+            model = result.get("model")
+            provider = result.get("provider")
+            npc = result.get("npc")
+            command_history = result.get("command_history")
+            messages = result.get("messages")
+            current_path = result.get("current_path")
+            message_id = save_conversation_message(
+                command_history,
+                conversation_id,
+                "user",
+                user_input,
+                wd=current_path,
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
             )
+
             save_conversation_message(
                 command_history,
-                current_conversation_id,
+                conversation_id,
                 "assistant",
-                result.get("output", ""),
+                output,
+                wd=current_path,
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
             )
+
+            # if there are attachments in most recent user sent message, save them
+            # save_attachment_to_message(command_history, message_id, # file_path, attachment_name, attachment_type)
 
             if (
                 result["output"] is not None

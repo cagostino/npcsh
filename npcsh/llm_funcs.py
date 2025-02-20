@@ -482,6 +482,7 @@ def execute_llm_command(
     messages: Optional[List[Dict[str, str]]] = None,
     retrieved_docs=None,
     n_docs=5,
+    stream=False,
 ) -> str:
     """
     Function Description:

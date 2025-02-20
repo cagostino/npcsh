@@ -1991,7 +1991,18 @@ def execute_command(
             except Exception as e:
                 print(f"Warning: Failed to store embeddings: {str(e)}")
 
-    return {"messages": messages, "output": output}
+    # return following
+
+    return {
+        "messages": messages,
+        "output": output,
+        "conversation_id": conversation_id,
+        "model": model,
+        "current_path": os.getcwd(),
+        "provider": provider,
+        "npc": npc.name if npc else None,
+        command_history: command_history,
+    }
 
 
 def execute_command_stream(
@@ -2571,6 +2582,10 @@ def enter_spool_mode(
 
     loaded_content = {}  # New dictionary to hold loaded content
 
+    # Create conversation ID if not provided
+    if not conversation_id:
+        conversation_id = start_new_conversation()
+
     # Load specified files if any
     if files:
         for file in files:
@@ -2633,19 +2648,62 @@ def enter_spool_mode(
 
             if user_input.lower() == "/whisper":  # Check for whisper command
                 messages = enter_whisper_mode(command_history, spool_context, npc)
-                print(messages)  # Optionally print output from whisper mode
+                # print(messages)  # Optionally print output from whisper mode
                 continue  # Continue with spool mode after exiting whisper mode
 
             if user_input.startswith("/ots"):
                 command_parts = user_input.split()
+                file_path = None
+                filename = None
+
+                # Handle image loading/capturing
                 if len(command_parts) > 1:
                     filename = command_parts[1]
                     file_path = os.path.join(os.getcwd(), filename)
-                    # Get user prompt about the image
-                    user_prompt = input(
-                        "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                else:
+                    output = capture_screenshot(npc=npc)
+                    if output and "file_path" in output:
+                        file_path = output["file_path"]
+                        filename = output["filename"]
+
+                if not file_path or not os.path.exists(file_path):
+                    print(f"Error: Image file not found at {file_path}")
+                    continue
+
+                # Get user prompt about the image
+                user_prompt = input(
+                    "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                )
+
+                # Read image file as binary data
+                try:
+                    with open(file_path, "rb") as img_file:
+                        img_data = img_file.read()
+
+                    # Create an attachment for the image
+                    image_attachment = {
+                        "name": filename,
+                        "type": guess_mime_type(filename),
+                        "data": img_data,
+                        "size": len(img_data),
+                    }
+
+                    # Save user message with image attachment
+                    message_id = save_conversation_message(
+                        command_history,
+                        conversation_id,
+                        "user",
+                        user_prompt
+                        if user_prompt
+                        else f"Please analyze this image: {filename}",
+                        wd=os.getcwd(),
+                        model=model,
+                        provider=provider,
+                        npc=npc.name if npc else None,
+                        attachments=[image_attachment],
                     )
 
+                    # Now use analyze_image which will process the image
                     output = analyze_image(
                         command_history,
                         user_prompt,
@@ -2653,37 +2711,43 @@ def enter_spool_mode(
                         filename,
                         npc=npc,
                         stream=stream,
+                        message_id=message_id,  # Pass the message ID for reference
                     )
 
-                else:
-                    output = capture_screenshot(npc=npc)
-                    user_prompt = input(
-                        "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                    # Save assistant's response
+                    if output and isinstance(output, str):
+                        save_conversation_message(
+                            command_history,
+                            conversation_id,
+                            "assistant",
+                            output,
+                            wd=os.getcwd(),
+                            model=model,
+                            provider=provider,
+                            npc=npc.name if npc else None,
+                        )
+
+                    # Update spool context with this exchange
+                    spool_context.append(
+                        {"role": "user", "content": user_prompt, "image": file_path}
                     )
-                    output = analyze_image(
-                        command_history,
-                        user_prompt,
-                        output["file_path"],
-                        output["filename"],
-                        npc=npc,
-                        stream=stream,
-                        **output["model_kwargs"],
-                    )
-                if output:
+                    spool_context.append({"role": "assistant", "content": output})
+
                     if isinstance(output, dict) and "filename" in output:
                         message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
-                    else:  # This handles both LLM responses and error messages (both strings)
+                    else:
                         message = output
-                    return {
-                        "messages": messages,
-                        "output": message,
-                    }  # Return the message
-                else:  # Handle the case where capture_screenshot returns None
-                    print("Screenshot capture failed.")
-                    return {
-                        "messages": messages,
-                        "output": None,
-                    }  # Return None to indicate failure
+
+                    render_markdown(
+                        output["response"]
+                        if isinstance(output["response"], str)
+                        else str(output["response"])
+                    )
+                    continue
+
+                except Exception as e:
+                    print(f"Error processing image: {str(e)}")
+                    continue
 
             # Prepare kwargs for get_conversation
             kwargs_to_pass = {}
@@ -2720,14 +2784,26 @@ def enter_spool_mode(
             # Add user input to spool context
             spool_context.append({"role": "user", "content": user_input})
 
+            # Save user message to conversation history
+            message_id = save_conversation_message(
+                command_history,
+                conversation_id,
+                "user",
+                user_input,
+                wd=os.getcwd(),
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
+            )
+
             # Get the conversation
             if stream:
                 conversation_result = ""
-                output = get_conversation(spool_context, **kwargs_to_pass)
+                output = get_stream(spool_context, **kwargs_to_pass)
                 for chunk in output:
                     print(chunk)
             else:
-                conversation_result = get_stream(spool_context, **kwargs_to_pass)
+                conversation_result = get_conversation(spool_context, **kwargs_to_pass)
 
             # Handle potential errors in conversation_result
             if isinstance(conversation_result, str) and "Error" in conversation_result:
@@ -2765,11 +2841,17 @@ def enter_spool_mode(
                 assistant_reply,
                 os.getcwd(),
             )
+
+            # Save assistant's response to conversation history
             save_conversation_message(
-                command_history, conversation_id, "user", user_input
-            )
-            save_conversation_message(
-                command_history, conversation_id, "assistant", assistant_reply
+                command_history,
+                conversation_id,
+                "assistant",
+                assistant_reply,
+                wd=os.getcwd(),
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
             )
 
             # sometimes claude responds with unfinished markdown notation. so we need to check if there are two sets
@@ -2789,3 +2871,22 @@ def enter_spool_mode(
             [msg["content"] for msg in spool_context if msg["role"] == "assistant"]
         ),
     }
+
+
+def guess_mime_type(filename):
+    """Guess the MIME type of a file based on its extension."""
+    extension = os.path.splitext(filename)[1].lower()
+    mime_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+        ".webp": "image/webp",
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".csv": "text/csv",
+        ".json": "application/json",
+        ".md": "text/markdown",
+    }
+    return mime_types.get(extension, "application/octet-stream")
