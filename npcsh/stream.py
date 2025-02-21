@@ -19,7 +19,7 @@ import base64
 
 
 def get_anthropic_stream(
-    messages: List[Dict[str, str]],
+    messages,
     model: str,
     npc: Any = None,
     tools: list = None,
@@ -33,11 +33,10 @@ def get_anthropic_stream(
         api_key = os.environ.get("ANTHROPIC_API_KEY")
     client = anthropic.Anthropic(api_key=api_key)
 
-    if not messages:
-        messages = [{"role": "user", "content": []}]
-
+    for message in messages:
+        if isinstance(message["content"], str):
+            message["content"] = [{"type": "text", "text": message["content"]}]
     if images:
-        messages[-1].setdefault("content", [])
         for img in images:
             with open(img["file_path"], "rb") as image_file:
                 img["data"] = base64.b64encode(image_file.read()).decode("utf-8")

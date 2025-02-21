@@ -2191,6 +2191,7 @@ def execute_command_stream(
     model: str = None,
     provider: str = None,
     messages: list = None,
+    images: list = None,
     conversation_id: str = None,
 ):
     """
@@ -2281,6 +2282,7 @@ def execute_command_stream(
                 messages=messages,
                 model=model_override,
                 provider=provider_override,
+                images = images,
                 stream=True,
             )
 

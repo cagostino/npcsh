@@ -134,63 +134,63 @@ class CommandHistory:
         attachments=None,
         message_id=None,
     ):
-        """
-        Add a conversation message with optional attachments.
-
-        Args:
-            role: The role of the message sender ('user', 'assistant', etc.)
-            content: The message content
-            conversation_id: The ID of the conversation
-            directory_path: The current working directory path
-            model: The model used (optional)
-            provider: The provider used (optional)
-            npc: The NPC identifier (optional)
-            attachments: List of dicts containing attachment info (optional)
-            message_id: Custom message ID (if None, one will be generated)
-
-        Returns:
-            The message ID
-        """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Generate message ID if not provided
+        print(message_id)
         if message_id is None:
             message_id = self.generate_message_id()
-
+        print(message_id)
         if isinstance(content, dict):
             content = json.dumps(content, cls=CustomJSONEncoder)
 
+        # Check if message_id already exists
         self.cursor.execute(
-            """
-            INSERT INTO conversation_history
-            (message_id, timestamp, role, content, conversation_id, directory_path, model, provider, npc)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-            (
-                message_id,
-                timestamp,
-                role,
-                content,
-                conversation_id,
-                directory_path,
-                model,
-                provider,
-                npc,
-            ),
+            "SELECT content FROM conversation_history WHERE message_id = ?",
+            (message_id,),
         )
+        existing_row = self.cursor.fetchone()
 
-        # Add attachments if provided
+        if existing_row:
+            # Append to existing content
+            new_content = existing_row[0] + content
+            self.cursor.execute(
+                "UPDATE conversation_history SET content = ?, timestamp = ? WHERE message_id = ?",
+                (new_content, timestamp, message_id),
+            )
+        else:
+            # Insert new message
+            self.cursor.execute(
+                """
+                INSERT INTO conversation_history
+                (message_id, timestamp, role, content, conversation_id, directory_path, model, provider, npc)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    message_id,
+                    timestamp,
+                    role,
+                    content,
+                    conversation_id,
+                    directory_path,
+                    model,
+                    provider,
+                    npc,
+                ),
+            )
+
+        print("asdfash ", message_id)
+        self.conn.commit()
         if attachments:
+            print("attachments ", attachments)
             for attachment in attachments:
                 self.add_attachment(
-                    message_id=message_id,
-                    attachment_name=attachment.get("name"),
-                    attachment_type=attachment.get("type"),
-                    attachment_data=attachment.get("data"),
+                    message_id,
+                    attachment["name"],
+                    attachment["type"],
+                    attachment["data"],
                     attachment_size=attachment.get("size"),
                 )
 
-        self.conn.commit()
         return message_id
 
     def add_attachment(
@@ -216,6 +216,7 @@ class CommandHistory:
         # Calculate size if not provided
         if attachment_size is None and attachment_data is not None:
             attachment_size = len(attachment_data)
+        print("ghr ", message_id)
 
         self.cursor.execute(
             """
@@ -231,6 +232,20 @@ class CommandHistory:
                 attachment_size,
                 timestamp,
             ),
+        )
+        self.conn.commit()
+
+    def get_full_message_content(self, message_id):
+        self.cursor.execute(
+            "SELECT content FROM conversation_history WHERE message_id = ? ORDER BY timestamp ASC",
+            (message_id,),
+        )
+        return "".join(row[0] for row in self.cursor.fetchall())  # Merge chunks
+
+    def update_message_content(self, message_id, full_content):
+        self.cursor.execute(
+            "UPDATE conversation_history SET content = ? WHERE message_id = ?",
+            (full_content, message_id),
         )
         self.conn.commit()
 
@@ -438,6 +453,7 @@ def save_conversation_message(
     provider: str = None,
     npc: str = None,
     attachments: List[Dict] = None,
+    message_id: str = None,
 ):
     """
     Saves a conversation message linked to a conversation ID with optional attachments.
@@ -463,6 +479,7 @@ def save_conversation_message(
     """
     if wd is None:
         wd = os.getcwd()
+
     return command_history.add_conversation(
         role=role,
         content=content,
@@ -472,6 +489,7 @@ def save_conversation_message(
         provider=provider,
         npc=npc,
         attachments=attachments,
+        message_id=message_id,
     )
 
 

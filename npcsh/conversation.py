@@ -20,6 +20,7 @@ def get_ollama_conversation(
     model: str,
     npc: Any = None,
     tools: list = None,
+    images=None,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -50,6 +51,7 @@ def get_openai_conversation(
     npc: Any = None,
     tools: list = None,
     api_key: str = None,
+    images=None,
     **kwargs,
 ) -> List[Dict[str, str]]:
     """
@@ -166,6 +168,7 @@ def get_anthropic_conversation(
     model: str,
     npc: Any = None,
     tools: list = None,
+    images=None,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:

@@ -302,6 +302,7 @@ def get_stream(
     provider: str = NPCSH_CHAT_PROVIDER,
     model: str = NPCSH_CHAT_MODEL,
     npc: Any = None,
+    images: List[Dict[str, str]] = None,
     api_url: str = None,
     api_key: str = None,
     **kwargs,
@@ -336,14 +337,24 @@ def get_stream(
         model = "llama3.2"
     print(model, provider)
     if provider == "ollama":
-        return get_ollama_stream(messages, model, npc=npc, **kwargs)
+        return get_ollama_stream(messages, model, npc=npc, images=images, **kwargs)
     elif provider == "openai":
-        return get_openai_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
+        return get_openai_stream(
+            messages, model, npc=npc, api_key=api_key, images=images, **kwargs
+        )
     elif provider == "anthropic":
-        return get_anthropic_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
+        return get_anthropic_stream(
+            messages, model, npc=npc, api_key=api_key, images=images, **kwargs
+        )
     elif provider == "openai-like":
         return get_openai_like_stream(
-            messages, model, npc=npc, api_url=api_url, api_key=api_key, **kwargs
+            messages,
+            model,
+            npc=npc,
+            api_url=api_url,
+            api_key=api_key,
+            images=images,
+            **kwargs,
         )
     elif provider == "deepseek":
         return get_deepseek_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
@@ -389,11 +400,17 @@ def get_conversation(
 
     # print(provider, model)
     if provider == "ollama":
-        return get_ollama_conversation(messages, model, npc=npc, **kwargs)
+        return get_ollama_conversation(
+            messages, model, npc=npc, images=images, **kwargs
+        )
     elif provider == "openai":
-        return get_openai_conversation(messages, model, npc=npc, **kwargs)
+        return get_openai_conversation(
+            messages, model, npc=npc, images=images, **kwargs
+        )
     elif provider == "anthropic":
-        return get_anthropic_conversation(messages, model, npc=npc, **kwargs)
+        return get_anthropic_conversation(
+            messages, model, npc=npc, images=images, **kwargs
+        )
     elif provider == "gemini":
         return get_gemini_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "deepseek":
@@ -413,6 +430,7 @@ def execute_llm_question(
     retrieved_docs=None,
     n_docs: int = 5,
     stream: bool = False,
+    images: List[Dict[str, str]] = None,
 ):
     location = os.getcwd()
     if messages is None or len(messages) == 0:
@@ -439,7 +457,9 @@ def execute_llm_question(
     # Use the existing messages list
     if stream:
         print("beginning stream")
-        response = get_stream(messages, model=model, provider=provider, npc=npc)
+        response = get_stream(
+            messages, model=model, provider=provider, npc=npc, images=images
+        )
         # let streamer deal with the diff response data and messages
         return response
         # print("Response from get_stream:", response)
@@ -452,7 +472,9 @@ def execute_llm_question(
         # messages.append({"role": "assistant", "content": output})
 
     else:
-        response = get_conversation(messages, model=model, provider=provider, npc=npc)
+        response = get_conversation(
+            messages, model=model, provider=provider, npc=npc, images=images
+        )
 
     # Print response from get_conversation for debugging
     # print("Response from get_conversation:", response)
@@ -680,6 +702,7 @@ def check_llm_command(
     npc: Any = None,
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
+    images: list = None,
     n_docs=5,
     stream=False,
 ):
@@ -716,10 +739,22 @@ def check_llm_command(
     Determine the nature of the user's request:
     1. Is it a specific request for a task that could be accomplished via a bash command or a simple python script that could be executed in a single bash call?
     2. Should a tool be invoked to fulfill the request?
-    3. Is it a general question that requires an informative answer?
+    3. Is it a general question that requires an informative answer or a highly specific question that
+        requires inforrmation on the web?
     4. Would this question be best answered by an alternative NPC?
     5. Is it a complex request that actually requires more than one
     tool to be called, perhaps in a sequence?
+
+    Excluding time-sensitive phenomena,
+        most general questions can be answered without any
+        extra tools or agent passes. Only use tools or pass to other NPCs
+        when it is obvious that the answer needs to be as up-to-date as possible. For example,
+        a question about where mount everest is does not necessarily need to be answered by a tool call or an agent pass.
+        Similarly, if a user asks to exaplin the plot of the aeneid, this can be answered without a tool call or agent pass.
+        If a user were to ask for the current weather in tokyo or the current price of bitcoin or who the mayor of a city is, then a tool call or agent pass may be appropriate.
+
+        Tools are valuable but their use should be limited and purposeful to
+        ensure the best user experience.
 
     Available tools:
     """
@@ -860,6 +895,7 @@ def check_llm_command(
             npc=npc,
             retrieved_docs=retrieved_docs,
             stream=stream,
+            images=images,
         )
         if stream:
             return result
