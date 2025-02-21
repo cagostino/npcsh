@@ -143,10 +143,15 @@ def get_ollama_response(
     """
     # try:
     # Prepare the message payload
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+    if messages is None or len(messages) == 0:
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ]
 
-    message = {"role": "user", "content": prompt}
     if images:
-        message["images"] = [image["file_path"] for image in images]
+        messages[-1]["images"] = [image["file_path"] for image in images]
 
     # Prepare format
     if isinstance(format, type):

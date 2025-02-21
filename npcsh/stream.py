@@ -15,6 +15,7 @@ from openai import OpenAI
 from diffusers import StableDiffusionPipeline
 from google.generativeai import types
 import google.generativeai as genai
+import base64
 
 
 def get_anthropic_stream(
@@ -22,45 +23,66 @@ def get_anthropic_stream(
     model: str,
     npc: Any = None,
     tools: list = None,
+    images: List[Dict[str, str]] = None,
     api_key: str = None,
     **kwargs,
 ) -> Generator:
-    """Streams responses from Anthropic, yielding raw text chunks."""
-    print(messages)
-    messages_copy = messages.copy()
+    """Streams responses from Anthropic, supporting images and yielding raw text chunks."""
 
-    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
     if api_key is None:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
-
     client = anthropic.Anthropic(api_key=api_key)
 
+    if not messages:
+        messages = [{"role": "user", "content": []}]
+
+    if images:
+        messages[-1].setdefault("content", [])
+        for img in images:
+            with open(img["file_path"], "rb") as image_file:
+                img["data"] = base64.b64encode(image_file.read()).decode("utf-8")
+                img["media_type"] = "image/jpeg"
+                messages[-1]["content"].append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": img["media_type"],
+                            "data": img["data"],
+                        },
+                    }
+                )
+
     response = client.messages.create(
-        model=model,
-        system=system_message,
-        messages=messages_copy,
-        max_tokens=8192,
-        stream=True,
+        model=model, messages=messages, max_tokens=8192, stream=True
     )
-    # print(response, type(response))
-    return response
+
+    for chunk in response:
+        yield chunk
 
 
 def get_ollama_stream(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
+    images: list = None,
     tools: list = None,
     **kwargs,
 ) -> Generator:
     """Streams responses from Ollama, yielding raw text chunks."""
     messages_copy = messages.copy()
+    if images:
+        messages[-1]["images"] = [image["file_path"] for image in images]
+
     if messages_copy[0]["role"] != "system":
         if npc is not None:
             system_message = get_system_message(npc)
             messages_copy.insert(0, {"role": "system", "content": system_message})
 
-    return ollama.chat(model=model, messages=messages_copy, stream=True, **kwargs)
+    for chunk in ollama.chat(
+        model=model, messages=messages_copy, stream=True, **kwargs
+    ):
+        yield chunk
 
 
 def get_openai_stream(
@@ -68,23 +90,53 @@ def get_openai_stream(
     model: str,
     npc: Any = None,
     tools: list = None,
+    images: List[Dict[str, str]] = None,
     api_key: str = None,
     **kwargs,
 ) -> Generator:
-    """Streams responses from OpenAI, yielding raw text chunks."""
+    """Streams responses from OpenAI, supporting images and yielding raw text chunks."""
+
     if api_key is None:
         api_key = os.environ["OPENAI_API_KEY"]
     client = OpenAI(api_key=api_key)
-    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
-    if messages is None or len(messages) == 0:
-        messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": [{"type": "text", "text": prompt}]},
-        ]
 
-    return client.chat.completions.create(
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+
+    if not messages:
+        messages = [{"role": "system", "content": system_message}]
+
+    # Add images if provided
+    if images:
+        last_user_message = (
+            messages[-1]
+            if messages and messages[-1]["role"] == "user"
+            else {"role": "user", "content": []}
+        )
+
+        if isinstance(last_user_message["content"], str):
+            last_user_message["content"] = [
+                {"type": "text", "text": last_user_message["content"]}
+            ]
+
+        for image in images:
+            with open(image["file_path"], "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode("utf-8")
+                last_user_message["content"].append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
+                    }
+                )
+
+        if last_user_message not in messages:
+            messages.append(last_user_message)
+
+    stream = client.chat.completions.create(
         model=model, messages=messages, stream=True, **kwargs
     )
+
+    for chunk in stream:
+        yield chunk
 
 
 def get_openai_like_stream(

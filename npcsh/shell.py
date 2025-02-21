@@ -215,6 +215,8 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             command_history = result.get("command_history")
             messages = result.get("messages")
             current_path = result.get("current_path")
+            attachments = result.get("attachments")
+
             message_id = save_conversation_message(
                 command_history,
                 conversation_id,
@@ -224,6 +226,7 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 model=model,
                 provider=provider,
                 npc=npc.name if npc else None,
+                attachments=attachments,
             )
 
             save_conversation_message(
