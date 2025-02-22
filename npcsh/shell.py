@@ -9,6 +9,7 @@ import termios
 import tty
 import shlex
 import json
+
 from datetime import datetime
 
 # Third-party imports
@@ -63,7 +64,7 @@ from .shell_helpers import (
     execute_command,
     orange,  # For colored prompt
 )
-from .npc_compiler import NPCCompiler, load_tools_from_directory
+from .npc_compiler import NPCCompiler, load_tools_from_directory, NPC
 
 import argparse
 from .serve import (
@@ -228,11 +229,18 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             model = result.get("model")
             provider = result.get("provider")
             npc = result.get("npc")
-            command_history = result.get("command_history")
+
             messages = result.get("messages")
             current_path = result.get("current_path")
             attachments = result.get("attachments")
 
+            if npc is not None:
+                if isinstance(npc, NPC):
+                    npc_name = npc.name
+                elif isinstance(npc, str):
+                    npc_name = npc
+            else:
+                npc_name = None
             message_id = save_conversation_message(
                 command_history,
                 conversation_id,
@@ -241,7 +249,7 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 wd=current_path,
                 model=model,
                 provider=provider,
-                npc=npc.name if npc else None,
+                npc=npc_name,
                 attachments=attachments,
             )
 
@@ -253,7 +261,7 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 wd=current_path,
                 model=model,
                 provider=provider,
-                npc=npc.name if npc else None,
+                npc=npc_name,
             )
 
             # if there are attachments in most recent user sent message, save them
