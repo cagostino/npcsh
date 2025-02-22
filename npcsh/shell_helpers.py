@@ -1400,7 +1400,11 @@ Bash commands and other programs can be executed directly. """
         # output = enter_observation_mode(command_history, npc=npc)
     elif command_name == "cmd" or command_name == "command":
         output = execute_llm_command(
-            command, command_history, npc=npc, stream=NPCSH_STREAM_OUTPUT
+            command,
+            command_history,
+            npc=npc,
+            stream=NPCSH_STREAM_OUTPUT,
+            messages=messages,
         )
     elif command_name == "rag":
         output = execute_rag_command(command, command_history, messages=messages)
