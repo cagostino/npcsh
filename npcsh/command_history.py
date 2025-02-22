@@ -136,10 +136,10 @@ class CommandHistory:
     ):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        print(message_id)
+        # print(message_id)
         if message_id is None:
             message_id = self.generate_message_id()
-        print(message_id)
+        # print(message_id)
         if isinstance(content, dict):
             content = json.dumps(content, cls=CustomJSONEncoder)
 
@@ -178,10 +178,10 @@ class CommandHistory:
                 ),
             )
 
-        print("asdfash ", message_id)
+        # print("asdfash ", message_id)
         self.conn.commit()
         if attachments:
-            print("attachments ", attachments)
+            # print("attachments ", attachments)
             for attachment in attachments:
                 self.add_attachment(
                     message_id,

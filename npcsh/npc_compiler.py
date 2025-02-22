@@ -174,9 +174,7 @@ class Tool:
                 if stream:
                     messages = messages.copy() if messages else []
                     messages.append({"role": "user", "content": rendered_code})
-                    return get_stream(
-                        messages, model=model, provider=provider, npc=npc
-                    )
+                    return get_stream(messages, model=model, provider=provider, npc=npc)
 
                 else:
                     llm_response = get_llm_response(
@@ -670,14 +668,24 @@ class SilentUndefined(Undefined):
 
 
 class NPCCompiler:
-    def __init__(self, npc_directory, db_path):
+    def __init__(
+        self,
+        npc_directory,
+        db_path,
+    ):
         self.npc_directory = npc_directory
         self.dirs = [self.npc_directory]
-        if self.npc_directory == os.path.abspath("./npc_team/"):
+        # import pdb
+        self.is_global_dir = self.npc_directory == os.path.expanduser(
+            "~/.npcsh/npc_team/"
+        )
+
+        # pdb.set_trace()
+        if is_global_dir:
             self.project_npc_directory = None
             self.project_tools_directory = None
         else:
-            self.project_npc_directory = os.path.abspath("./npc_team/")
+            self.project_npc_directory = npc_directory
             self.project_tools_directory = os.path.join(
                 self.project_npc_directory, "tools"
             )
@@ -689,7 +697,9 @@ class NPCCompiler:
         self.pipe_cache = {}
 
         # Set tools directories
-        self.global_tools_directory = os.path.join(self.npc_directory, "tools")
+        self.global_tools_directory = os.path.join(
+            os.path.expanduser("~/.npcsh/npc_team/"), "tools"
+        )
 
         # Initialize Jinja environment with multiple loaders
         self.jinja_env = Environment(
