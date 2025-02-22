@@ -106,7 +106,7 @@ def search_similar_texts(
 
     print(f"\nQuery to embed: {query}")
     embedded_search_term = get_ollama_embeddings([query], embedding_model)[0]
-    print(f"Query embedding: {embedded_search_term}")
+    # print(f"Query embedding: {embedded_search_term}")
 
     if docs_to_embed is None:
         # Fetch from the database if no documents to embed are provided

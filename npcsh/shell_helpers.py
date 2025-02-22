@@ -841,7 +841,9 @@ def execute_rag_command(
                 else:
                     with open(filename, "r", encoding="utf-8") as file:
                         file_texts = file.readlines()
-                    file_texts = [line.strip() for line in file_texts if len(line) > 0]
+                    file_texts = [
+                        line.strip() for line in file_texts if line.strip() != ""
+                    ]
                     docs_to_embed.extend(file_texts)
             else:
                 return {
@@ -1131,7 +1133,6 @@ def execute_slash_command(
     command_parts = command.split()
     command_name = command_parts[0]
     args = command_parts[1:]
-    attachments = []
 
     if command_name in valid_npcs:
         npc_path = get_npc_path(command_name, db_path)
@@ -1298,83 +1299,44 @@ def execute_slash_command(
             user_prompt = input(
                 "Enter a prompt for the LLM about this image (or press Enter to skip): "
             )
+
             output = analyze_image(
                 command_history,
                 user_prompt,
                 file_path,
                 filename,
-                messages=messages,
                 npc=npc,
-                stream=stream,
             )
-            with open(file_path, "rb") as img_file:
-                img_data = img_file.read()
-
-            image_attachment = {
-                "name": filename,
-                "type": guess_mime_type(filename),
-                "data": img_data,
-                "size": len(img_data),
-            }
-            attachments.append(image_attachment)
 
         else:
             output = capture_screenshot(npc=npc)
             user_prompt = input(
                 "Enter a prompt for the LLM about this image (or press Enter to skip): "
             )
-            file_path = output["file_path"]
-            filename = output["filename"]
             # print(output["model_kwargs"])
             output = analyze_image(
                 command_history,
                 user_prompt,
                 output["file_path"],
                 output["filename"],
-                messages=messages,
                 npc=npc,
-                stream=stream,
                 **output["model_kwargs"],
             )
-            print("stream= ", stream)
-
             # messages = output["messages"]
-            with open(file_path, "rb") as img_file:
-                img_data = img_file.read()
 
-            image_attachment = {
-                "name": file_path,
-                "type": guess_mime_type(filename),
-                "data": img_data,
-                "size": len(img_data),
-            }
-            attachments.append(image_attachment)
-
-            if stream:
-                return {
-                    "output": output,
-                    "messages": messages,
-                    "attachments": attachments,
-                }
-            else:
-                output = output["response"]
+            output = output["response"]
 
         if output:
             if isinstance(output, dict) and "filename" in output:
                 message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
             else:  # This handles both LLM responses and error messages (both strings)
                 message = output
-            return {
-                "messages": messages,
-                "output": message,
-                "attachments": attachments,
-            }  # Return the message
+            return {"messages": messages, "output": message}  # Return the message
         else:  # Handle the case where capture_screenshot returns None
             print("Screenshot capture failed.")
             return {
                 "messages": messages,
                 "output": None,
-                "attachments": attachments,
             }  # Return None to indicate failure
     elif command_name == "help":  # New help command
         output = """# Available Commands
@@ -1420,7 +1382,6 @@ Bash commands and other programs can be executed directly. """
         return {
             "messages": messages,
             "output": output,
-            "attachments": attachments,
         }
 
     elif command_name == "whisper":
@@ -1454,7 +1415,6 @@ Bash commands and other programs can be executed directly. """
             return {
                 "messages": messages,
                 "output": "Invalid set command. Usage: /set [model|provider|db_path] 'value_in_quotes' ",
-                "attachments": attachments,
             }
     elif command_name == "search":
         output = execute_search_command(
@@ -1487,7 +1447,6 @@ Bash commands and other programs can be executed directly. """
                     return {
                         "messages": messages,
                         "output": "Error: inherit_last must be an integer",
-                        "attachments": attachments,
                     }
             if part.startswith("device="):
                 device = part.split("=")[1]
@@ -1527,18 +1486,10 @@ Bash commands and other programs can be executed directly. """
                     conversation_id=conversation_id,
                     stream=stream,
                 )
-                return {
-                    "messages": output["messages"],
-                    "output": output,
-                    "attachments": attachments,
-                }
+                return {"messages": output["messages"], "output": output}
 
             else:
-                return {
-                    "messages": [],
-                    "output": "No previous conversation found.",
-                    "attachments": attachments,
-                }
+                return {"messages": [], "output": "No previous conversation found."}
 
         output = enter_spool_mode(
             command_history,
@@ -1550,22 +1501,13 @@ Bash commands and other programs can be executed directly. """
             conversation_id=conversation_id,
             stream=stream,
         )
-        return {
-            "messages": output["messages"],
-            "output": output,
-            "attachments": attachments,
-        }
+        return {"messages": output["messages"], "output": output}
 
     else:
         output = f"Unknown command: {command_name}"
 
     subcommands = [f"/{command}"]
-    return {
-        "messages": messages,
-        "output": output,
-        "subcommands": subcommands,
-        "attachments": attachments,
-    }
+    return {"messages": messages, "output": output, "subcommands": subcommands}
 
 
 def execute_set_command(command: str, value: str) -> str:
@@ -1777,21 +1719,10 @@ def execute_command(
     """
     subcommands = []
     output = ""
-    attachments = []
     location = os.getcwd()
     db_conn = sqlite3.connect(db_path)
     if len(command.strip()) == 0:
-        return {
-            "messages": messages,
-            "output": output,
-            "conversation_id": conversation_id,
-            "model": model,
-            "current_path": os.getcwd(),
-            "provider": provider,
-            "npc": current_npc,
-            "command_history": command_history,
-            "attachments": attachments,
-        }
+        return {"messages": messages, "output": output}
     if messages is None:
         messages = []
 
@@ -1864,7 +1795,6 @@ def execute_command(
             output = result.get("output", "")
             new_messages = result.get("messages", None)
             subcommands = result.get("subcommands", [])
-            attachments = result.get("attachments", [])
 
         else:
             try:
@@ -1879,26 +1809,9 @@ def execute_command(
                         return {
                             "messages": messages,
                             "output": "Error: Unmatched quotation in command",
-                            "conversation_id": conversation_id,
-                            "model": model,
-                            "current_path": os.getcwd(),
-                            "provider": provider,
-                            "npc": npc,
-                            "command_history": command_history,
-                            "attachments": attachments,
                         }
                 else:
-                    return {
-                        "messages": messages,
-                        "output": f"Error: {str(e)}",
-                        "conversation_id": conversation_id,
-                        "model": model,
-                        "current_path": os.getcwd(),
-                        "provider": provider,
-                        "npc": npc,
-                        "command_history": command_history,
-                        "attachments": attachments,
-                    }
+                    return {"messages": messages, "output": f"Error: {str(e)}"}
 
             # ALL EXISTING COMMAND HANDLING LOGIC REMAINS UNCHANGED
             if command_parts[0] in interactive_commands:
@@ -1909,13 +1822,6 @@ def execute_command(
                 return {
                     "messages": messages,
                     "output": f"Interactive {command_parts[0]} session ended with return code {return_code}",
-                    "conversation_id": conversation_id,
-                    "model": model,
-                    "current_path": os.getcwd(),
-                    "provider": provider,
-                    "npc": npc,
-                    "command_history": command_history,
-                    "attachments": attachments,
                 }
             elif command_parts[0] == "cd":
                 change_dir_result = change_directory(command_parts, messages)
@@ -1926,15 +1832,7 @@ def execute_command(
                     return {
                         "messages": messages,
                         "output": open_terminal_editor(command),
-                        "conversation_id": conversation_id,
-                        "model": model,
-                        "current_path": os.getcwd(),
-                        "provider": provider,
-                        "npc": npc,
-                        "command_history": command_history,
-                        "attachments": attachments,
                     }
-
                 elif command_parts[0] in ["cat", "find", "who", "open", "which"]:
                     if not validate_bash_command(command_parts):
                         output = "Error: Invalid command syntax or arguments"
@@ -2023,7 +1921,7 @@ def execute_command(
                 ## deal with stream here
 
             # Capture output for next piped command
-        if isinstance(output, dict) and not stream:
+        if isinstance(output, dict):
             response = output.get("output", "")
             new_messages = output.get("messages", None)
             if new_messages is not None:
@@ -2033,15 +1931,12 @@ def execute_command(
         # Only render markdown once, at the end
         if output:
             ## deal with stream output here.
+
             if not stream:
                 try:
                     render_markdown(output)
                 except AttributeError:
                     print(output)
-
-            else:
-                print(output, type(output))
-                output = stream_with_rich_markdown(output, provider_override)
 
             piped_outputs.append(f'"{output}"')
 
@@ -2093,8 +1988,8 @@ def execute_command(
                     ids=current_ids,
                 )
 
-            # print("Stored embeddings.")
-            # print("collection", collection)
+                # print("Stored embeddings.")
+                # print("collection", collection)
             except Exception as e:
                 print(f"Warning: Failed to store embeddings: {str(e)}")
 
@@ -2107,78 +2002,9 @@ def execute_command(
         "model": model,
         "current_path": os.getcwd(),
         "provider": provider,
-        "npc": npc,
-        "command_history": command_history,
-        "attachments": attachments,
+        "npc": npc.name if npc else None,
+        command_history: command_history,
     }
-
-
-from rich.console import Console
-from rich.markdown import Markdown
-
-
-def stream_with_rich_markdown(stream_output, provider):
-    """Stream markdown with proper rendering using Rich library."""
-    console = Console()
-    output_chunks = []
-    buffer = ""
-    in_code_block = False
-    code_block_count = 0
-
-    for chunk in stream_output:
-        if provider == "openai":
-            chunk_content = chunk.choices[0].delta.content
-        elif provider == "anthropic":
-            if chunk.type == "content_block_delta":
-                chunk_content = chunk.delta.text
-            else:
-                continue
-        elif provider == "ollama":
-            chunk_content = chunk.get("message", {}).get("content", "")
-        else:
-            continue  # Skip unsupported providers
-
-        if not chunk_content:
-            continue
-
-        output_chunks.append(chunk_content)
-
-        # Add to buffer and check for code blocks
-        for char in chunk_content:
-            buffer += char
-
-            if buffer.endswith("```"):
-                code_block_count += 1
-                in_code_block = code_block_count % 2 != 0
-
-        # Decide when to render
-        complete_markdown_section = not in_code_block and (
-            "\n\n" in buffer  # Paragraph complete
-            or buffer.endswith("\n# ")  # Header complete
-            or buffer.endswith("\n## ")  # Subheader complete
-            or buffer.endswith("\n- ")  # List item complete
-            or buffer.endswith("\n* ")  # List item complete
-            or buffer.endswith("\n1. ")  # Numbered list complete
-        )
-
-        # Process buffer when appropriate
-        if complete_markdown_section:
-            try:
-                print("\033[2K\r", end="")  # Clear last line
-                console.print(Markdown(buffer))
-                buffer = ""
-            except Exception:
-                print(buffer, end="", flush=True)
-                buffer = ""
-
-    # Render any remaining content
-    if buffer:
-        try:
-            console.print(Markdown(buffer))
-        except Exception:
-            print(buffer, end="", flush=True)
-
-    return "".join(output_chunks)
 
 
 def execute_command_stream(
@@ -2191,7 +2017,6 @@ def execute_command_stream(
     model: str = None,
     provider: str = None,
     messages: list = None,
-    images: list = None,
     conversation_id: str = None,
 ):
     """
@@ -2282,7 +2107,6 @@ def execute_command_stream(
                 messages=messages,
                 model=model_override,
                 provider=provider_override,
-                images = images,
                 stream=True,
             )
 
@@ -2871,11 +2695,9 @@ def enter_spool_mode(
                         command_history,
                         conversation_id,
                         "user",
-                        (
-                            user_prompt
-                            if user_prompt
-                            else f"Please analyze this image: {filename}"
-                        ),
+                        user_prompt
+                        if user_prompt
+                        else f"Please analyze this image: {filename}",
                         wd=os.getcwd(),
                         model=model,
                         provider=provider,

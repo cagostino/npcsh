@@ -85,60 +85,6 @@ def npc_compiler():
     return NPCCompiler(npc_dir, ":memory:")
 
 
-'''
-def test_execute_command_real_cd(command_history, npc_compiler, test_db):
-    """Test actual directory changes"""
-    original_dir = os.getcwd()
-    home_dir = os.path.expanduser("~")
-
-    result = execute_command("cd ~", command_history, test_db, npc_compiler)
-    assert os.getcwd() == home_dir
-    assert "Changed directory" in result["output"]
-
-    test_dir = tempfile.mkdtemp()
-    result = execute_command(f"cd {test_dir}", command_history, test_db, npc_compiler)
-    assert os.getcwd() == test_dir
-
-    os.chdir(original_dir)
-    os.rmdir(test_dir)
-
-
-def test_execute_command_real_file_operations(command_history, npc_compiler, test_db):
-    """Test actual file operations"""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.chdir(temp_dir)
-
-        result = execute_command(
-            "echo 'test content' > test.txt", command_history, test_db, npc_compiler
-        )
-        assert os.path.exists("test.txt")
-        with open("test.txt") as f:
-            assert "test content" in f.read()
-
-        result = execute_command("cat test.txt", command_history, test_db, npc_compiler)
-        assert "test content" in result["output"]
-
-        result = execute_command("rm test.txt", command_history, test_db, npc_compiler)
-        assert not os.path.exists("test.txt")
-
-
-def test_execute_command_with_pipes(command_history, npc_compiler, test_db):
-    """Test command piping functionality"""
-    result = execute_command(
-        "echo 'hello world' | grep 'hello'", command_history, test_db, npc_compiler
-    )
-    assert "hello" in result["output"]
-
-
-def test_execute_command_error_handling(command_history, npc_compiler, test_db):
-    """Test error handling in commands"""
-    result = execute_command(
-        "cd /thisdirectorydoesnotexist", command_history, test_db, npc_compiler
-    )
-    assert "not found" in result["output"]
-'''
-
-
 def test_execute_slash_commands(command_history, npc_compiler, test_db):
     """Test various slash commands"""
 
@@ -155,3 +101,73 @@ def test_execute_command_with_model_override(command_history, npc_compiler, test
         npc_compiler,
     )
     assert result["output"] is not None
+
+
+def test_execute_command_who_was_simon_bolivar(command_history, npc_compiler, test_db):
+    """Test the command for querying information about Simón Bolívar."""
+    result = execute_command(
+        "What country was Simon Bolivar born in?",
+        command_history,
+        test_db,
+        npc_compiler,
+    )
+    assert "venezuela" in str(result["output"]).lower()
+
+
+def test_execute_command_capital_of_france(command_history, npc_compiler, test_db):
+    """Test the command for querying the capital of France."""
+    result = execute_command(
+        "What is the capital of France?", command_history, test_db, npc_compiler
+    )
+    assert "paris" in str(result["output"]).lower()
+
+
+def test_execute_command_weather_info(command_history, npc_compiler, test_db):
+    """Test the command for getting weather information."""
+    result = execute_command(
+        "what is the weather in Tokyo?", command_history, test_db, npc_compiler
+    )
+    print(result)  # Add print for debugging
+    assert "tokyo" in str(result["output"]).lower()
+
+
+def test_execute_command_linked_list_implementation(
+    command_history, npc_compiler, test_db
+):
+    """Test the command for querying linked list implementation in Python."""
+    result = execute_command(
+        " Tell me a way to implement a linked list in Python?",
+        command_history,
+        test_db,
+        npc_compiler,
+    )
+    assert "class Node:" in str(result["output"])
+    assert "class LinkedList:" in str(result["output"])
+
+
+def test_execute_command_inquiry_with_npcs(command_history, npc_compiler, test_db):
+    """Test inquiry using NPCs."""
+    result = execute_command(
+        "/search -p duckduckgo who is the current us president",
+        command_history,
+        test_db,
+        npc_compiler,
+    )
+    assert "President" in result["output"]  # Check for presence of expected output
+
+
+def test_execute_command_rag_search(command_history, npc_compiler, test_db):
+    """Test the command for a RAG search."""
+    result = execute_command(
+        "/rag -f dummy_linked_list.py linked list",
+        command_history,
+        test_db,
+        npc_compiler,
+    )
+
+    print(result)  # Print the result for debugging visibility
+    # Instead of specific class search, check if it includes any relevant text
+    assert (
+        "Found similar texts:" in result["output"]
+    )  # Check for invocation acknowledgement
+    assert "linked" in result["output"].lower()  # Check for mention of linked list

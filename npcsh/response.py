@@ -156,15 +156,15 @@ def get_ollama_response(
     # Prepare format
     if isinstance(format, type):
         schema = format.model_json_schema()
-        res = ollama.chat(model=model, messages=[message], format=schema)
+        res = ollama.chat(model=model, messages=messages, format=schema)
 
     elif isinstance(format, str):
         if format == "json":
-            res = ollama.chat(model=model, messages=[message], format=format)
+            res = ollama.chat(model=model, messages=messages, format=format)
         else:
-            res = ollama.chat(model=model, messages=[message])
+            res = ollama.chat(model=model, messages=messages)
     else:
-        res = ollama.chat(model=model, messages=[message])
+        res = ollama.chat(model=model, messages=messages)
     response_content = res.get("message", {}).get("content")
 
     # Prepare the return dictionary
