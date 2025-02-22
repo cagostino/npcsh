@@ -6,7 +6,7 @@
 ########
 ########
 
-from .npc_sysenv import get_system_message
+from npcsh.npc_sysenv import get_system_message
 from typing import Any, Dict, Generator, List
 import os
 import anthropic
@@ -16,6 +16,7 @@ from diffusers import StableDiffusionPipeline
 from google.generativeai import types
 import google.generativeai as genai
 import base64
+import json
 
 
 def get_anthropic_stream(
@@ -25,17 +26,32 @@ def get_anthropic_stream(
     tools: list = None,
     images: List[Dict[str, str]] = None,
     api_key: str = None,
+    tool_choice: Dict = None,
     **kwargs,
 ) -> Generator:
-    """Streams responses from Anthropic, supporting images and yielding raw text chunks."""
+    """
+    Streams responses from Anthropic, supporting images, tools, and yielding raw text chunks.
 
+    Args:
+        messages: List of conversation messages
+        model: Anthropic model to use
+        npc: Optional NPC context
+        tools: Optional list of tools to provide to Claude
+        images: Optional list of images to include
+        api_key: Anthropic API key
+        tool_choice: Optional tool choice configuration
+        **kwargs: Additional arguments for the API call
+    """
     if api_key is None:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
     client = anthropic.Anthropic(api_key=api_key)
 
+    # Preprocess messages to ensure content is a list of dicts
     for message in messages:
         if isinstance(message["content"], str):
             message["content"] = [{"type": "text", "text": message["content"]}]
+
+    # Add images if provided
     if images:
         for img in images:
             with open(img["file_path"], "rb") as image_file:
@@ -52,12 +68,100 @@ def get_anthropic_stream(
                     }
                 )
 
-    response = client.messages.create(
-        model=model, messages=messages, max_tokens=8192, stream=True
-    )
+    # Prepare API call parameters
+    api_params = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": kwargs.get("max_tokens", 8192),
+        "stream": True,
+    }
+
+    # Add tools if provided
+    if tools:
+        api_params["tools"] = tools
+
+    # Add tool choice if specified
+    if tool_choice:
+        api_params["tool_choice"] = tool_choice
+
+    # Make the API call
+    response = client.messages.create(**api_params)
 
     for chunk in response:
         yield chunk
+
+
+def process_anthropic_tool_stream(
+    stream, tool_map: Dict[str, callable], messages: List[Dict] = None
+) -> List[Dict]:
+    """
+    Process the Anthropic tool use stream
+    """
+    tool_results = []
+    current_tool = None
+    current_input = ""
+    context = messages[-1]["content"] if messages else ""
+
+    for chunk in stream:
+        # Look for tool use blocks
+        if (
+            chunk.type == "content_block_start"
+            and getattr(chunk, "content_block", None)
+            and chunk.content_block.type == "tool_use"
+        ):
+            current_tool = {
+                "id": chunk.content_block.id,
+                "name": chunk.content_block.name,
+            }
+            current_input = ""
+
+        # Collect input JSON deltas
+        if chunk.type == "content_block_delta" and hasattr(chunk.delta, "partial_json"):
+            current_input += chunk.delta.partial_json
+
+        # When tool input is complete
+        if chunk.type == "content_block_stop" and current_tool:
+            try:
+                # Parse the complete input
+                tool_input = json.loads(current_input) if current_input.strip() else {}
+
+                # Add context to tool input
+                tool_input["context"] = context
+
+                # Execute the tool
+                tool_func = tool_map.get(current_tool["name"])
+                if tool_func:
+                    result = tool_func(tool_input)
+                    tool_results.append(
+                        {
+                            "tool_name": current_tool["name"],
+                            "tool_input": tool_input,
+                            "tool_result": result,
+                        }
+                    )
+                else:
+                    tool_results.append(
+                        {
+                            "tool_name": current_tool["name"],
+                            "tool_input": tool_input,
+                            "error": f"Tool {current_tool['name']} not found",
+                        }
+                    )
+
+            except Exception as e:
+                tool_results.append(
+                    {
+                        "tool_name": current_tool["name"],
+                        "tool_input": current_input,
+                        "error": str(e),
+                    }
+                )
+
+            # Reset current tool
+            current_tool = None
+            current_input = ""
+
+    return tool_results
 
 
 def get_ollama_stream(
