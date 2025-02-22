@@ -26,7 +26,13 @@ try:
 except:
     print("Could not load the sentence-transformers package.")
 # Local imports
-from .npc_sysenv import get_system_message, lookup_provider, NPCSH_STREAM_OUTPUT
+from .npc_sysenv import (
+    get_system_message,
+    lookup_provider,
+    NPCSH_STREAM_OUTPUT,
+    NPCSH_CHAT_MODEL,
+    NPCSH_CHAT_PROVIDER,
+)
 from .command_history import (
     CommandHistory,
     start_new_conversation,
@@ -71,6 +77,16 @@ def main() -> None:
     Starts either the Flask server or the interactive shell based on the argument provided.
     """
     # Set up argument parsing to handle 'serve' and regular commands
+
+    check_old_par_name = os.environ.get("NPCSH_MODEL", None)
+    if check_old_par_name is not None:
+        # raise a deprecation warning
+        print(
+            """Deprecation Warning: NPCSH_MODEL and NPCSH_PROVIDER were deprecated in v0.3.5 in favor of NPCSH_CHAT_MODEL and NPCSH_CHAT_PROVIDER instead.\
+                Please update your environment variables to use the new names.
+                """
+        )
+
     parser = argparse.ArgumentParser(description="npcsh CLI")
     parser.add_argument(
         "command",

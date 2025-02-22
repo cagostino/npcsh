@@ -104,7 +104,7 @@ def ensure_npcshrc_exists() -> str:
             npcshrc.write("export NPCSH_API_URL=''")
             npcshrc.write("export NPCSH_DB_PATH='~/npcsh_history.db'\n")
             npcshrc.write("export NPCSH_VECTOR_DB_PATH='~/npcsh_chroma.db'\n")
-
+            npcshrc.write("export NPCSH_STREAM_OUTPUT=0")
     return npcshrc_path
 
 
