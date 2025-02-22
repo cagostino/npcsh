@@ -4,7 +4,7 @@ from typing import Any
 import os
 import io
 import chromadb
-
+import sqlite3
 from dotenv import load_dotenv
 from PIL import Image
 

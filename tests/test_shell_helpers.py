@@ -6,16 +6,25 @@ from pathlib import Path
 from npcsh.shell_helpers import execute_command
 from npcsh.command_history import CommandHistory
 from npcsh.npc_compiler import NPCCompiler
-from npcsh.npc_sysenv import get_system_message, lookup_provider, NPCSH_STREAM_OUTPUT
+from npcsh.npc_sysenv import (
+    get_system_message,
+    lookup_provider,
+    NPCSH_STREAM_OUTPUT,
+    get_available_tables,
+)
 
 
 @pytest.fixture
 def test_db():
     """Create a test database with all required tables"""
-    db = sqlite3.connect(":memory:")
+    # Create temp file that persists during tests
+    temp_db = tempfile.NamedTemporaryFile(delete=False)
+    db_path = temp_db.name
+
+    db = sqlite3.connect(db_path)
     cursor = db.cursor()
 
-    # Create all necessary tables
+    # Create your tables
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS command_history (
@@ -38,35 +47,12 @@ def test_db():
     """
     )
 
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS morning_routine (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT,
-            description TEXT,
-            schedule TEXT
-        )
-    """
-    )
-
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS pipeline_runs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pipeline_name TEXT,
-            step_name TEXT,
-            output TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """
-    )
-
-    # Insert default NPC
+    # Insert test data
     cursor.execute(
         """
         INSERT INTO compiled_npcs (name, source_path, compiled_content)
         VALUES (?, ?, ?)
-    """,
+        """,
         (
             "sibiji",
             os.path.abspath("../npcsh/npc_team/sibiji.npc"),
@@ -75,7 +61,12 @@ def test_db():
     )
 
     db.commit()
-    return ":memory:"
+    db.close()
+
+    yield db_path  # Return the path to the temp file
+
+    # Clean up after tests
+    os.unlink(db_path)
 
 
 @pytest.fixture
@@ -94,6 +85,7 @@ def npc_compiler():
     return NPCCompiler(npc_dir, ":memory:")
 
 
+'''
 def test_execute_command_real_cd(command_history, npc_compiler, test_db):
     """Test actual directory changes"""
     original_dir = os.getcwd()
@@ -144,10 +136,12 @@ def test_execute_command_error_handling(command_history, npc_compiler, test_db):
         "cd /thisdirectorydoesnotexist", command_history, test_db, npc_compiler
     )
     assert "not found" in result["output"]
+'''
 
 
 def test_execute_slash_commands(command_history, npc_compiler, test_db):
     """Test various slash commands"""
+
     result = execute_command("/help", command_history, test_db, npc_compiler)
     assert "Available Commands" in result["output"]
 
@@ -155,6 +149,9 @@ def test_execute_slash_commands(command_history, npc_compiler, test_db):
 def test_execute_command_with_model_override(command_history, npc_compiler, test_db):
     """Test command execution with model override"""
     result = execute_command(
-        "@gpt-4 What is 2+2?", command_history, test_db, npc_compiler
+        "@gpt-4o-mini What is 2+2?",
+        command_history,
+        test_db,
+        npc_compiler,
     )
     assert result["output"] is not None

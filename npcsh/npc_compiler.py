@@ -681,7 +681,7 @@ class NPCCompiler:
         )
 
         # pdb.set_trace()
-        if is_global_dir:
+        if self.is_global_dir:
             self.project_npc_directory = None
             self.project_tools_directory = None
         else:
