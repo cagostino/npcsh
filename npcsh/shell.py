@@ -20,21 +20,29 @@ from dotenv import load_dotenv
 import subprocess
 from typing import Dict, Any, List, Optional
 
+
 try:
     from sentence_transformers import SentenceTransformer
 except:
     print("Could not load the sentence-transformers package.")
 # Local imports
+from .npc_sysenv import (
+    get_system_message,
+    lookup_provider,
+    NPCSH_STREAM_OUTPUT,
+    NPCSH_CHAT_MODEL,
+    NPCSH_CHAT_PROVIDER,
+)
 from .command_history import (
     CommandHistory,
     start_new_conversation,
     save_conversation_message,
+    save_attachment_to_message,
 )
 from .llm_funcs import (
     execute_llm_command,
     execute_llm_question,
     generate_image,
-    lookup_provider,
     check_llm_command,
     get_conversation,
     get_system_message,
@@ -69,6 +77,16 @@ def main() -> None:
     Starts either the Flask server or the interactive shell based on the argument provided.
     """
     # Set up argument parsing to handle 'serve' and regular commands
+
+    check_old_par_name = os.environ.get("NPCSH_MODEL", None)
+    if check_old_par_name is not None:
+        # raise a deprecation warning
+        print(
+            """Deprecation Warning: NPCSH_MODEL and NPCSH_PROVIDER were deprecated in v0.3.5 in favor of NPCSH_CHAT_MODEL and NPCSH_CHAT_PROVIDER instead.\
+                Please update your environment variables to use the new names.
+                """
+        )
+
     parser = argparse.ArgumentParser(description="npcsh CLI")
     parser.add_argument(
         "command",
@@ -193,23 +211,53 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 current_npc,
                 messages=messages,
                 conversation_id=current_conversation_id,
+                stream=NPCSH_STREAM_OUTPUT,
             )
 
             messages = result.get("messages", messages)
+
+            # need to adjust the output for the messages to all have
+            # model, provider, npc, timestamp, role, content
+            # also messages
 
             if "current_npc" in result:
                 current_npc = result["current_npc"]
 
             output = result.get("output")
-            save_conversation_message(
-                command_history, current_conversation_id, "user", user_input
+            conversation_id = result.get("conversation_id")
+            model = result.get("model")
+            provider = result.get("provider")
+            npc = result.get("npc")
+            command_history = result.get("command_history")
+            messages = result.get("messages")
+            current_path = result.get("current_path")
+            attachments = result.get("attachments")
+
+            message_id = save_conversation_message(
+                command_history,
+                conversation_id,
+                "user",
+                user_input,
+                wd=current_path,
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
+                attachments=attachments,
             )
+
             save_conversation_message(
                 command_history,
-                current_conversation_id,
+                conversation_id,
                 "assistant",
-                result.get("output", ""),
+                output,
+                wd=current_path,
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
             )
+
+            # if there are attachments in most recent user sent message, save them
+            # save_attachment_to_message(command_history, message_id, # file_path, attachment_name, attachment_type)
 
             if (
                 result["output"] is not None

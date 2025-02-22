@@ -32,18 +32,23 @@ except:
     print("Could not load the sentence-transformers package.")
 
 from .load_data import load_pdf, load_csv, load_json, load_excel, load_txt, load_image
-from .llm_funcs import (
-    get_available_models,
+from .npc_sysenv import (
     get_model_and_provider,
+    get_available_models,
+    get_system_message,
+    NPCSH_STREAM_OUTPUT,
+)
+
+from .embeddings import search_similar_texts, chroma_client
+
+from .llm_funcs import (
     execute_llm_command,
     execute_llm_question,
+    get_stream,
     get_conversation,
-    get_system_message,
     check_llm_command,
     generate_image,
     get_embeddings,
-    search_similar_texts,
-    chroma_client,
 )
 from .plonk import plonk, action_space
 from .helpers import get_db_npcs, get_npc_path, initialize_npc_project
@@ -836,7 +841,9 @@ def execute_rag_command(
                 else:
                     with open(filename, "r", encoding="utf-8") as file:
                         file_texts = file.readlines()
-                    file_texts = [line.strip() for line in file_texts if len(line) > 0]
+                    file_texts = [
+                        line.strip() for line in file_texts if line.strip() != ""
+                    ]
                     docs_to_embed.extend(file_texts)
             else:
                 return {
@@ -973,6 +980,7 @@ def execute_search_command(
         "output": result[0] + f"\n\n\n Citation Links: {result[1]}",
     }
 
+
 def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
     inputs = {}
 
@@ -1024,6 +1032,7 @@ def extract_tool_inputs(args: List[str], tool: Tool) -> Dict[str, Any]:
                 inputs[key] = input_[key]
 
     return inputs
+
 
 import math
 from PIL import Image
@@ -1096,6 +1105,7 @@ def execute_slash_command(
     model: str = None,
     provider: str = None,
     conversation_id: str = None,
+    stream: bool = False,
 ):
     """
     Function Description:
@@ -1390,9 +1400,7 @@ Bash commands and other programs can be executed directly. """
         # output = enter_observation_mode(command_history, npc=npc)
     elif command_name == "cmd" or command_name == "command":
         output = execute_llm_command(
-            command,
-            command_history,
-            npc=npc,
+            command, command_history, npc=npc, stream=NPCSH_STREAM_OUTPUT
         )
     elif command_name == "rag":
         output = execute_rag_command(command, command_history, messages=messages)
@@ -1425,6 +1433,7 @@ Bash commands and other programs can be executed directly. """
             messages=[],
             model=model,
             provider=provider,
+            stream=stream,
         )
     elif command_name == "spool" or command_name == "sp":
         inherit_last = 0
@@ -1475,6 +1484,7 @@ Bash commands and other programs can be executed directly. """
                     device=device,
                     messages=spool_context,
                     conversation_id=conversation_id,
+                    stream=stream,
                 )
                 return {"messages": output["messages"], "output": output}
 
@@ -1489,6 +1499,7 @@ Bash commands and other programs can be executed directly. """
             rag_similarity_threshold=rag_similarity_threshold,
             device=device,
             conversation_id=conversation_id,
+            stream=stream,
         )
         return {"messages": output["messages"], "output": output}
 
@@ -1516,8 +1527,8 @@ def execute_set_command(command: str, value: str) -> str:
 
     # Map command to environment variable name
     var_map = {
-        "model": "NPCSH_MODEL",
-        "provider": "NPCSH_PROVIDER",
+        "model": "NPCSH_CHAT_MODEL",
+        "provider": "NPCSH_CHAT_PROVIDER",
         "db_path": "NPCSH_DB_PATH",
     }
 
@@ -1573,6 +1584,7 @@ def rehash_last_message(
     model: str,
     provider: str,
     npc: Any = None,
+    stream: bool = False,
 ) -> dict:
     # Fetch the last message or command related to this conversation ID
 
@@ -1589,6 +1601,7 @@ def rehash_last_message(
         provider=provider,
         npc=npc,
         messages=None,
+        stream=stream,
     )
 
 
@@ -1683,8 +1696,11 @@ def execute_command(
     npc_compiler: NPCCompiler,
     embedding_model: Union[SentenceTransformer, Any] = None,
     current_npc: NPC = None,
+    model: str = None,
+    provider: str = None,
     messages: list = None,
     conversation_id: str = None,
+    stream: bool = False,
 ):
     """
     Function Description:
@@ -1732,13 +1748,19 @@ def execute_command(
         messages.append({"role": "user", "content": single_command})
         # print(messages)
 
-        model_override, provider_override, command = get_model_and_provider(
-            single_command, available_models[0]
-        )
-        if model_override is None:
-            model_override = os.getenv("NPCSH_MODEL")
-        if provider_override is None:
-            provider_override = os.getenv("NPCSH_PROVIDER")
+        if model is None:
+            # note the only situation where id expect this to take precedent is when a frontend is specifying the model
+            # to pass through at each time
+            model_override, provider_override, command = get_model_and_provider(
+                single_command, available_models[0]
+            )
+            if model_override is None:
+                model_override = os.getenv("NPCSH_CHAT_MODEL")
+            if provider_override is None:
+                provider_override = os.getenv("NPCSH_CHAT_PROVIDER")
+        else:
+            model_override = model
+            provider_override = provider
 
         # Rest of the existing logic remains EXACTLY the same
         # print(model_override, provider_override)
@@ -1766,7 +1788,10 @@ def execute_command(
                 model=model_override,
                 provider=provider_override,
                 conversation_id=conversation_id,
+                stream=stream,
             )
+            ## deal with stream here
+
             output = result.get("output", "")
             new_messages = result.get("messages", None)
             subcommands = result.get("subcommands", [])
@@ -1818,7 +1843,10 @@ def execute_command(
                             messages=messages,
                             model=model_override,
                             provider=provider_override,
+                            stream=stream,
                         )
+                        ## deal with stream here
+
                     else:
                         # ALL THE EXISTING SUBPROCESS AND SPECIFIC COMMAND CHECKS REMAIN
                         try:
@@ -1888,7 +1916,9 @@ def execute_command(
                     messages=messages,
                     model=model_override,
                     provider=provider_override,
+                    stream=stream,
                 )
+                ## deal with stream here
 
             # Capture output for next piped command
         if isinstance(output, dict):
@@ -1900,10 +1930,13 @@ def execute_command(
 
         # Only render markdown once, at the end
         if output:
-            try:
-                render_markdown(output)
-            except AttributeError:
-                print(output)
+            ## deal with stream output here.
+
+            if not stream:
+                try:
+                    render_markdown(output)
+                except AttributeError:
+                    print(output)
 
             piped_outputs.append(f'"{output}"')
 
@@ -1960,7 +1993,122 @@ def execute_command(
             except Exception as e:
                 print(f"Warning: Failed to store embeddings: {str(e)}")
 
-    return {"messages": messages, "output": output}
+    # return following
+
+    return {
+        "messages": messages,
+        "output": output,
+        "conversation_id": conversation_id,
+        "model": model,
+        "current_path": os.getcwd(),
+        "provider": provider,
+        "npc": npc.name if npc else None,
+        command_history: command_history,
+    }
+
+
+def execute_command_stream(
+    command: str,
+    command_history: CommandHistory,
+    db_path: str,
+    npc_compiler: NPCCompiler,
+    embedding_model: Union[SentenceTransformer, Any] = None,
+    current_npc: NPC = None,
+    model: str = None,
+    provider: str = None,
+    messages: list = None,
+    conversation_id: str = None,
+):
+    """
+    Function Description:
+        Executes a command, with support for piping outputs between commands.
+    Args:
+        command : str : Command
+        command_history : CommandHistory : Command history
+        db_path : str : Database path
+        npc_compiler : NPCCompiler : NPC compiler
+    Keyword Args:
+        embedding_model : Union[SentenceTransformer, Any] : Embedding model
+        current_npc : NPC : Current NPC
+        messages : list : Messages
+    Returns:stream
+        dict : dict : Dictionary
+    """
+    subcommands = []
+    output = ""
+    location = os.getcwd()
+    db_conn = sqlite3.connect(db_path)
+
+    # Split commands by pipe, preserving the original parsing logic
+    commands = command.split("|")
+    available_models = get_available_models()
+
+    # Track piped output between commands
+    piped_outputs = []
+
+    for idx, single_command in enumerate(commands):
+        # Modify command if there's piped output from previous command
+        if idx > 0:
+            single_command, additional_args = parse_piped_command(single_command)
+            if len(piped_outputs) > 0:
+                single_command = replace_pipe_outputs(
+                    single_command, piped_outputs, idx
+                )
+            if len(additional_args) > 0:
+                single_command = f"{single_command} {' '.join(additional_args)}"
+        messages.append({"role": "user", "content": single_command})
+        if model is None:
+            # note the only situation where id expect this to take precedent is when a frontend is specifying the model
+            # to pass through at each time
+            model_override, provider_override, command = get_model_and_provider(
+                single_command, available_models[0]
+            )
+            if model_override is None:
+                model_override = os.getenv("NPCSH_CHAT_MODEL")
+            if provider_override is None:
+                provider_override = os.getenv("NPCSH_CHAT_PROVIDER")
+        else:
+            model_override = model
+            provider_override = provider
+
+        # Rest of the existing logic remains EXACTLY the same
+        # print(model_override, provider_override)
+        if current_npc is None:
+            valid_npcs = get_db_npcs(db_path)
+
+            npc_name = get_npc_from_command(command)
+            if npc_name is None:
+                npc_name = "sibiji"  # Default NPC
+            npc_path = get_npc_path(npc_name, db_path)
+            npc = load_npc_from_file(npc_path, db_conn)
+        else:
+            npc = current_npc
+        # print(single_command.startswith("/"))
+        if single_command.startswith("/"):
+            return execute_slash_command(
+                single_command,
+                command_history,
+                db_path,
+                db_conn,
+                npc_compiler,
+                valid_npcs,
+                npc=npc,
+                messages=messages,
+                model=model_override,
+                provider=provider_override,
+                conversation_id=conversation_id,
+                stream=True,
+            )
+        else:  # LLM command processing with existing logic
+            return check_llm_command(
+                single_command,
+                command_history,
+                npc=npc,
+                messages=messages,
+                model=model_override,
+                provider=provider_override,
+                stream=True,
+            )
 
 
 def enter_whisper_mode(
@@ -1969,6 +2117,7 @@ def enter_whisper_mode(
     npc: Any = None,
     spool=False,
     continuous=False,
+    stream=False,
 ) -> str:
     """
     Function Description:
@@ -2032,15 +2181,26 @@ def enter_whisper_mode(
             break
         if not spool:
             llm_response = check_llm_command(
-                text, command_history, npc=npc, messages=messages
+                text, command_history, npc=npc, messages=messages, stream=stream
             )  # Use
 
             messages = llm_response["messages"]
             output = llm_response["output"]
         else:
-            messages = get_conversation(
-                messages, model=model, provider=provider, npc=npc
-            )
+            if stream:
+                messages = get_stream(
+                    messages,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
+                )
+            else:
+                messages = get_conversation(
+                    messages,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
+                )
 
             output = messages[-1]["content"]
         print(output)
@@ -2401,6 +2561,7 @@ def enter_spool_mode(
     device: str = "cpu",
     messages: List[Dict] = None,
     conversation_id: str = None,
+    stream: bool = False,
 ) -> Dict:
     """
     Function Description:
@@ -2422,6 +2583,10 @@ def enter_spool_mode(
     )  # Initialize context with messages
 
     loaded_content = {}  # New dictionary to hold loaded content
+
+    # Create conversation ID if not provided
+    if not conversation_id:
+        conversation_id = start_new_conversation()
 
     # Load specified files if any
     if files:
@@ -2477,6 +2642,7 @@ def enter_spool_mode(
                     model=model,
                     provider=provider,
                     npc=npc,
+                    stream=stream,
                 )
                 print(output["output"])
                 messages = output.get("messages", [])
@@ -2484,55 +2650,106 @@ def enter_spool_mode(
 
             if user_input.lower() == "/whisper":  # Check for whisper command
                 messages = enter_whisper_mode(command_history, spool_context, npc)
-                print(messages)  # Optionally print output from whisper mode
+                # print(messages)  # Optionally print output from whisper mode
                 continue  # Continue with spool mode after exiting whisper mode
 
             if user_input.startswith("/ots"):
                 command_parts = user_input.split()
+                file_path = None
+                filename = None
+
+                # Handle image loading/capturing
                 if len(command_parts) > 1:
                     filename = command_parts[1]
                     file_path = os.path.join(os.getcwd(), filename)
-                    # Get user prompt about the image
-                    user_prompt = input(
-                        "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                else:
+                    output = capture_screenshot(npc=npc)
+                    if output and "file_path" in output:
+                        file_path = output["file_path"]
+                        filename = output["filename"]
+
+                if not file_path or not os.path.exists(file_path):
+                    print(f"Error: Image file not found at {file_path}")
+                    continue
+
+                # Get user prompt about the image
+                user_prompt = input(
+                    "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                )
+
+                # Read image file as binary data
+                try:
+                    with open(file_path, "rb") as img_file:
+                        img_data = img_file.read()
+
+                    # Create an attachment for the image
+                    image_attachment = {
+                        "name": filename,
+                        "type": guess_mime_type(filename),
+                        "data": img_data,
+                        "size": len(img_data),
+                    }
+
+                    # Save user message with image attachment
+                    message_id = save_conversation_message(
+                        command_history,
+                        conversation_id,
+                        "user",
+                        user_prompt
+                        if user_prompt
+                        else f"Please analyze this image: {filename}",
+                        wd=os.getcwd(),
+                        model=model,
+                        provider=provider,
+                        npc=npc.name if npc else None,
+                        attachments=[image_attachment],
                     )
 
+                    # Now use analyze_image which will process the image
                     output = analyze_image(
                         command_history,
                         user_prompt,
                         file_path,
                         filename,
                         npc=npc,
+                        stream=stream,
+                        message_id=message_id,  # Pass the message ID for reference
                     )
 
-                else:
-                    output = capture_screenshot(npc=npc)
-                    user_prompt = input(
-                        "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                    # Save assistant's response
+                    if output and isinstance(output, str):
+                        save_conversation_message(
+                            command_history,
+                            conversation_id,
+                            "assistant",
+                            output,
+                            wd=os.getcwd(),
+                            model=model,
+                            provider=provider,
+                            npc=npc.name if npc else None,
+                        )
+
+                    # Update spool context with this exchange
+                    spool_context.append(
+                        {"role": "user", "content": user_prompt, "image": file_path}
                     )
-                    output = analyze_image(
-                        command_history,
-                        user_prompt,
-                        output["file_path"],
-                        output["filename"],
-                        npc=npc,
-                        **output["model_kwargs"],
-                    )
-                if output:
+                    spool_context.append({"role": "assistant", "content": output})
+
                     if isinstance(output, dict) and "filename" in output:
                         message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
-                    else:  # This handles both LLM responses and error messages (both strings)
+                    else:
                         message = output
-                    return {
-                        "messages": messages,
-                        "output": message,
-                    }  # Return the message
-                else:  # Handle the case where capture_screenshot returns None
-                    print("Screenshot capture failed.")
-                    return {
-                        "messages": messages,
-                        "output": None,
-                    }  # Return None to indicate failure
+
+                    render_markdown(
+                        output["response"]
+                        if isinstance(output["response"], str)
+                        else str(output["response"])
+                    )
+                    continue
+
+                except Exception as e:
+                    print(f"Error processing image: {str(e)}")
+                    continue
 
             # Prepare kwargs for get_conversation
             kwargs_to_pass = {}
@@ -2540,6 +2757,7 @@ def enter_spool_mode(
                 kwargs_to_pass["npc"] = npc
                 if npc.model:
                     kwargs_to_pass["model"] = npc.model
+
                 if npc.provider:
                     kwargs_to_pass["provider"] = npc.provider
 
@@ -2568,8 +2786,26 @@ def enter_spool_mode(
             # Add user input to spool context
             spool_context.append({"role": "user", "content": user_input})
 
+            # Save user message to conversation history
+            message_id = save_conversation_message(
+                command_history,
+                conversation_id,
+                "user",
+                user_input,
+                wd=os.getcwd(),
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
+            )
+
             # Get the conversation
-            conversation_result = get_conversation(spool_context, **kwargs_to_pass)
+            if stream:
+                conversation_result = ""
+                output = get_stream(spool_context, **kwargs_to_pass)
+                for chunk in output:
+                    print(chunk)
+            else:
+                conversation_result = get_conversation(spool_context, **kwargs_to_pass)
 
             # Handle potential errors in conversation_result
             if isinstance(conversation_result, str) and "Error" in conversation_result:
@@ -2607,11 +2843,17 @@ def enter_spool_mode(
                 assistant_reply,
                 os.getcwd(),
             )
+
+            # Save assistant's response to conversation history
             save_conversation_message(
-                command_history, conversation_id, "user", user_input
-            )
-            save_conversation_message(
-                command_history, conversation_id, "assistant", assistant_reply
+                command_history,
+                conversation_id,
+                "assistant",
+                assistant_reply,
+                wd=os.getcwd(),
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
             )
 
             # sometimes claude responds with unfinished markdown notation. so we need to check if there are two sets
@@ -2631,3 +2873,22 @@ def enter_spool_mode(
             [msg["content"] for msg in spool_context if msg["role"] == "assistant"]
         ),
     }
+
+
+def guess_mime_type(filename):
+    """Guess the MIME type of a file based on its extension."""
+    extension = os.path.splitext(filename)[1].lower()
+    mime_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+        ".webp": "image/webp",
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".csv": "text/csv",
+        ".json": "application/json",
+        ".md": "text/markdown",
+    }
+    return mime_types.get(extension, "application/octet-stream")

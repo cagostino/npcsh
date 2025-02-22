@@ -1,6 +1,6 @@
 name: DataCollector
 primary_directive: Collect user feedback regarding UI preferences.
-suggested_tools_to_use:
+tools:
   - feedback_gatherer
 model: claude-3-haiku-latest
 provider: anthropic

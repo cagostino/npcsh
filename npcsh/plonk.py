@@ -214,6 +214,74 @@ def test_open_reddit(npc: Any = None):
     return result
 
 
+def generate_plonk(
+    request,
+):
+    prompt = f"""
+
+    A user asked the following question: {request}
+
+    You are in charge of creating a plonk plan that will handle their request.
+    This plonk plan will be a series of steps that you will write that will be
+    used to generate a fully functioning system that will accomplish the user's request.
+    your plonk plan should be a python script that generates LLM prompts
+    that will be used to generate the distinct pieces of software.
+
+    The goal here is modularization, abstraction, separation of scales.
+    A careful set of instructions can pave the way for a system that can be iterated on
+    and improved with successive steps.
+
+    Here is an example of a question and answer that you might generate:
+
+    Question: "Set up an automation system that will open a web browser every morning
+        and go to my bank account and export my transactions."
+
+    Answer:
+    "{{'plonk plan': ```
+
+from npcsh.llm_funcs import get_llm_response
+
+automation_script = get_llm_response( '''
+    Write a python script that will request input from a user about what bank they use. Then use selenium to open the browser and navigate to the bank's website.
+    Get the user's username and password and log in, also through raw input.
+    Then navigate to the transactions page and export the transactions. Ensure you are sufficiently logging information at each step of the way so that the results can be
+    debugged efficiently.
+    Return the script without any additional comment or Markdown formatting. It is imperative that you do not include any additional text.
+''')
+# write the automation script to a file
+automation_script_file = open('automation_script.py', 'w')
+automation_script_file.write(automation_script)
+automation_script_file.close()
+
+
+scheduling_script = get_llm_response( f'''
+    Write a bash script that will set up an OS scheduler to run the automation script every morning at 8 am.
+    The automation script is located at ./automation_script.py.
+    You'll need to ensure that the full path is used in the scheduling script.
+    Return the script without any additional comment or Markdown formatting.
+    It is imperative that you do not include any additional text.
+    Do not leave any placeholder paths or variables in the script.
+    They must be able to execute without
+    any further modification by you or the user.
+    ''')
+# write the scheduling script to a file
+scheduling_script_file = open('scheduling_script.sh', 'w')
+scheduling_script_file.write(scheduling_script)
+
+scheduling_script_file.close()
+# attempt to run the scheduling script
+import subprocess
+subprocess.run(['bash', 'scheduling_script.sh'])
+```}}
+
+    In this example, we have set up a plan that will require multiple other LLM calls to generate the necessary items to
+    accomplish the user's request.
+
+    """
+
+    return get_llm_response(prompt)
+
+
 # Optional: If you want to run this as a standalone script
 if __name__ == "__main__":
     test_open_reddit()

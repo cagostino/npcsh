@@ -6,7 +6,7 @@ import subprocess
 from typing import Dict, Any
 from PIL import ImageGrab  # Import ImageGrab from Pillow
 
-from .llm_funcs import get_llm_response
+from .llm_funcs import get_llm_response, get_stream
 import os
 
 
@@ -188,7 +188,12 @@ def capture_screenshot(npc: Any = None, full=False) -> Dict[str, str]:
 
 
 def analyze_image_base(
-    user_prompt: str, file_path: str, filename: str, npc: Any = None, **model_kwargs
+    user_prompt: str,
+    file_path: str,
+    filename: str,
+    npc: Any = None,
+    stream: bool = False,
+    **model_kwargs,
 ) -> Dict[str, str]:
     """
     Function Description:
@@ -231,6 +236,8 @@ def analyze_image(
     file_path: str,
     filename: str,
     npc: Any = None,
+    stream: bool = False,
+    messages: list = None,
     **model_kwargs,
 ) -> Dict[str, str]:
     """
@@ -253,19 +260,29 @@ def analyze_image(
 
         if user_prompt:
             try:
-                print("Analyzing image...")
-                response = get_llm_response(
-                    user_prompt, images=[image_info], npc=npc, **model_kwargs
-                )
-                # print(response)
-                # Add to command history *inside* the try block
-                command_history.add_command(
-                    f"screenshot with prompt: {user_prompt}",
-                    ["screenshot", npc.name if npc else ""],
-                    response,
-                    os.getcwd(),
-                )
-                return response
+                # print("Analyzing image...")
+                # print(model_kwargs)
+                # print("stream", stream)
+                if stream:
+                    # print("going to stream")
+                    return get_stream(
+                        messages, images=[image_info], npc=npc, **model_kwargs
+                    )
+
+                else:
+                    response = get_llm_response(
+                        user_prompt, images=[image_info], npc=npc, **model_kwargs
+                    )
+
+                    print(response)
+                    # Add to command history *inside* the try block
+                    command_history.add_command(
+                        f"screenshot with prompt: {user_prompt}",
+                        ["screenshot", npc.name if npc else ""],
+                        response,
+                        os.getcwd(),
+                    )
+                    return response
 
             except Exception as e:
                 error_message = f"Error during LLM processing: {e}"
