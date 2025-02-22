@@ -2,6 +2,7 @@ tool_name: local_search
 description: |
     Searches files in current and downstream directories to find items related to the user's query using fuzzy matching.
     Returns only relevant snippets (10 lines around matches) to avoid including too much irrelevant content.
+    Intended for fuzzy searches, not for understanding file sizes.
 inputs:
   - query
   - summarize: false  # Optional - set to true to summarize the results

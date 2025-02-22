@@ -745,16 +745,7 @@ def check_llm_command(
     5. Is it a complex request that actually requires more than one
     tool to be called, perhaps in a sequence?
 
-    Excluding time-sensitive phenomena,
-        most general questions can be answered without any
-        extra tools or agent passes. Only use tools or pass to other NPCs
-        when it is obvious that the answer needs to be as up-to-date as possible. For example,
-        a question about where mount everest is does not necessarily need to be answered by a tool call or an agent pass.
-        Similarly, if a user asks to exaplin the plot of the aeneid, this can be answered without a tool call or agent pass.
-        If a user were to ask for the current weather in tokyo or the current price of bitcoin or who the mayor of a city is, then a tool call or agent pass may be appropriate.
 
-        Tools are valuable but their use should be limited and purposeful to
-        ensure the best user experience.
 
     Available tools:
     """
@@ -784,8 +775,20 @@ def check_llm_command(
 
     prompt += f"""
     In considering how to answer this, consider:
-    - Whether it can be answered via a bash command on the user's computer.
+    - Whether it can be answered via a bash command on the user's computer. e.g. if a user is curious about file sizes within a directory or about processes running on their computer, these are likely best handled by a bash command.
+
     - Whether a tool should be used.
+
+    Excluding time-sensitive phenomena,
+    most general questions can be answered without any
+    extra tools or agent passes.
+    Only use tools or pass to other NPCs
+    when it is obvious that the answer needs to be as up-to-date as possible. For example,
+    a question about where mount everest is does not necessarily need to be answered by a tool call or an agent pass.
+    Similarly, if a user asks to explain the plot of the aeneid, this can be answered without a tool call or agent pass.
+    If a user were to ask for the current weather in tokyo or the current price of bitcoin or who the mayor of a city is, then a tool call or agent pass may be appropriate. If a user asks about the process using the most ram or the biggest file in a directory, a bash command will be most appropriate.
+    Tools are valuable but their use should be limited and purposeful to
+    ensure the best user experience.
 
     Respond with a JSON object containing:
     - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc", "execute_sequence"]

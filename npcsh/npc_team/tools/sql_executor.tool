@@ -1,5 +1,5 @@
 tool_name: sql_executor
-description: Execute SQL queries and display the result
+description: Execute SQL queries on the ~/npcsh_history.db and display the result. The database contains only information about conversations and other user-provided data. It does not store any information about individual files.
 inputs:
   - sql_query
   - interpret: "false"  # Note that this is not a boolean, but a string
