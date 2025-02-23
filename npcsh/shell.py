@@ -177,7 +177,7 @@ Welcome to \033[1;94mnpc\033[0m\033[1;38;5;202msh\033[0m!
          \033[1;94m|_|
 
 Begin by asking a question, issuing a bash command, or typing '/help' for more information.
-"""
+        """
     )
 
     current_npc = None
