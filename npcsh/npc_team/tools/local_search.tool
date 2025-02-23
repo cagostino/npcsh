@@ -14,7 +14,7 @@ steps:
     code: |
         # Search parameters are directly available
         query = "{{ query }}"
-        file_filter = {{ file_filter | default(None) | tojson }}
+        file_filter = {{ file_filter | default(None) }}
         if isinstance(file_filter, str) and file_filter.lower() == 'none':
             file_filter = None
         max_depth = {{ depth | default(2) }}
