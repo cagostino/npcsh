@@ -1051,14 +1051,14 @@ def handle_tool_call(
     for inp in required_inputs:
         if not isinstance(inp, dict):
             # dicts contain the keywords so its fine if theyre missing from the inputs.
-            if inp not in input_values:
+            if inp not in input_values or input_values[inp] == "":
                 missing_inputs.append(inp)
     if len(missing_inputs) > 0:
         # print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
         if attempt < n_attempts:
             print(f"attempt {attempt+1} to generate inputs failed, trying again")
             print("missing inputs", missing_inputs)
-            print("llm response", response)
+            #print("llm response", response)
             print("input values", input_values)
             return handle_tool_call(
                 command,
@@ -1080,6 +1080,7 @@ def handle_tool_call(
         }
 
     # try:
+    print("Executing tool with input values:", input_values)
     tool_output = tool.execute(
         input_values,
         npc.all_tools_dict,
