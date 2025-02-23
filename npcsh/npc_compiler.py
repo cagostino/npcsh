@@ -138,7 +138,7 @@ class Tool:
             )
             # if i is the last step and the user has reuqested a streaming output
             # then we should return the stream
-            if i == len(self.steps) - 1:
+            if i == len(self.steps) - 1 and stream:  # this was causing the big issue X:
                 return context
         # Return the final output
         if context.get("output") is not None:
@@ -212,16 +212,16 @@ class Tool:
             }
             new_locals = {}
             exec_env = context.copy()
-            exec(rendered_code, exec_globals, new_locals)
-            exec_env.update(new_locals)
-
-            context.update(exec_env)
-            print(context)
-            # If output is set, also set it as results
-            if "output" in exec_env:
-                if exec_env["output"] is not None:
-                    context["results"] = exec_env["output"]
-
+            try:
+                exec(rendered_code, exec_globals, new_locals)
+                exec_env.update(new_locals)
+                context.update(exec_env)
+                # If output is set, also set it as results
+                if "output" in exec_env:
+                    if exec_env["output"] is not None:
+                        context["results"] = exec_env["output"]
+            except NameError as e:
+                print(f"NameError: {e} , on the following tool code: ", rendered_code)
         return context
 
     def to_dict(self):
@@ -1064,7 +1064,7 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         )
         api_url = npc_data.get("api_url", os.environ.get("NPCSH_API_URL", None))
         use_global_tools = npc_data.get("use_global_tools", True)
-        print(use_global_tools)
+        # print(use_global_tools)
         # Load tools from global and project-specific directories
         all_tools = []
         # 1. Load tools defined within the NPC profile

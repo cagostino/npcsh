@@ -53,7 +53,7 @@ def get_deepseek_response(
         api_key = os.getenv("DEEPSEEK_API_KEY", None)
     client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
-    print(client)
+    # print(client)
 
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
     if messages is None or len(messages) == 0:
@@ -77,7 +77,7 @@ def get_deepseek_response(
                         },
                     }
                 )
-    print(messages)
+    # print(messages)
     # print(model)
     response_format = None if format == "json" else format
     if response_format is None:
