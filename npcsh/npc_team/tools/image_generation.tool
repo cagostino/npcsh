@@ -7,7 +7,7 @@ steps:
   - engine: "python"
     code: |
       # Clean and prepare the prompt
-      image_prompt = inputs['prompt'].strip()
+      image_prompt = '{{prompt}}'.strip()
       #print(f"Prompt: {image_prompt}")
 
       # Generate the image
