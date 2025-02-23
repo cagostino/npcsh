@@ -6,7 +6,7 @@ description: |
 inputs:
   - query
   - summarize: false  # Optional - set to true to summarize the results
-  - file_filter: None  # Optional - can be filename patterns or folder names
+  - file_filter: 'none'  # Optional - can be filename patterns or folder names
   - depth: 2  # Optional - search depth for nested directories
   - fuzzy_threshold: 70  # Optional - minimum fuzzy match score (0-100)
 steps:
@@ -14,7 +14,7 @@ steps:
     code: |
         # Search parameters are directly available
         query = "{{ query }}"
-        file_filter = {{ file_filter | default(None) }}
+        file_filter = "{{ file_filter | default('None') }}"
         if isinstance(file_filter, str) and file_filter.lower() == 'none':
             file_filter = None
         max_depth = {{ depth | default(2) }}

@@ -4,19 +4,36 @@ import json
 from datetime import datetime
 import uuid
 from typing import Optional, List, Dict, Any, Tuple
+import pandas as pd
+import numpy as np
+
+
+def deep_to_dict(obj):
+    """
+    Recursively convert objects that have a 'to_dict' method to dictionaries,
+    otherwise drop them from the output.
+    """
+    if isinstance(obj, dict):
+        return {key: deep_to_dict(val) for key, val in obj.items()}
+
+    if isinstance(obj, list):
+        return [deep_to_dict(item) for item in obj]
+
+    if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict", None)):
+        return deep_to_dict(obj.to_dict())
+
+    if isinstance(obj, (int, float, str, bool, type(None))):
+        return obj
+
+    return None  # Drop objects that don't have a known conversion
 
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, (pd.Index, pd.Series, pd.DataFrame)):
-            return obj.to_dict()
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super().default(obj)
+        try:
+            return deep_to_dict(obj)
+        except TypeError:
+            return super().default(obj)
 
 
 def show_history(command_history, args):
@@ -136,13 +153,11 @@ class CommandHistory:
     ):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # print(message_id)
         if message_id is None:
             message_id = self.generate_message_id()
-        # print(message_id)
+
         if isinstance(content, dict):
             content = json.dumps(content, cls=CustomJSONEncoder)
-
         # Check if message_id already exists
         self.cursor.execute(
             "SELECT content FROM conversation_history WHERE message_id = ?",
@@ -178,10 +193,8 @@ class CommandHistory:
                 ),
             )
 
-        # print("asdfash ", message_id)
         self.conn.commit()
         if attachments:
-            # print("attachments ", attachments)
             for attachment in attachments:
                 self.add_attachment(
                     message_id,
@@ -216,7 +229,6 @@ class CommandHistory:
         # Calculate size if not provided
         if attachment_size is None and attachment_data is not None:
             attachment_size = len(attachment_data)
-        print("ghr ", message_id)
 
         self.cursor.execute(
             """

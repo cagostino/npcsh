@@ -222,7 +222,7 @@ def get_llm_response(
             model = "llava:7b"
         else:
             model = "llama3.2"
-    print(provider, model)
+    # print(provider, model)
     # print(provider, model)
     if provider == "ollama":
         if model is None:
@@ -335,7 +335,7 @@ def get_stream(
     else:
         provider = "ollama"
         model = "llama3.2"
-    print(model, provider)
+    # print(model, provider)
     if provider == "ollama":
         return get_ollama_stream(messages, model, npc=npc, images=images, **kwargs)
     elif provider == "openai":
@@ -456,7 +456,7 @@ def execute_llm_question(
 
     # Use the existing messages list
     if stream:
-        print("beginning stream")
+        # print("beginning stream")
         response = get_stream(
             messages, model=model, provider=provider, npc=npc, images=images
         )
@@ -882,7 +882,7 @@ def check_llm_command(
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
-        if stream or isinstance(result, str):
+        if stream:
             return result
         messages = result.get("messages", messages)
         output = result.get("output", "")
@@ -1068,7 +1068,7 @@ def handle_tool_call(
     # print(f"Tool output: {tool_output}")
     # render_markdown(str(tool_output))
     if messages is not None:  # Check if messages is not None
-        messages.append({"role": "assistant", "content": str(tool_output)})
+        messages.append({"role": "assistant", "content": tool_output})
     return {"messages": messages, "output": tool_output}
     # except Exception as e:
     #    print(f"Error executing tool {tool_name}: {e}")
