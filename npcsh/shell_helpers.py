@@ -1659,11 +1659,11 @@ def parse_piped_command(current_command):
 
     try:
         command_parts = shlex.split(current_command)
-        print(command_parts)
+        # print(command_parts)
     except ValueError:
         # Fallback if quote parsing fails
         command_parts = current_command.split()
-        print(command_parts)
+        # print(command_parts)
     # Base command is the first part
     base_command = command_parts[0]
 
