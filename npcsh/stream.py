@@ -13,6 +13,8 @@ import anthropic
 import ollama  # Add to setup.py if missing
 from openai import OpenAI
 from diffusers import StableDiffusionPipeline
+from google import genai
+
 from google.generativeai import types
 import google.generativeai as genai
 import base64
@@ -166,7 +168,7 @@ def process_anthropic_tool_stream(
 
 from typing import List, Dict, Any, Literal
 
-ProviderType = Literal["openai", "anthropic", "ollama"]
+ProviderType = Literal["openai", "anthropic", "ollama", "gemini"]
 
 
 def generate_tool_schema(
@@ -229,6 +231,27 @@ def generate_tool_schema(
                 },
             },
         }
+    elif provider == "gemini":
+        # Convert our generic tool schema to a Gemini function declaration
+        function = {
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                    k: {
+                        "type": v.get("type", "STRING").upper(),
+                        "description": v.get("description", ""),
+                        "enum": v.get("enum", None),
+                    }
+                    for k, v in parameters.items()
+                },
+                "required": required or [],
+            },
+        }
+
+        # Create a Tool object as shown in the example
+        return types.Tool(function_declarations=[function])
 
     raise ValueError(f"Unknown provider: {provider}")
 
@@ -547,7 +570,7 @@ def get_deepseek_stream(
     """
     if api_key is None:
         api_key = os.environ["DEEPSEEK_API_KEY"]
-    client = deepseek.Deepseek(api_key=api_key)
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
     system_message = get_system_message(npc) if npc else ""
 
@@ -555,10 +578,10 @@ def get_deepseek_stream(
     if messages_copy[0]["role"] != "system":
         messages_copy.insert(0, {"role": "system", "content": system_message})
 
-    completion = client.messages.create(
-        model=model,
-        max_tokens=1024,
-        messages=messages_copy,
+    completion = client.chat.completions.create(
+        model="deepseek-chat",
+        messages=messages,
+        tools=tools,
         stream=True,
         **kwargs,  # Include any additional keyword arguments
     )
@@ -574,19 +597,89 @@ def get_gemini_stream(
     tools: list = None,
     api_key: str = None,
     **kwargs,
-) -> List[Dict[str, str]]:
-    """
-    Function Description:
-        This function generates a conversation using the Gemini API.
-    Args:
-        messages (List[Dict[str, str]]): The list of messages in the conversation.
-        model (str): The model to use for the conversation.
-    Keyword Args:
-        npc (Any): The NPC object.
-        api_key (str): The API key for accessing the Gemini API.
-    Returns:
-        List[Dict[str, str]]: The list of messages in the conversation.
+) -> Generator:
+    """Streams responses from Gemini, supporting tools and yielding chunks."""
+    import google.generativeai as genai
 
-    """
+    if api_key is None:
+        api_key = os.environ["GEMINI_API_KEY"]
 
-    return
+    # Configure the Gemini API
+    genai.configure(api_key=api_key)
+
+    # Create model instance
+    model = genai.GenerativeModel(model_name=model)
+
+    # Convert all messages to contents list
+    contents = []
+    for msg in messages:
+        if msg["role"] != "system":
+            contents.append(
+                {
+                    "role": "user" if msg["role"] == "user" else "model",
+                    "parts": [{"text": msg["content"]}],
+                }
+            )
+
+    try:
+        # Generate streaming response with full history
+        response = model.generate_content(
+            contents=contents, tools=tools if tools else None, stream=True, **kwargs
+        )
+
+        for chunk in response:
+            yield chunk
+
+    except Exception as e:
+        print(f"Error in Gemini stream: {str(e)}")
+        yield None
+
+
+def process_gemini_tool_stream(
+    stream, tool_map: Dict[str, callable], tools: List[Dict]
+) -> List[Dict]:
+    """Process the Gemini tool stream and execute tools."""
+    tool_results = []
+
+    try:
+        for response in stream:
+            if not response.candidates:
+                continue
+
+            for candidate in response.candidates:
+                if not candidate.content or not candidate.content.parts:
+                    continue
+
+                for part in candidate.content.parts:
+                    if hasattr(part, "function_call"):
+                        try:
+                            tool_name = part.function_call.name
+                            # Convert MapComposite to dict
+                            tool_args = dict(part.function_call.args)
+
+                            if tool_name in tool_map:
+                                result = tool_map[tool_name](tool_args)
+                                tool_results.append(
+                                    {
+                                        "tool_name": tool_name,
+                                        "tool_input": tool_args,
+                                        "tool_result": result,
+                                    }
+                                )
+                        except Exception as e:
+                            tool_results.append(
+                                {
+                                    "error": str(e),
+                                    "tool_name": tool_name
+                                    if "tool_name" in locals()
+                                    else "unknown",
+                                    "tool_input": tool_args
+                                    if "tool_args" in locals()
+                                    else None,
+                                }
+                            )
+
+    except Exception as e:
+        tool_results.append({"error": f"Stream processing error: {str(e)}"})
+
+    return tool_results

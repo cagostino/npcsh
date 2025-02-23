@@ -6,6 +6,8 @@ import ollama  # Add to setup.py if missing
 from openai import OpenAI
 from diffusers import StableDiffusionPipeline
 from google.generativeai import types
+from google import genai
+
 import google.generativeai as genai
 from .npc_sysenv import (
     get_system_message,

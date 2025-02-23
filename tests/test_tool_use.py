@@ -7,9 +7,12 @@ from npcsh.stream import (
     process_anthropic_tool_stream,
     get_openai_stream,
     process_openai_tool_stream,
+    get_deepseek_stream,
     get_ollama_stream,
     process_ollama_tool_stream,
     generate_tool_schema,
+    get_gemini_stream,
+    process_gemini_tool_stream,
 )
 import json
 
@@ -36,14 +39,14 @@ story_params = {
         "description": "Complexity of the story prompt",
     },
 }
-
 tools_by_provider = {}
-for provider in ["openai", "ollama", "anthropic"]:
+for provider in ["openai", "ollama", "anthropic", "gemini"]:
     tools_by_provider[provider] = [
         generate_tool_schema(
             name="roll_dice",
             description="Simulate dice rolls with configurable parameters",
             parameters=dice_params,
+            required=["num_dice", "sides"],
             provider=provider,
         ),
         generate_tool_schema(
@@ -164,8 +167,13 @@ class MockToolKit:
         Returns:
             dict: Dice roll results
         """
-        num_dice = params.get("num_dice", 1)
-        sides = params.get("sides", 6)
+        # Convert parameters to integers, handling floats
+        try:
+            num_dice = int(float(params.get("num_dice", 1)))
+            sides = int(float(params.get("sides", 6)))
+        except (ValueError, TypeError):
+            num_dice = 1
+            sides = 6
 
         rolls = [random.randint(1, sides) for _ in range(num_dice)]
 
@@ -289,9 +297,133 @@ def test_openai_function_calling():
 
 
 def test_ollama_function_calling():
-    stream = get_ollama_stream(messages=messages, model="llama3.2", tools=ollama_tools)
+    stream = get_ollama_stream(
+        messages=messages,
+        model="MFDoom/deepseek-r1-tool-calling:14b",
+        tools=tools_by_provider["ollama"],
+    )
 
-    tool_results = process_ollama_tool_stream(stream, tool_map, ollama_tools)
+    tool_results = process_ollama_tool_stream(
+        stream, tool_map, tools=tools_by_provider["ollama"]
+    )
+
+    print("Tool Execution Results:")
+    for result in tool_results:
+        if "error" in result:
+            print(f"\nError: {result['error']}")
+            continue
+
+        print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
+        print("Tool Input:", result.get("tool_input", "No specific input"))
+        print("Execution Result:")
+        for key, value in result["tool_result"].items():
+            print(f"  {key}: {value}")
+
+    stream = get_ollama_stream(
+        messages=messages,
+        model="llama3.2",
+        tools=tools_by_provider["ollama"],
+    )
+
+    tool_results = process_ollama_tool_stream(
+        stream, tool_map, tools=tools_by_provider["ollama"]
+    )
+
+    print("Tool Execution Results:")
+    for result in tool_results:
+        if "error" in result:
+            print(f"\nError: {result['error']}")
+            continue
+
+        print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
+        print("Tool Input:", result.get("tool_input", "No specific input"))
+        print("Execution Result:")
+        for key, value in result["tool_result"].items():
+            print(f"  {key}: {value}")
+    stream = get_ollama_stream(
+        messages=messages,
+        model="qwq",
+        tools=tools_by_provider["ollama"],
+    )
+
+    tool_results = process_ollama_tool_stream(
+        stream, tool_map, tools=tools_by_provider["ollama"]
+    )
+
+    print("Tool Execution Results:")
+    for result in tool_results:
+        if "error" in result:
+            print(f"\nError: {result['error']}")
+            continue
+
+        print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
+        print("Tool Input:", result.get("tool_input", "No specific input"))
+        print("Execution Result:")
+        for key, value in result["tool_result"].items():
+            print(f"  {key}: {value}")
+
+
+def test_deepseek_stream():
+    stream = get_deepseek_stream(
+        messages=messages, model="deepseek-chat", tools=tools_by_provider["openai"]
+    )
+
+    tool_results = process_openai_tool_stream(stream, tool_map)
+
+    print("Tool Execution Results:")
+    for result in tool_results:
+        if "error" in result:
+            print(f"\nError: {result['error']}")
+            continue
+
+        print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
+        print("Tool Input:", result.get("tool_input", "No specific input"))
+        print("Execution Result:")
+        for key, value in result["tool_result"].items():
+            print(f"  {key}: {value}")
+
+    # for reasoning
+    stream = get_deepseek_stream(
+        messages=messages, model="deepseek-reasoner", tools=tools_by_provider["openai"]
+    )
+    """
+
+    for chunk in stream:
+        choice = chunk.choices[0]
+        if choice.delta.tool_calls is not None:
+            #if choice.delta.tool_calls[0]arguments is not None:
+            print(choice.delta.tool_calls[0])
+
+    """
+
+    tool_results = process_openai_tool_stream(stream, tool_map)
+
+    print("Tool Execution Results:")
+    for result in tool_results:
+        if "error" in result:
+            print(f"\nError: {result['error']}")
+            continue
+
+        print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
+        print("Tool Input:", result.get("tool_input", "No specific input"))
+        print("Execution Result:")
+        for key, value in result["tool_result"].items():
+            print(f"  {key}: {value}")
+
+
+def test_gemini_tool():
+    import os
+
+    stream = get_gemini_stream(
+        messages=messages,
+        model="gemini-2.0-flash-001",
+        tools=tools_by_provider["gemini"],
+        api_key=os.environ["GEMINI_API_KEY"],
+    )
+
+    tool_results = process_gemini_tool_stream(
+        stream, tool_map, tools=tools_by_provider["gemini"]
+    )
 
     print("Tool Execution Results:")
     for result in tool_results:
