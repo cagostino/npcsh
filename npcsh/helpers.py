@@ -97,11 +97,11 @@ def ensure_npcshrc_exists() -> str:
             npcshrc.write("export NPCSH_VISION_PROVIDER='ollama'\n")
             npcshrc.write("export NPCSH_VISION_MODEL='llava7b'\n")
             npcshrc.write(
-                "export NPCSH_IMAGE_GEN_MODEL='runwayml/stable-diffusion-v1-5'"
+                "export NPCSH_IMAGE_GEN_MODEL='runwayml/stable-diffusion-v1-5'\n"
             )
-            npcshrc.write("export NPCSH_IMAGE_GEN_PROVIDER='diffusers'")
+            npcshrc.write("export NPCSH_IMAGE_GEN_PROVIDER='diffusers'\n")
 
-            npcshrc.write("export NPCSH_API_URL=''")
+            npcshrc.write("export NPCSH_API_URL=''\n")
             npcshrc.write("export NPCSH_DB_PATH='~/npcsh_history.db'\n")
             npcshrc.write("export NPCSH_VECTOR_DB_PATH='~/npcsh_chroma.db'\n")
             npcshrc.write("export NPCSH_STREAM_OUTPUT=0")
