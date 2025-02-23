@@ -222,6 +222,11 @@ class Tool:
                         context["results"] = exec_env["output"]
             except NameError as e:
                 print(f"NameError: {e} , on the following tool code: ", rendered_code)
+            except SyntaxError as e:
+                print(f"SyntaxError: {e} , on the following tool code: ", rendered_code)
+            except Exception as e:
+                print(f"Error executing Python code: {e}")
+
         return context
 
     def to_dict(self):
