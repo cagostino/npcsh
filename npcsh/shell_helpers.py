@@ -1659,10 +1659,11 @@ def parse_piped_command(current_command):
 
     try:
         command_parts = shlex.split(current_command)
+        # print(command_parts)
     except ValueError:
         # Fallback if quote parsing fails
         command_parts = current_command.split()
-
+        # print(command_parts)
     # Base command is the first part
     base_command = command_parts[0]
 
@@ -1725,13 +1726,16 @@ def execute_command(
     output = ""
     location = os.getcwd()
     db_conn = sqlite3.connect(db_path)
+    # print(f"Executing command: {command}")
     if len(command.strip()) == 0:
         return {"messages": messages, "output": output}
+
     if messages is None:
         messages = []
 
     # Split commands by pipe, preserving the original parsing logic
     commands = command.split("|")
+    # print(commands)
     available_models = get_available_models()
 
     # Track piped output between commands
@@ -1801,21 +1805,22 @@ def execute_command(
             subcommands = result.get("subcommands", [])
 
         else:
+            # print(single_command)
             try:
                 command_parts = shlex.split(single_command)
+                # print(command_parts)
             except ValueError as e:
                 if "No closing quotation" in str(e):
                     # Attempt to close unclosed quotes
-                    single_command += '"'
+                    if single_command.count('"') % 2 == 1:
+                        single_command += '"'
+                    elif single_command.count("'") % 2 == 1:
+                        single_command += "'"
                     try:
                         command_parts = shlex.split(single_command)
                     except ValueError:
-                        return {
-                            "messages": messages,
-                            "output": "Error: Unmatched quotation in command",
-                        }
-                else:
-                    return {"messages": messages, "output": f"Error: {str(e)}"}
+                        # fall back to regular split
+                        command_parts = single_command.split()
 
             # ALL EXISTING COMMAND HANDLING LOGIC REMAINS UNCHANGED
             if command_parts[0] in interactive_commands:
@@ -1912,6 +1917,8 @@ def execute_command(
                         output = colored(f"Error executing command: {e}", "red")
 
             else:
+                # print("LLM command")
+                # print(single_command)
                 # LLM command processing with existing logic
                 output = check_llm_command(
                     single_command,
