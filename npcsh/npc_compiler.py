@@ -323,8 +323,9 @@ class NPC:
         self.model = model
         self.db_conn = db_conn
         self.tables = self.db_conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table';"
+            "SELECT name, sql FROM sqlite_master WHERE type='table';"
         ).fetchall()
+
         self.provider = provider
         self.api_url = api_url
         self.all_tools = all_tools or []

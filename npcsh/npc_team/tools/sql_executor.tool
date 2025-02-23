@@ -8,13 +8,17 @@ steps:
   - engine: python
     code: |
       import pandas as pd
-      df = pd.read_sql_query('{{sql_query}}', npc.db_conn)
+      try:
+        df = pd.read_sql_query('{{sql_query}}', npc.db_conn)
+      except pandas.errors.DatabaseError as e:
+        df = pd.DataFrame({'Error': [str(e)]})
+
 
       output = df.to_string()
 
   - engine: natural
     code: |
-      {% if summarize %}
+      {% if interpret %}
       Here is the result of the SQL query:
       ```
       {{ df.to_string() }}  # Convert DataFrame to string for a nicer display

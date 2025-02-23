@@ -956,6 +956,8 @@ def handle_tool_call(
     retrieved_docs=None,
     n_docs: int = 5,
     stream=False,
+    n_attempts=3,
+    attempt=0,
 ) -> Union[str, Dict[str, Any]]:
     """
     Function Description:
@@ -1000,9 +1002,12 @@ def handle_tool_call(
     The user wants to use the tool '{tool_name}' with the following request:
     '{command}'
     Here is the tool file:
-    {tool}
+    ```
+    {tool.to_dict()}
+    ```
 
     Please extract the required inputs for the tool as a JSON object.
+    They must be exactly as they are named in the tool.
     Return only the JSON object without any markdown formatting.
     """
     if npc and hasattr(npc, "shared_context"):
@@ -1015,6 +1020,7 @@ def handle_tool_call(
 
     # print(f"Tool prompt: {prompt}")
 
+    # print(prompt)
     response = get_llm_response(
         prompt,
         format="json",
@@ -1048,8 +1054,30 @@ def handle_tool_call(
             if inp not in input_values:
                 missing_inputs.append(inp)
     if len(missing_inputs) > 0:
-        print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
-        return f"Missing inputs for tool '{tool_name}': {missing_inputs}"
+        # print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
+        if attempt < n_attempts:
+            print(f"attempt {attempt+1} to generate inputs failed, trying again")
+            print("missing inputs", missing_inputs)
+            print("llm response", response)
+            print("input values", input_values)
+            return handle_tool_call(
+                command,
+                tool_name,
+                command_history,
+                model=model,
+                provider=provider,
+                messages=messages,
+                npc=npc,
+                retrieved_docs=retrieved_docs,
+                n_docs=n_docs,
+                stream=stream,
+                attempt=attempt + 1,
+                n_attempts=n_attempts,
+            )
+        return {
+            "output": f"Missing inputs for tool '{tool_name}': {missing_inputs}",
+            "messages": messages,
+        }
 
     # try:
     tool_output = tool.execute(
