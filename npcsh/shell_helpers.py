@@ -1726,7 +1726,7 @@ def execute_command(
     output = ""
     location = os.getcwd()
     db_conn = sqlite3.connect(db_path)
-    print(f"Executing command: {command}")
+    # print(f"Executing command: {command}")
     if len(command.strip()) == 0:
         return {"messages": messages, "output": output}
 
@@ -1735,7 +1735,7 @@ def execute_command(
 
     # Split commands by pipe, preserving the original parsing logic
     commands = command.split("|")
-    print(commands)
+    # print(commands)
     available_models = get_available_models()
 
     # Track piped output between commands
@@ -1805,10 +1805,10 @@ def execute_command(
             subcommands = result.get("subcommands", [])
 
         else:
-            print(single_command)
+            # print(single_command)
             try:
                 command_parts = shlex.split(single_command)
-                print(command_parts)
+                # print(command_parts)
             except ValueError as e:
                 if "No closing quotation" in str(e):
                     # Attempt to close unclosed quotes
@@ -1819,9 +1819,8 @@ def execute_command(
                     try:
                         command_parts = shlex.split(single_command)
                     except ValueError:
-                        #fall back to regular split
+                        # fall back to regular split
                         command_parts = single_command.split()
-
 
             # ALL EXISTING COMMAND HANDLING LOGIC REMAINS UNCHANGED
             if command_parts[0] in interactive_commands:
@@ -1918,8 +1917,8 @@ def execute_command(
                         output = colored(f"Error executing command: {e}", "red")
 
             else:
-                print("LLM command")
-                print(single_command)
+                # print("LLM command")
+                # print(single_command)
                 # LLM command processing with existing logic
                 output = check_llm_command(
                     single_command,
