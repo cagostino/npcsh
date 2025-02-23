@@ -882,7 +882,7 @@ def check_llm_command(
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
-        if stream:
+        if stream or isinstance(result, str):
             return result
         messages = result.get("messages", messages)
         output = result.get("output", "")
