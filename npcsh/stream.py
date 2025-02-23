@@ -164,28 +164,188 @@ def process_anthropic_tool_stream(
     return tool_results
 
 
+from typing import List, Dict, Any, Literal
+
+ProviderType = Literal["openai", "anthropic", "ollama"]
+
+
+def generate_tool_schema(
+    name: str,
+    description: str,
+    parameters: Dict[str, Any],
+    provider: ProviderType,
+    required: List[str] = None,
+) -> Dict[str, Any]:
+    """
+    Generate provider-specific function/tool schema from common parameters
+
+    Args:
+        name: Name of the function
+        description: Description of what the function does
+        parameters: Dict of parameter names and their properties
+        provider: Which provider to generate schema for
+        required: List of required parameter names
+    """
+    if required is None:
+        required = []
+
+    if provider == "openai":
+        return {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": {
+                    "type": "object",
+                    "properties": parameters,
+                    "required": required,
+                    "additionalProperties": False,
+                },
+                "strict": True,
+            },
+        }
+
+    elif provider == "anthropic":
+        return {
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": parameters,
+                "required": required,
+            },
+        }
+
+    elif provider == "ollama":
+        return {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": {
+                    "type": "object",
+                    "properties": parameters,
+                    "required": required,
+                },
+            },
+        }
+
+    raise ValueError(f"Unknown provider: {provider}")
+
+
 def get_ollama_stream(
     messages: List[Dict[str, str]],
     model: str,
     npc: Any = None,
-    images: list = None,
     tools: list = None,
+    images: list = None,
+    tool_choice: Dict = None,
     **kwargs,
 ) -> Generator:
-    """Streams responses from Ollama, yielding raw text chunks."""
+    """Streams responses from Ollama, supporting images and tools."""
     messages_copy = messages.copy()
+
+    # Handle images if provided
     if images:
         messages[-1]["images"] = [image["file_path"] for image in images]
 
+    # Add system message if not present
     if messages_copy[0]["role"] != "system":
         if npc is not None:
             system_message = get_system_message(npc)
             messages_copy.insert(0, {"role": "system", "content": system_message})
 
-    for chunk in ollama.chat(
-        model=model, messages=messages_copy, stream=True, **kwargs
-    ):
+    # Prepare API call parameters
+    api_params = {
+        "model": model,
+        "messages": messages_copy,
+        "stream": True,
+    }
+
+    # Add tools if provided
+    if tools:
+        api_params["tools"] = tools
+
+    # Make the API call
+    for chunk in ollama.chat(**api_params):
         yield chunk
+
+
+def process_ollama_tool_stream(
+    stream, tool_map: Dict[str, callable], tools: List[Dict]
+) -> List[Dict]:
+    """Process the Ollama tool use stream"""
+    tool_results = []
+    content = ""
+
+    # Build tool schema map
+    tool_schemas = {
+        tool["function"]["name"]: tool["function"]["parameters"] for tool in tools
+    }
+
+    def convert_params(tool_name: str, params: dict) -> dict:
+        """Convert parameters to the correct type based on schema"""
+        schema = tool_schemas.get(tool_name, {})
+        properties = schema.get("properties", {})
+
+        converted = {}
+        for key, value in params.items():
+            prop_schema = properties.get(key, {})
+            prop_type = prop_schema.get("type")
+
+            if prop_type == "integer" and isinstance(value, str):
+                try:
+                    converted[key] = int(value)
+                except (ValueError, TypeError):
+                    converted[key] = 0
+            else:
+                converted[key] = value
+
+        return converted
+
+    # Accumulate content
+    for chunk in stream:
+        if chunk.message and chunk.message.content:
+            content += chunk.message.content
+
+    # Process complete JSON objects when done
+    try:
+        # Find all JSON objects in the content
+        json_objects = []
+        current = ""
+        for char in content:
+            current += char
+            if current.count("{") == current.count("}") and current.strip().startswith(
+                "{"
+            ):
+                json_objects.append(current.strip())
+                current = ""
+
+        # Process each JSON object
+        for json_str in json_objects:
+            try:
+                tool_call = json.loads(json_str)
+                tool_name = tool_call.get("name")
+                tool_params = tool_call.get("parameters", {})
+
+                if tool_name in tool_map:
+                    # Convert parameters to correct types
+                    converted_params = convert_params(tool_name, tool_params)
+                    result = tool_map[tool_name](converted_params)
+                    tool_results.append(
+                        {
+                            "tool_name": tool_name,
+                            "tool_input": converted_params,
+                            "tool_result": result,
+                        }
+                    )
+            except Exception as e:
+                tool_results.append({"error": str(e), "partial_json": json_str})
+
+    except Exception as e:
+        tool_results.append({"error": str(e), "content": content})
+
+    return tool_results
 
 
 def get_openai_stream(
@@ -195,9 +355,10 @@ def get_openai_stream(
     tools: list = None,
     images: List[Dict[str, str]] = None,
     api_key: str = None,
+    tool_choice: Dict = None,
     **kwargs,
 ) -> Generator:
-    """Streams responses from OpenAI, supporting images and yielding raw text chunks."""
+    """Streams responses from OpenAI, supporting images, tools and yielding raw text chunks."""
 
     if api_key is None:
         api_key = os.environ["OPENAI_API_KEY"]
@@ -234,12 +395,91 @@ def get_openai_stream(
         if last_user_message not in messages:
             messages.append(last_user_message)
 
-    stream = client.chat.completions.create(
-        model=model, messages=messages, stream=True, **kwargs
-    )
+    # Prepare API call parameters
+    api_params = {"model": model, "messages": messages, "stream": True, **kwargs}
+
+    # Add tools if provided
+    if tools:
+        api_params["tools"] = tools
+
+    # Add tool choice if specified
+    if tool_choice:
+        api_params["tool_choice"] = tool_choice
+
+    stream = client.chat.completions.create(**api_params)
 
     for chunk in stream:
         yield chunk
+
+
+def process_openai_tool_stream(stream, tool_map: Dict[str, callable]) -> List[Dict]:
+    """
+    Process the OpenAI tool use stream
+    """
+    final_tool_calls = {}
+    tool_results = []
+
+    for chunk in stream:
+        delta = chunk.choices[0].delta
+
+        # Process tool calls if present
+        if delta.tool_calls:
+            for tool_call in delta.tool_calls:
+                index = tool_call.index
+
+                # Initialize tool call if new
+                if index not in final_tool_calls:
+                    final_tool_calls[index] = {
+                        "id": tool_call.id,
+                        "name": tool_call.function.name if tool_call.function else None,
+                        "arguments": tool_call.function.arguments
+                        if tool_call.function
+                        else "",
+                    }
+                # Append arguments if continuing
+                elif tool_call.function and tool_call.function.arguments:
+                    final_tool_calls[index]["arguments"] += tool_call.function.arguments
+
+    # Process all complete tool calls
+    for tool_call in final_tool_calls.values():
+        try:
+            # Parse the arguments
+            tool_input = (
+                json.loads(tool_call["arguments"])
+                if tool_call["arguments"].strip()
+                else {}
+            )
+
+            # Execute the tool
+            tool_func = tool_map.get(tool_call["name"])
+            if tool_func:
+                result = tool_func(tool_input)
+                tool_results.append(
+                    {
+                        "tool_name": tool_call["name"],
+                        "tool_input": tool_input,
+                        "tool_result": result,
+                    }
+                )
+            else:
+                tool_results.append(
+                    {
+                        "tool_name": tool_call["name"],
+                        "tool_input": tool_input,
+                        "error": f"Tool {tool_call['name']} not found",
+                    }
+                )
+
+        except Exception as e:
+            tool_results.append(
+                {
+                    "tool_name": tool_call["name"],
+                    "tool_input": tool_call["arguments"],
+                    "error": str(e),
+                }
+            )
+
+    return tool_results
 
 
 def get_openai_like_stream(

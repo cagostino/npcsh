@@ -2,9 +2,63 @@ import random
 from typing import Dict, Any, List
 import json
 import uuid
-from npcsh.stream import get_anthropic_stream, process_anthropic_tool_stream
-
+from npcsh.stream import (
+    get_anthropic_stream,
+    process_anthropic_tool_stream,
+    get_openai_stream,
+    process_openai_tool_stream,
+    get_ollama_stream,
+    process_ollama_tool_stream,
+    generate_tool_schema,
+)
 import json
+
+# Example with our actual tools:
+dice_params = {
+    "num_dice": {"type": "integer", "description": "Number of dice to roll"},
+    "sides": {"type": "integer", "description": "Number of sides on each die"},
+}
+
+character_params = {
+    "profession": {"type": "string", "description": "Optional specific profession"},
+    "age_range": {
+        "type": "string",
+        "enum": ["child", "teen", "young_adult", "adult", "elder"],
+        "description": "Optional age range",
+    },
+}
+
+story_params = {
+    "genre": {"type": "string", "description": "Optional story genre"},
+    "complexity": {
+        "type": "string",
+        "enum": ["simple", "complex"],
+        "description": "Complexity of the story prompt",
+    },
+}
+
+tools_by_provider = {}
+for provider in ["openai", "ollama", "anthropic"]:
+    tools_by_provider[provider] = [
+        generate_tool_schema(
+            name="roll_dice",
+            description="Simulate dice rolls with configurable parameters",
+            parameters=dice_params,
+            provider=provider,
+        ),
+        generate_tool_schema(
+            name="generate_character_profile",
+            description="Generate a random character profile with optional constraints",
+            parameters=character_params,
+            provider=provider,
+        ),
+        generate_tool_schema(
+            name="generate_story_prompt",
+            description="Create a random story writing prompt",
+            parameters=story_params,
+            provider=provider,
+        ),
+    ]
 
 
 class MockToolKit:
@@ -176,60 +230,6 @@ class MockToolKit:
         }
 
 
-tools = [
-    {
-        "name": "generate_character_profile",
-        "description": "Generate a random character profile with optional constraints",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "profession": {
-                    "type": "string",
-                    "description": "Optional specific profession",
-                },
-                "age_range": {
-                    "type": "string",
-                    "enum": ["child", "teen", "young_adult", "adult", "elder"],
-                    "description": "Optional age range",
-                },
-            },
-        },
-    },
-    {
-        "name": "roll_dice",
-        "description": "Simulate dice rolls with configurable parameters",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "num_dice": {
-                    "type": "integer",
-                    "description": "Number of dice to roll",
-                },
-                "sides": {
-                    "type": "integer",
-                    "description": "Number of sides on each die",
-                },
-            },
-        },
-    },
-    {
-        "name": "generate_story_prompt",
-        "description": "Create a random story writing prompt",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "genre": {"type": "string", "description": "Optional story genre"},
-                "complexity": {
-                    "type": "string",
-                    "enum": ["simple", "complex"],
-                    "description": "Complexity of the story prompt",
-                },
-            },
-        },
-    },
-]
-
-# Prepare messages with example tool use requests
 messages = [
     {
         "role": "user",
@@ -250,22 +250,57 @@ tool_map = {
 }
 
 
-# Stream the response with tools
-stream = get_anthropic_stream(
-    messages=messages,
-    model="claude-3-5-haiku-latest",
-    tools=tools,
-    tool_choice={"type": "any"},
-)
+def test_anthropic():
+    # Prepare messages with example tool use requests
+    # Stream the response with tools
+    stream = get_anthropic_stream(
+        messages=messages,
+        model="claude-3-5-haiku-latest",
+        tools=anthropic_tools,
+        tool_choice={"type": "any"},
+    )
+    tool_results = process_anthropic_tool_stream(stream, tool_map)
+    # Print out the tool results with more context
+    print("Tool Execution Results:")
+    for result in tool_results:
+        print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
+        print("Tool Input:", result.get("tool_input", "No specific input"))
+        print("Execution Result:")
+        for key, value in result["tool_result"].items():
+            print(f"  {key}: {value}")
 
 
-tool_results = process_anthropic_tool_stream(stream, tool_map)
+def test_openai_function_calling():
+    # Stream the response with tools
+    stream = get_openai_stream(
+        messages=messages, model="gpt-4o-mini", tools=openai_tools, tool_choice="auto"
+    )
 
-# Print out the tool results with more context
-print("Tool Execution Results:")
-for result in tool_results:
-    print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
-    print("Tool Input:", result.get("tool_input", "No specific input"))
-    print("Execution Result:")
-    for key, value in result["tool_result"].items():
-        print(f"  {key}: {value}")
+    tool_results = process_openai_tool_stream(stream, tool_map)
+
+    # Print out the tool results with more context
+    print("Tool Execution Results:")
+    for result in tool_results:
+        print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
+        print("Tool Input:", result.get("tool_input", "No specific input"))
+        print("Execution Result:")
+        for key, value in result["tool_result"].items():
+            print(f"  {key}: {value}")
+
+
+def test_ollama_function_calling():
+    stream = get_ollama_stream(messages=messages, model="llama3.2", tools=ollama_tools)
+
+    tool_results = process_ollama_tool_stream(stream, tool_map, ollama_tools)
+
+    print("Tool Execution Results:")
+    for result in tool_results:
+        if "error" in result:
+            print(f"\nError: {result['error']}")
+            continue
+
+        print(f"\n--- {result['tool_name'].replace('_', ' ').title()} ---")
+        print("Tool Input:", result.get("tool_input", "No specific input"))
+        print("Execution Result:")
+        for key, value in result["tool_result"].items():
+            print(f"  {key}: {value}")
