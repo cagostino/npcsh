@@ -569,17 +569,14 @@ def get_multiline_input(prompt: str) -> str:
     lines = []
     current_prompt = prompt
     while True:
-        try:
-            line = input(current_prompt)
-            if line.endswith("\\"):
-                lines.append(line[:-1])  # Remove the backslash
-                # Use a continuation prompt for the next line
-                current_prompt = readline_safe_prompt("> ")
-            else:
-                lines.append(line)
-                break
-        except EOFError:
-            break  # Handle EOF (Ctrl+D)
+        line = input(current_prompt)
+        if line.endswith("\\"):
+            lines.append(line[:-1])  # Remove the backslash
+            # Use a continuation prompt for the next line
+            current_prompt = readline_safe_prompt("> ")
+        else:
+            lines.append(line)
+            break
     return "\n".join(lines)
 
 
