@@ -13,12 +13,13 @@ import redis
 # compress the image
 from PIL import Image
 from PIL import ImageFile
+from io import BytesIO
 
 from .command_history import (
     CommandHistory,
     save_conversation_message,
 )
-from .npc_compiler import NPCCompiler
+from .npc_compiler import NPCCompiler, NPC
 from .npc_sysenv import get_model_and_provider, get_available_models, get_system_message
 
 from .llm_funcs import (
@@ -68,20 +69,221 @@ def capture():
 
 @app.route("/api/stream", methods=["POST"])
 def stream():
-    """SSE stream that takes messages, model, and provider from frontend."""
+    """SSE stream that takes messages, models, providers, and attachments from frontend."""
     data = request.json
-    messages = data.get("messages", [])
+    commandstr = data.get("commandstr")
+    conversation_id = data.get("conversationId")
     model = data.get("model", None)
     provider = data.get("provider", None)
+    save_to_sqlite3 = data.get("saveToSqlite3", False)
+    npc = data.get("npc", None)
+    attachments = data.get("attachments", [])
+    current_path = data.get("currentPath")
+    print(data)
 
-    if not messages:
-        return jsonify({"error": "No messages provided"}), 400
+    messages = data.get("messages", [])
+    print("messages", messages)
+    command_history = CommandHistory(db_path)
+
+    images = []
+    attachments_loaded = []
+
+    if attachments:
+        for attachment in attachments:
+            extension = attachment["name"].split(".")[-1]
+            extension_mapped = extension_map.get(extension.upper(), "others")
+            file_path = os.path.expanduser(
+                "~/.npcsh/" + extension_mapped + "/" + attachment["name"]
+            )
+
+            if extension_mapped == "images":
+                # Open the image file and save it to the file path
+                ImageFile.LOAD_TRUNCATED_IMAGES = True
+                img = Image.open(attachment["path"])
+
+                # Save the image to a BytesIO buffer (to extract binary data)
+                img_byte_arr = BytesIO()
+                img.save(img_byte_arr, format="PNG")  # or the appropriate format
+                img_byte_arr.seek(0)  # Rewind the buffer to the beginning
+
+                # Save the image to a file
+                img.save(file_path, optimize=True, quality=50)
+
+                # Add to images list for LLM processing
+                images.append({"filename": attachment["name"], "file_path": file_path})
+
+                # Add the image data (in binary form) to attachments_loaded
+                attachments_loaded.append(
+                    {
+                        "name": attachment["name"],
+                        "type": extension_mapped,
+                        "data": img_byte_arr.read(),  # Read binary data from the buffer
+                        "size": os.path.getsize(file_path),
+                    }
+                )
+    if save_to_sqlite3:
+        if len(messages) == 0:
+            # load the conversation messages
+            messages = fetch_messages_for_conversation(conversation_id)
+        if not messages:
+            return jsonify({"error": "No messages provided"}), 400
+        messages.append({"role": "user", "content": commandstr})
+        message_id = command_history.generate_message_id()
+
+        save_conversation_message(
+            command_history,
+            conversation_id,
+            "user",
+            commandstr,
+            wd=current_path,
+            model=model,
+            provider=provider,
+            npc=npc,
+            attachments=attachments_loaded,
+            message_id=message_id,
+        )
+        message_id = command_history.generate_message_id()
+
+    stream_response = get_stream(
+        messages,
+        images=images,
+        model=model,
+        provider=provider,
+        npc=npc if isinstance(npc, NPC) else None,
+    )
+
+    """else:
+
+        stream_response = execute_command_stream(
+            commandstr,
+            command_history,
+            db_path,
+            npc_compiler,
+            model=model,
+            provider=provider,
+            messages=messages,
+            images=images,  # Pass the processed images
+        )  # Get all conversation messages so far
+    """
+    final_response = ""  # To accumulate the assistant's response
+    complete_response = []  # List to store all chunks
 
     def event_stream():
-        for response_chunk in get_stream(messages, model=model, provider=provider):
-            yield response_chunk
+        for response_chunk in stream_response:
+            chunk_content = ""
 
-    return Response(event_stream(), mimetype="text/event-stream")
+            # Extract content based on model type
+            if model.startswith("gpt-4o"):
+                chunk_content = "".join(
+                    choice.delta.content
+                    for choice in response_chunk.choices
+                    if choice.delta.content is not None
+                )
+                if chunk_content:
+                    complete_response.append(chunk_content)
+                chunk_data = {
+                    "id": response_chunk.id,
+                    "object": response_chunk.object,
+                    "created": response_chunk.created,
+                    "model": response_chunk.model,
+                    "choices": [
+                        {
+                            "index": choice.index,
+                            "delta": {
+                                "content": choice.delta.content,
+                                "role": choice.delta.role,
+                            },
+                            "finish_reason": choice.finish_reason,
+                        }
+                        for choice in response_chunk.choices
+                    ],
+                }
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+
+            elif model.startswith("llama"):
+                chunk_content = response_chunk["message"]["content"]
+                if chunk_content:
+                    complete_response.append(chunk_content)
+                chunk_data = {
+                    "id": None,
+                    "object": None,
+                    "created": response_chunk["created_at"],
+                    "model": response_chunk["model"],
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {
+                                "content": chunk_content,
+                                "role": response_chunk["message"]["role"],
+                            },
+                            "finish_reason": response_chunk.get("done_reason"),
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(chunk_data)}\n\n"
+            elif model.startswith("claude"):
+                print(response_chunk)
+                if response_chunk.type == "message_start":
+                    chunk_data = {
+                        "id": None,
+                        "object": None,
+                        "created": None,
+                        "model": model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {
+                                    "content": "",
+                                    "role": "assistant",
+                                },
+                                "finish_reason": "",
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+                if response_chunk.type == "content_block_delta":
+                    chunk_content = response_chunk.delta.text
+                    if chunk_content:
+                        complete_response.append(chunk_content)
+                    chunk_data = {
+                        "id": None,
+                        "object": None,
+                        "created": None,
+                        "model": model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {
+                                    "content": chunk_content,
+                                    "role": "assistant",
+                                },
+                                "finish_reason": response_chunk.delta.type,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+            if save_to_sqlite3:
+                save_conversation_message(
+                    command_history,
+                    conversation_id,
+                    "assistant",
+                    chunk_content,
+                    wd=current_path,
+                    model=model,
+                    provider=provider,
+                    npc=npc,
+                    message_id=message_id,  # Save with the same message_id
+                )
+
+        # Send completion message
+        yield f"data: {json.dumps({'type': 'message_stop'})}\n\n"
+        if save_to_sqlite3:
+            full_content = command_history.get_full_message_content(message_id)
+            command_history.update_message_content(message_id, full_content)
+
+    response = Response(event_stream(), mimetype="text/event-stream")
+
+    return response
 
 
 @app.after_request
