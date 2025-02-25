@@ -79,6 +79,10 @@ from .response import (
     get_deepseek_response,
     get_gemini_response,
 )
+from .image_gen import (
+    generate_image_openai,
+    generate_image_hf_diffusion,
+)
 
 from .embeddings import (
     get_ollama_embeddings,
@@ -130,7 +134,11 @@ def generate_image(
     # if provider == "ollama":
     #    image = generate_image_ollama(prompt, model)
     if provider == "openai":
-        image = generate_image_openai(prompt, model, openai_api_key)
+        image = generate_image_openai(
+            prompt,
+            model,
+            npc=npc,
+        )
     # elif provider == "anthropic":
     #    image = generate_image_anthropic(prompt, model, anthropic_api_key)
     # elif provider == "openai-like":
@@ -1058,7 +1066,7 @@ def handle_tool_call(
         if attempt < n_attempts:
             print(f"attempt {attempt+1} to generate inputs failed, trying again")
             print("missing inputs", missing_inputs)
-            #print("llm response", response)
+            # print("llm response", response)
             print("input values", input_values)
             return handle_tool_call(
                 command,
