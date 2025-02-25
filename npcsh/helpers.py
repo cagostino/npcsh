@@ -200,6 +200,8 @@ def add_npcshrc_to_shell_config() -> None:
         None
     """
 
+    if os.getenv( "NPCSH_INITIALIZED" ) is not None:
+        return
     config_file = get_shell_config_file()
     npcshrc_line = "\n# Source NPCSH configuration\nif [ -f ~/.npcshrc ]; then\n    . ~/.npcshrc\nfi\n"
 
