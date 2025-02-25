@@ -52,7 +52,7 @@ def get_anthropic_stream(
     for message in messages:
         if isinstance(message["content"], str):
             message["content"] = [{"type": "text", "text": message["content"]}]
-
+    print(messages)
     # Add images if provided
     if images:
         for img in images:
@@ -455,9 +455,9 @@ def process_openai_tool_stream(stream, tool_map: Dict[str, callable]) -> List[Di
                     final_tool_calls[index] = {
                         "id": tool_call.id,
                         "name": tool_call.function.name if tool_call.function else None,
-                        "arguments": tool_call.function.arguments
-                        if tool_call.function
-                        else "",
+                        "arguments": (
+                            tool_call.function.arguments if tool_call.function else ""
+                        ),
                     }
                 # Append arguments if continuing
                 elif tool_call.function and tool_call.function.arguments:
@@ -670,12 +670,14 @@ def process_gemini_tool_stream(
                             tool_results.append(
                                 {
                                     "error": str(e),
-                                    "tool_name": tool_name
-                                    if "tool_name" in locals()
-                                    else "unknown",
-                                    "tool_input": tool_args
-                                    if "tool_args" in locals()
-                                    else None,
+                                    "tool_name": (
+                                        tool_name
+                                        if "tool_name" in locals()
+                                        else "unknown"
+                                    ),
+                                    "tool_input": (
+                                        tool_args if "tool_args" in locals() else None
+                                    ),
                                 }
                             )
 
