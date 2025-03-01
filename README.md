@@ -191,6 +191,16 @@ npcsh> What is the capital of France?
 The capital of France is Paris. It is the largest city in the country and is known for its rich history, art, culture, and architecture, including famous landmarks such as the Eiffel Tower, Notre-Dame Cathedral, and the Louvre Museum.
 ```
 
+```npcsh
+npcsh> can you tell me a joke about my favorite city?
+
+Additional input needed: The user did not specify their favorite city, which is necessary to generate a relevant joke.
+Please tell me your favorite city so I can share a joke about it!: boston
+
+Sure! Here's a joke about Boston:
+Why do Bostonians like to play hide and seek?
+Because good luck hiding when everyone yells, "Wicked awesome, ya gotta be here!"
+```
 
 ```npcsh
 npcsh> What's the weather in Tokyo?
