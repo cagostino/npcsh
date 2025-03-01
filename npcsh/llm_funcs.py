@@ -752,6 +752,7 @@ def check_llm_command(
     4. Would this question be best answered by an alternative NPC?
     5. Is it a complex request that actually requires more than one
     tool to be called, perhaps in a sequence?
+    6. is there a need for the user to provide additional input to fulfill the request?
 
 
 
@@ -784,7 +785,7 @@ def check_llm_command(
     prompt += f"""
     In considering how to answer this, consider:
     - Whether it can be answered via a bash command on the user's computer. e.g. if a user is curious about file sizes within a directory or about processes running on their computer, these are likely best handled by a bash command.
-
+    - Whether more context from the user is required to adequately answer the question. e.g. if a user asks for a joke about their favorite city but they don't include the city , it would be helpful to ask for that information. Similarly, if a user asks to open a browser and to check the weather in a city, it would be helpful to ask for the city and which website or source to use.
     - Whether a tool should be used.
 
     Excluding time-sensitive phenomena,
@@ -799,7 +800,7 @@ def check_llm_command(
     ensure the best user experience.
 
     Respond with a JSON object containing:
-    - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc", "execute_sequence"]
+    - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc", "execute_sequence", "request_input"]
     - "tool_name": : if action is "invoke_tool": the name of the tool to use.
                      else if action is "execute_sequence", a list of tool names to use.
     - "explanation": a brief explanation of why you chose this action.
@@ -925,6 +926,46 @@ def check_llm_command(
             retrieved_docs=retrieved_docs,
             n_docs=n_docs,
         )
+    elif action == "request_input":
+        explanation = response_content_parsed.get("explanation")
+
+        request_input = handle_request_input(
+            f"Explanation from check_llm_command:  {explanation} \n for the user input command: {command}",
+            model=model,
+            provider=provider,
+        )
+        # pass it back through with the request input added to the end of the messages
+        # so that we can re-pass the result through the check_llm_command.
+
+        messages.append(
+            {
+                "role": "assistant",
+                "content": f"""its clear that extra input is required.
+                                could you please provide it? Here is the reason:
+
+                                {explanation},
+
+                                and the prompt: {command}""",
+            }
+        )
+        messages.append(
+            {
+                "role": "user",
+                "content": command + " \n \n \n extra context: " + request_input,
+            }
+        )
+
+        return check_llm_command(
+            command + " \n \n \n extra context: " + request_input,
+            command_history,
+            model=model,
+            provider=provider,
+            npc=npc,
+            messages=messages,
+            retrieved_docs=retrieved_docs,
+            n_docs=n_docs,
+        )
+
     elif action == "execute_sequence":
         tool_names = response_content_parsed.get("tool_name")
         output = ""
@@ -1567,6 +1608,43 @@ def enter_reasoning_human_in_the_loop(
                     )
 
                 return  # Stop the original stream in either case
+
+
+def handle_request_input(
+    context: str,
+    model: str = NPCSH_CHAT_MODEL,
+    provider: str = NPCSH_CHAT_PROVIDER,
+):
+    """
+    Analyze text and decide what to request from the user
+    """
+    prompt = f"""
+    Analyze the text:
+    {context}
+    and determine what additional input is needed.
+    Return a JSON object with:
+    {{
+        "input_needed": boolean,
+        "request_reason": string explaining why input is needed,
+        "request_prompt": string to show user if input needed
+    }}
+
+    Do not include any additional markdown formatting or leading ```json tags. Your response
+    must be a valid JSON object.
+    """
+
+    response = get_llm_response(
+        prompt, model=model, provider=provider, messages=[], format="json"
+    )
+
+    result = response.get("response", {})
+    if isinstance(result, str):
+        result = json.loads(result)
+
+    user_input = request_user_input(
+        {"reason": result["request_reason"], "prompt": result["request_prompt"]}
+    )
+    return user_input
 
 
 def analyze_thoughts_for_input(
