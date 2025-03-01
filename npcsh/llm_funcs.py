@@ -810,7 +810,7 @@ def check_llm_command(
 
     The format of the JSON object is:
     {{
-        "action": "execute_command" | "invoke_tool" | "answer_question" | "pass_to_npc" | "execute_sequence",
+        "action": "execute_command" | "invoke_tool" | "answer_question" | "pass_to_npc" | "execute_sequence" | "request_input",
         "tool_name": "<tool_name(s)_if_applicable>",
         "explanation": "<your_explanation>",
         "npc_name": "<npc_name_if_applicable>"

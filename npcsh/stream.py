@@ -579,7 +579,7 @@ def get_deepseek_stream(
         messages_copy.insert(0, {"role": "system", "content": system_message})
 
     completion = client.chat.completions.create(
-        model="deepseek-chat",
+        model=model,
         messages=messages,
         tools=tools,
         stream=True,
