@@ -1400,7 +1400,7 @@ Bash commands and other programs can be executed directly. """
             command,
             command_history,
             npc=npc,
-            stream=NPCSH_STREAM_OUTPUT,
+            stream=stream,
             messages=messages,
         )
     elif command_name == "rag":

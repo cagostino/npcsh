@@ -49,6 +49,7 @@ from .npc_sysenv import (
     NPCSH_REASONING_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
+    NPCSH_API_URL,
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     chroma_client,
@@ -193,7 +194,7 @@ def get_llm_response(
     images: List[Dict[str, str]] = None,
     npc: Any = None,
     messages: List[Dict[str, str]] = None,
-    api_url: str = None,
+    api_url: str = NPCSH_API_URL,
     **kwargs,
 ):
     """
@@ -311,7 +312,7 @@ def get_stream(
     model: str = NPCSH_CHAT_MODEL,
     npc: Any = None,
     images: List[Dict[str, str]] = None,
-    api_url: str = None,
+    api_url: str = NPCSH_API_URL,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:
@@ -358,8 +359,8 @@ def get_stream(
         return get_openai_like_stream(
             messages,
             model,
+            api_url,
             npc=npc,
-            api_url=api_url,
             api_key=api_key,
             images=images,
             **kwargs,
@@ -378,7 +379,7 @@ def get_conversation(
     model: str = NPCSH_CHAT_MODEL,
     images: List[Dict[str, str]] = None,
     npc: Any = None,
-    api_url: str = None,
+    api_url: str = NPCSH_API_URL,
     **kwargs,
 ) -> List[Dict[str, str]]:
     """
@@ -415,6 +416,10 @@ def get_conversation(
         return get_openai_conversation(
             messages, model, npc=npc, images=images, **kwargs
         )
+    elif provider == "openai-like":
+        return get_openai_like_conversation(
+            messages, model, api_url, npc=npc, images=images, **kwargs
+        )
     elif provider == "anthropic":
         return get_anthropic_conversation(
             messages, model, npc=npc, images=images, **kwargs
@@ -433,6 +438,8 @@ def execute_llm_question(
     command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     npc: Any = None,
     messages: List[Dict[str, str]] = None,
     retrieved_docs=None,
@@ -466,7 +473,13 @@ def execute_llm_question(
     if stream:
         # print("beginning stream")
         response = get_stream(
-            messages, model=model, provider=provider, npc=npc, images=images
+            messages,
+            model=model,
+            provider=provider,
+            npc=npc,
+            images=images,
+            api_url=api_url,
+            api_key=api_key,
         )
         # let streamer deal with the diff response data and messages
         return response
@@ -481,7 +494,13 @@ def execute_llm_question(
 
     else:
         response = get_conversation(
-            messages, model=model, provider=provider, npc=npc, images=images
+            messages,
+            model=model,
+            provider=provider,
+            npc=npc,
+            images=images,
+            api_url=api_url,
+            api_key=api_key,
         )
 
     # Print response from get_conversation for debugging
@@ -508,6 +527,8 @@ def execute_llm_command(
     command_history: Any,
     model: Optional[str] = None,
     provider: Optional[str] = None,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     npc: Optional[Any] = None,
     messages: Optional[List[Dict[str, str]]] = None,
     retrieved_docs=None,
@@ -569,6 +590,8 @@ def execute_llm_command(
             prompt,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             messages=[],
             npc=npc,
             format="json",
@@ -626,6 +649,8 @@ def execute_llm_command(
                     messages,
                     model=model,
                     provider=provider,
+                    api_url=api_url,
+                    api_key=api_key,
                     npc=npc,
                 )
 
@@ -634,6 +659,8 @@ def execute_llm_command(
                     prompt,
                     model=model,
                     provider=provider,
+                    api_url=api_url,
+                    api_key=api_key,
                     npc=npc,
                     messages=messages,
                 )
@@ -668,6 +695,8 @@ def execute_llm_command(
                 model=model,
                 provider=provider,
                 npc=npc,
+                api_url=api_url,
+                api_key=api_key,
                 format="json",
                 messages=messages,
             )
@@ -707,6 +736,8 @@ def check_llm_command(
     command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     npc: Any = None,
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
@@ -833,6 +864,8 @@ def check_llm_command(
         prompt,
         model=model,
         provider=provider,
+        api_url=api_url,
+        api_key=api_key,
         npc=npc,
         format="json",
         messages=[],
@@ -867,6 +900,8 @@ def check_llm_command(
             command_history,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             messages=[],
             npc=npc,
             retrieved_docs=retrieved_docs,
@@ -886,6 +921,8 @@ def check_llm_command(
             command_history,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             messages=messages,
             npc=npc,
             retrieved_docs=retrieved_docs,
@@ -903,6 +940,8 @@ def check_llm_command(
             command_history,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             messages=messages,
             npc=npc,
             retrieved_docs=retrieved_docs,
@@ -960,6 +999,8 @@ def check_llm_command(
             command_history,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             npc=npc,
             messages=messages,
             retrieved_docs=retrieved_docs,
@@ -977,6 +1018,8 @@ def check_llm_command(
                 command_history,
                 model=model,
                 provider=provider,
+                api_url=api_url,
+                api_key=api_key,
                 messages=messages,
                 npc=npc,
                 retrieved_docs=retrieved_docs,
@@ -1000,6 +1043,8 @@ def handle_tool_call(
     command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     messages: List[Dict[str, str]] = None,
     npc: Any = None,
     retrieved_docs=None,
@@ -1075,6 +1120,8 @@ def handle_tool_call(
         format="json",
         model=model,
         provider=provider,
+        api_url=api_url,
+        api_key=api_key,
         npc=npc,
     )
     try:
@@ -1117,6 +1164,8 @@ def handle_tool_call(
                 provider=provider,
                 messages=messages,
                 npc=npc,
+                api_url=api_url,
+                api_key=api_key,
                 retrieved_docs=retrieved_docs,
                 n_docs=n_docs,
                 stream=stream,
@@ -1651,6 +1700,8 @@ def analyze_thoughts_for_input(
     thought_text: str,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
 ) -> Optional[Dict[str, str]]:
     """
     Analyze accumulated thoughts to determine if user input is needed.
@@ -1686,7 +1737,13 @@ def analyze_thoughts_for_input(
     )
 
     response = get_llm_response(
-        prompt, model=model, provider=provider, messages=[], format="json"
+        prompt,
+        model=model,
+        provider=provider,
+        api_url=api_url,
+        api_key=api_key,
+        messages=[],
+        format="json",
     )
 
     result = response.get("response", {})

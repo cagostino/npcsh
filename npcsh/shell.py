@@ -210,6 +210,8 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 db_path,
                 npc_compiler,
                 current_npc,
+                model=NPCSH_CHAT_MODEL,
+                provider=NPCSH_CHAT_PROVIDER,
                 messages=messages,
                 conversation_id=current_conversation_id,
                 stream=NPCSH_STREAM_OUTPUT,
@@ -253,6 +255,38 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 attachments=attachments,
             )
 
+            if NPCSH_STREAM_OUTPUT:
+                str_output = ""
+                for chunk in output:
+                    if provider == "anthropic":
+                        if chunk.type == "content_block_delta":
+                            chunk_content = chunk.delta.text
+                            if chunk_content:
+                                str_output += chunk_content
+                                print(chunk_content, end="")
+
+                    elif (
+                        provider == "openai"
+                        or provider == "deepseek"
+                        or provider == "openai-like"
+                    ):
+                        chunk_content = "".join(
+                            choice.delta.content
+                            for choice in chunk.choices
+                            if choice.delta.content is not None
+                        )
+                        if chunk_content:
+                            str_output += chunk_content
+                            print(chunk_content, end="")
+
+                    elif provider == "ollama":
+                        chunk_content = chunk["message"]["content"]
+                        if chunk_content:
+                            str_output += chunk_content
+                            print(chunk_content, end="")
+                print("\n")
+            if len(str_output) > 0:
+                output = str_output
             save_conversation_message(
                 command_history,
                 conversation_id,
