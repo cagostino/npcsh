@@ -168,7 +168,9 @@ def process_anthropic_tool_stream(
 
 from typing import List, Dict, Any, Literal
 
-ProviderType = Literal["openai", "anthropic", "ollama", "gemini"]
+ProviderType = Literal[
+    "openai", "anthropic", "ollama", "gemini", "deepseek", "openai-like"
+]
 
 
 def generate_tool_schema(
@@ -508,10 +510,12 @@ def process_openai_tool_stream(stream, tool_map: Dict[str, callable]) -> List[Di
 def get_openai_like_stream(
     messages: List[Dict[str, str]],
     model: str,
+    api_url: str,
     npc: Any = None,
+    images: List[Dict[str, str]] = None,
     tools: list = None,
     api_key: str = None,
-    api_url: str = None,
+    **kwargs,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -525,7 +529,8 @@ def get_openai_like_stream(
     Returns:
         List[Dict[str, str]]: The list of messages in the conversation.
     """
-
+    if api_key is None:
+        api_key = "dummy"
     client = OpenAI(api_key=api_key, base_url=api_url)
 
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
