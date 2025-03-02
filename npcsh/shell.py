@@ -254,9 +254,9 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 npc=npc_name,
                 attachments=attachments,
             )
+            str_output = ""
 
             if NPCSH_STREAM_OUTPUT:
-                str_output = ""
                 for chunk in output:
                     if provider == "anthropic":
                         if chunk.type == "content_block_delta":
@@ -285,6 +285,7 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                             str_output += chunk_content
                             print(chunk_content, end="")
                 print("\n")
+
             if len(str_output) > 0:
                 output = str_output
             save_conversation_message(
