@@ -751,7 +751,6 @@ class NPCCompiler:
     def compile(self, npc_file: str):
         self.npc_cache.clear()  # Clear the cache
         self.resolved_npcs.clear()
-
         if isinstance(npc_file, NPC):
             npc_file = npc_file.name + ".npc"
         if not npc_file.endswith(".npc"):
@@ -1044,7 +1043,7 @@ class NPCCompiler:
 
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
-    # print(npc_file)
+
     if not npc_file.endswith(".npc"):
         # append it just incase
         name += ".npc"
@@ -1964,9 +1963,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df[
-                        "ai_analysis"
-                    ] = synthesized_df  # Adjust as per what synthesize returns
+                    df["ai_analysis"] = (
+                        synthesized_df  # Adjust as per what synthesize returns
+                    )
 
             return df
 
