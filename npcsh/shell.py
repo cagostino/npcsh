@@ -132,21 +132,26 @@ def main() -> None:
     # Initialize base NPCs and tools
     initialize_base_npcs_if_needed(db_path)
 
-    project_npc_directory = os.path.abspath("./npc_team/")
+    # check if ./npc_team exists
+    if os.path.exists("./npc_team"):
 
-    npc_compiler = NPCCompiler(project_npc_directory, db_path)
+        npc_directory = os.path.abspath("./npc_team/")
+    else:
+        npc_directory = os.path.expanduser("~/.npcsh/npc_team/")
+
+    npc_compiler = NPCCompiler(npc_directory, db_path)
 
     # Compile all NPCs in the user's npc_team directory
-    for filename in os.listdir(project_npc_directory):
+    for filename in os.listdir(npc_directory):
         if filename.endswith(".npc"):
-            npc_file_path = os.path.join(project_npc_directory, filename)
+            npc_file_path = os.path.join(npc_directory, filename)
             npc_compiler.compile(npc_file_path)
 
     # Compile NPCs from project-specific npc_team directory
-    if os.path.exists(project_npc_directory):
-        for filename in os.listdir(project_npc_directory):
+    if os.path.exists(npc_directory):
+        for filename in os.listdir(npc_directory):
             if filename.endswith(".npc"):
-                npc_file_path = os.path.join(project_npc_directory, filename)
+                npc_file_path = os.path.join(npc_directory, filename)
                 npc_compiler.compile(npc_file_path)
 
     if not is_npcsh_initialized():
