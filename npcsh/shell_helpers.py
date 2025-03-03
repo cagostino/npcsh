@@ -1165,12 +1165,14 @@ def execute_slash_command(
                 compiled_script = npc_compiler.compile(current_npc)
                 output = f"Compiled NPC profile: {compiled_script}"
             else:  # Compile all NPCs in the directory
-                output = ''
+                output = ""
                 for filename in os.listdir(npc_compiler.npc_directory):
                     if filename.endswith(".npc"):
                         try:
-                            compiled_script = npc_compiler.compile(filename)
-                            output += f"Compiled NPC profile: {compiled_script['name']}\n"
+                            compiled_script = npc_compiler.compile(npc_compiler.npc_directory+'/'+filename)
+                            output += (
+                                f"Compiled NPC profile: {compiled_script['name']}\n"
+                            )
                         except Exception as e:
                             output += f"Error compiling {filename}: {str(e)}\n"
 
@@ -1778,6 +1780,7 @@ def execute_command(
             if npc_name is None:
                 npc_name = "sibiji"  # Default NPC
             npc_path = get_npc_path(npc_name, db_path)
+
             npc = load_npc_from_file(npc_path, db_conn)
         else:
             npc = current_npc
@@ -2705,9 +2708,11 @@ def enter_spool_mode(
                         command_history,
                         conversation_id,
                         "user",
-                        user_prompt
-                        if user_prompt
-                        else f"Please analyze this image: {filename}",
+                        (
+                            user_prompt
+                            if user_prompt
+                            else f"Please analyze this image: {filename}"
+                        ),
                         wd=os.getcwd(),
                         model=model,
                         provider=provider,

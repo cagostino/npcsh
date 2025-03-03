@@ -406,7 +406,6 @@ def get_npc_path(npc_name: str, db_path: str) -> str:
                 query = f"SELECT source_path FROM compiled_npcs WHERE name = {npc_name}"
                 cursor.execute(query)
                 result = cursor.fetchone()
-                print(result)
                 if result:
                     return result[0]
         except Exception as e:
