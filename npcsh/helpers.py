@@ -200,7 +200,7 @@ def add_npcshrc_to_shell_config() -> None:
         None
     """
 
-    if os.getenv( "NPCSH_INITIALIZED" ) is not None:
+    if os.getenv("NPCSH_INITIALIZED") is not None:
         return
     config_file = get_shell_config_file()
     npcshrc_line = "\n# Source NPCSH configuration\nif [ -f ~/.npcshrc ]; then\n    . ~/.npcshrc\nfi\n"
@@ -396,7 +396,6 @@ def get_npc_path(npc_name: str, db_path: str) -> str:
             query = f"SELECT source_path FROM compiled_npcs WHERE name = '{npc_name}'"
             cursor.execute(query)
             result = cursor.fetchone()
-            print(result)
             if result:
                 return result[0]
 

@@ -189,8 +189,8 @@ def get_ollama_response(
                         .replace("```", "")
                         .strip()
                     )
-
-                result["response"] = json.loads(response_content)
+                response_content = json.loads(response_content)
+            result["response"] = response_content
         except json.JSONDecodeError:
             return {"error": f"Invalid JSON response: {response_content}"}
 
@@ -277,8 +277,10 @@ def get_openai_response(
                             .replace("```", "")
                             .strip()
                         )
+                    llm_response = json.loads(llm_response)
+                items_to_return["response"] = llm_response
+                return items_to_return
 
-                    items_to_return["response"] = json.loads(llm_response)
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
                 return {"error": "Invalid JSON response"}
@@ -395,8 +397,8 @@ def get_anthropic_response(
                             .replace("```", "")
                             .strip()
                         )
-
-                    items_to_return["response"] = json.loads(llm_response)
+                    llm_response = json.loads(llm_response)
+                items_to_return["response"] = llm_response
                 return items_to_return
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
@@ -471,7 +473,7 @@ def get_openai_like_response(
                             .replace("```", "")
                             .strip()
                         )
-                    #print(llm_response)
+                    # print(llm_response)
                     items_to_return["response"] = json.loads(llm_response)
 
                 return items_to_return

@@ -409,7 +409,7 @@ class NPC:
         Returns:
             Union[str, Dict[str, Any]]: The result of handling the agent pass.
         """
-        print(npc_to_pass, command)
+        # print(npc_to_pass, command)
 
         target_npc = self.get_npc(npc_to_pass)
         if target_npc is None:
@@ -417,7 +417,7 @@ class NPC:
 
         # initialize them as an actual NPC
         npc_to_pass_init = NPC(self.db_conn, **target_npc)
-        print(npc_to_pass_init, command)
+        # print(npc_to_pass_init, command)
         updated_command = (
             command
             + "/n"
@@ -759,24 +759,20 @@ class NPCCompiler:
         # get the absolute path
         npc_file = os.path.abspath(npc_file)
 
-        try:
-            # Parse NPCs from both global and project directories
-            self.parse_all_npcs()
+        self.parse_all_npcs()
+        # Resolve NPCs
+        self.resolve_all_npcs()
 
-            # Resolve NPCs
-            self.resolve_all_npcs()
+        # Finalize NPC profile
+        # print(npc_file)
+        # print(npc_file, "npc_file")
+        parsed_content = self.finalize_npc_profile(npc_file)
 
-            # Finalize NPC profile
-            # print(npc_file)
-            parsed_content = self.finalize_npc_profile(npc_file)
+        # Load tools from both global and project directories
+        parsed_content["tools"] = [tool.to_dict() for tool in self.all_tools]
 
-            # Load tools from both global and project directories
-            parsed_content["tools"] = [tool.to_dict() for tool in self.all_tools]
-
-            self.update_compiled_npcs_table(npc_file, parsed_content)
-            return parsed_content
-        except Exception as e:
-            raise e  # Re-raise exception for debugging
+        self.update_compiled_npcs_table(npc_file, parsed_content)
+        return parsed_content
 
     def load_tools(self):
         tools = []
@@ -830,6 +826,7 @@ class NPCCompiler:
         # print(self.dirs)
         for directory in self.dirs:
             if os.path.exists(directory):
+                print(directory)
                 for filename in os.listdir(directory):
                     if filename.endswith(".npc"):
                         npc_path = os.path.join(directory, filename)

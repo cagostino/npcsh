@@ -393,8 +393,8 @@ def get_attachment_response():
 def execute():
     try:
         data = request.json
-        print(data)
-        print(type(data))
+        # print(data)
+        # print(type(data))
         command = data.get("commandstr")  # .get("command")
         # strip it  to remove quotes/special marks
         command = command.strip()
@@ -404,8 +404,8 @@ def execute():
 
         current_path = data.get("currentPath")
         conversation_id = data.get("conversationId")
-        print(type(command))
-        print(command)
+        # print(type(command))
+        # print(command)
         if not command:
             return (
                 jsonify(
@@ -426,7 +426,7 @@ def execute():
             npc_compiler=npc_compiler,
             conversation_id=conversation_id,
         )
-        print(current_path)
+        # print(current_path)
         save_conversation_message(
             command_history, conversation_id, "user", command, wd=current_path
         )

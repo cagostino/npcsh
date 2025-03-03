@@ -870,7 +870,7 @@ def check_llm_command(
         format="json",
         messages=[],
     )
-    # print(action_response)
+    # print
     if "Error" in action_response:
         print(f"LLM Error: {action_response['error']}")
         return action_response["error"]
