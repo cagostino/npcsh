@@ -182,6 +182,7 @@ def stream():
                 if chunk_content:
                     complete_response.append(chunk_content)
                 chunk_data = {
+                    "type": "content",  # Added type
                     "id": response_chunk.id,
                     "object": response_chunk.object,
                     "created": response_chunk.created,
@@ -198,13 +199,14 @@ def stream():
                         for choice in response_chunk.choices
                     ],
                 }
-                yield f"data: {json.dumps(chunk_data)}\n\n"
+                yield f"{json.dumps(chunk_data)}\n\n"
 
             elif model.startswith("llama"):
                 chunk_content = response_chunk["message"]["content"]
                 if chunk_content:
                     complete_response.append(chunk_content)
                 chunk_data = {
+                    "type": "content",  # Added type
                     "id": None,
                     "object": None,
                     "created": response_chunk["created_at"],
@@ -220,11 +222,12 @@ def stream():
                         }
                     ],
                 }
-                yield f"data: {json.dumps(chunk_data)}\n\n"
+                yield f"{json.dumps(chunk_data)}\n\n"
             elif model.startswith("claude"):
                 print(response_chunk)
                 if response_chunk.type == "message_start":
                     chunk_data = {
+                        "type": "message_start",  # Added type
                         "id": None,
                         "object": None,
                         "created": None,
@@ -240,12 +243,14 @@ def stream():
                             }
                         ],
                     }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
+                    yield f"{json.dumps(chunk_data)}\n\n"
                 if response_chunk.type == "content_block_delta":
                     chunk_content = response_chunk.delta.text
                     if chunk_content:
                         complete_response.append(chunk_content)
                     chunk_data = {
+                        "type": "content",  # Added type
+                        "content": chunk_content,
                         "id": None,
                         "object": None,
                         "created": None,
@@ -261,7 +266,7 @@ def stream():
                             }
                         ],
                     }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
+                    yield f"{json.dumps(chunk_data)}\n\n"
             if save_to_sqlite3:
                 save_conversation_message(
                     command_history,
@@ -275,11 +280,15 @@ def stream():
                     message_id=message_id,  # Save with the same message_id
                 )
 
-        # Send completion message
-        yield f"data: {json.dumps({'type': 'message_stop'})}\n\n"
-        if save_to_sqlite3:
-            full_content = command_history.get_full_message_content(message_id)
-            command_history.update_message_content(message_id, full_content)
+            # Send completion message
+            yield f"{json.dumps({'type': 'message_stop'})}\n\n"
+            if save_to_sqlite3:
+                full_content = command_history.get_full_message_content(message_id)
+                command_history.update_message_content(message_id, full_content)
+
+        response = Response(event_stream(), mimetype="text/event-stream")
+
+        return response
 
     response = Response(event_stream(), mimetype="text/event-stream")
 
