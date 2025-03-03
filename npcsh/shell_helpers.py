@@ -569,7 +569,12 @@ def get_multiline_input(prompt: str) -> str:
     lines = []
     current_prompt = prompt
     while True:
-        line = input(current_prompt)
+        try:
+            line = input(current_prompt)
+        except EOFError:
+            print("Goodbye!")
+            break
+
         if line.endswith("\\"):
             lines.append(line[:-1])  # Remove the backslash
             # Use a continuation prompt for the next line
@@ -577,6 +582,7 @@ def get_multiline_input(prompt: str) -> str:
         else:
             lines.append(line)
             break
+
     return "\n".join(lines)
 
 
@@ -1169,7 +1175,9 @@ def execute_slash_command(
                 for filename in os.listdir(npc_compiler.npc_directory):
                     if filename.endswith(".npc"):
                         try:
-                            compiled_script = npc_compiler.compile(npc_compiler.npc_directory+'/'+filename)
+                            compiled_script = npc_compiler.compile(
+                                npc_compiler.npc_directory + "/" + filename
+                            )
                             output += (
                                 f"Compiled NPC profile: {compiled_script['name']}\n"
                             )
