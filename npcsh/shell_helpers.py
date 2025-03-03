@@ -1130,6 +1130,7 @@ def execute_slash_command(
     command_parts = command.split()
     command_name = command_parts[0]
     args = command_parts[1:]
+    current_npc = None
 
     if command_name in valid_npcs:
         npc_path = get_npc_path(command_name, db_path)
@@ -1164,11 +1165,12 @@ def execute_slash_command(
                 compiled_script = npc_compiler.compile(current_npc)
                 output = f"Compiled NPC profile: {compiled_script}"
             else:  # Compile all NPCs in the directory
+                output = ''
                 for filename in os.listdir(npc_compiler.npc_directory):
                     if filename.endswith(".npc"):
                         try:
                             compiled_script = npc_compiler.compile(filename)
-                            output += f"Compiled NPC profile: {compiled_script}\n"
+                            output += f"Compiled NPC profile: {compiled_script['name']}\n"
                         except Exception as e:
                             output += f"Error compiling {filename}: {str(e)}\n"
 
