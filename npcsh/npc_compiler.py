@@ -19,6 +19,7 @@ from collections import defaultdict, deque
 # Importing functions
 from .llm_funcs import (
     get_llm_response,
+    get_stream,
     process_data_output,
     get_data_response,
     generate_image,
@@ -105,7 +106,11 @@ class Tool:
         tools_dict: dict,
         jinja_env: Environment,
         command: str,
+        model: str = None,
+        provider: str = None,
         npc=None,
+        stream: bool = False,
+        messages: List[Dict[str, str]] = None,
     ):
         # Create the context with input values at top level for Jinja access
         context = npc.shared_context.copy() if npc else {}
@@ -120,9 +125,21 @@ class Tool:
         )
 
         # Process Steps
-        for step in self.steps:
-            context = self.execute_step(step, context, jinja_env, npc=npc)
-
+        for i, step in enumerate(self.steps):
+            context = self.execute_step(
+                step,
+                context,
+                jinja_env,
+                model=model,
+                provider=provider,
+                npc=npc,
+                stream=stream,
+                messages=messages,
+            )
+            # if i is the last step and the user has reuqested a streaming output
+            # then we should return the stream
+            if i == len(self.steps) - 1 and stream:  # this was causing the big issue X:
+                return context
         # Return the final output
         if context.get("output") is not None:
             return context.get("output")
@@ -130,7 +147,15 @@ class Tool:
             return context.get("llm_response")
 
     def execute_step(
-        self, step: dict, context: dict, jinja_env: Environment, npc: Any = None
+        self,
+        step: dict,
+        context: dict,
+        jinja_env: Environment,
+        npc: Any = None,
+        model: str = None,
+        provider: str = None,
+        stream: bool = False,
+        messages: List[Dict[str, str]] = None,
     ):
         engine = step.get("engine", "natural")
         code = step.get("code", "")
@@ -146,11 +171,19 @@ class Tool:
         if engine == "natural":
             if len(rendered_code.strip()) > 0:
                 # print(f"Executing natural language step: {rendered_code}")
-                llm_response = get_llm_response(rendered_code, npc=npc)
-                response_text = llm_response.get("response", "")
-                # Store both in context for reference
-                context["llm_response"] = response_text
-                context["results"] = response_text
+                if stream:
+                    messages = messages.copy() if messages else []
+                    messages.append({"role": "user", "content": rendered_code})
+                    return get_stream(messages, model=model, provider=provider, npc=npc)
+
+                else:
+                    llm_response = get_llm_response(
+                        rendered_code, model=model, provider=provider, npc=npc
+                    )
+                    response_text = llm_response.get("response", "")
+                    # Store both in context for reference
+                    context["llm_response"] = response_text
+                    context["results"] = response_text
 
         elif engine == "python":
             exec_globals = {
@@ -179,15 +212,20 @@ class Tool:
             }
             new_locals = {}
             exec_env = context.copy()
-            exec(rendered_code, exec_globals, new_locals)
-            exec_env.update(new_locals)
-
-            context.update(exec_env)
-
-            # If output is set, also set it as results
-            if "output" in exec_env:
-                if exec_env["output"] is not None:
-                    context["results"] = exec_env["output"]
+            try:
+                exec(rendered_code, exec_globals, new_locals)
+                exec_env.update(new_locals)
+                context.update(exec_env)
+                # If output is set, also set it as results
+                if "output" in exec_env:
+                    if exec_env["output"] is not None:
+                        context["results"] = exec_env["output"]
+            except NameError as e:
+                print(f"NameError: {e} , on the following tool code: ", rendered_code)
+            except SyntaxError as e:
+                print(f"SyntaxError: {e} , on the following tool code: ", rendered_code)
+            except Exception as e:
+                print(f"Error executing Python code: {e}")
 
         return context
 
@@ -290,8 +328,9 @@ class NPC:
         self.model = model
         self.db_conn = db_conn
         self.tables = self.db_conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table';"
+            "SELECT name, sql FROM sqlite_master WHERE type='table';"
         ).fetchall()
+
         self.provider = provider
         self.api_url = api_url
         self.all_tools = all_tools or []
@@ -370,7 +409,7 @@ class NPC:
         Returns:
             Union[str, Dict[str, Any]]: The result of handling the agent pass.
         """
-        print(npc_to_pass, command)
+        # print(npc_to_pass, command)
 
         target_npc = self.get_npc(npc_to_pass)
         if target_npc is None:
@@ -378,7 +417,7 @@ class NPC:
 
         # initialize them as an actual NPC
         npc_to_pass_init = NPC(self.db_conn, **target_npc)
-        print(npc_to_pass_init, command)
+        # print(npc_to_pass_init, command)
         updated_command = (
             command
             + "/n"
@@ -635,14 +674,24 @@ class SilentUndefined(Undefined):
 
 
 class NPCCompiler:
-    def __init__(self, npc_directory, db_path):
+    def __init__(
+        self,
+        npc_directory,
+        db_path,
+    ):
         self.npc_directory = npc_directory
         self.dirs = [self.npc_directory]
-        if self.npc_directory == os.path.abspath("./npc_team/"):
+        # import pdb
+        self.is_global_dir = self.npc_directory == os.path.expanduser(
+            "~/.npcsh/npc_team/"
+        )
+
+        # pdb.set_trace()
+        if self.is_global_dir:
             self.project_npc_directory = None
             self.project_tools_directory = None
         else:
-            self.project_npc_directory = os.path.abspath("./npc_team/")
+            self.project_npc_directory = npc_directory
             self.project_tools_directory = os.path.join(
                 self.project_npc_directory, "tools"
             )
@@ -654,7 +703,9 @@ class NPCCompiler:
         self.pipe_cache = {}
 
         # Set tools directories
-        self.global_tools_directory = os.path.join(self.npc_directory, "tools")
+        self.global_tools_directory = os.path.join(
+            os.path.expanduser("~/.npcsh/npc_team/"), "tools"
+        )
 
         # Initialize Jinja environment with multiple loaders
         self.jinja_env = Environment(
@@ -700,7 +751,6 @@ class NPCCompiler:
     def compile(self, npc_file: str):
         self.npc_cache.clear()  # Clear the cache
         self.resolved_npcs.clear()
-
         if isinstance(npc_file, NPC):
             npc_file = npc_file.name + ".npc"
         if not npc_file.endswith(".npc"):
@@ -708,24 +758,20 @@ class NPCCompiler:
         # get the absolute path
         npc_file = os.path.abspath(npc_file)
 
-        try:
-            # Parse NPCs from both global and project directories
-            self.parse_all_npcs()
+        self.parse_all_npcs()
+        # Resolve NPCs
+        self.resolve_all_npcs()
 
-            # Resolve NPCs
-            self.resolve_all_npcs()
+        # Finalize NPC profile
+        # print(npc_file)
+        # print(npc_file, "npc_file")
+        parsed_content = self.finalize_npc_profile(npc_file)
 
-            # Finalize NPC profile
-            # print(npc_file)
-            parsed_content = self.finalize_npc_profile(npc_file)
+        # Load tools from both global and project directories
+        parsed_content["tools"] = [tool.to_dict() for tool in self.all_tools]
 
-            # Load tools from both global and project directories
-            parsed_content["tools"] = [tool.to_dict() for tool in self.all_tools]
-
-            self.update_compiled_npcs_table(npc_file, parsed_content)
-            return parsed_content
-        except Exception as e:
-            raise e  # Re-raise exception for debugging
+        self.update_compiled_npcs_table(npc_file, parsed_content)
+        return parsed_content
 
     def load_tools(self):
         tools = []
@@ -779,6 +825,7 @@ class NPCCompiler:
         # print(self.dirs)
         for directory in self.dirs:
             if os.path.exists(directory):
+                print(directory)
                 for filename in os.listdir(directory):
                     if filename.endswith(".npc"):
                         npc_path = os.path.join(directory, filename)
@@ -996,7 +1043,7 @@ class NPCCompiler:
 
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
-    # print(npc_file)
+
     if not npc_file.endswith(".npc"):
         # append it just incase
         name += ".npc"
@@ -1019,7 +1066,7 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         )
         api_url = npc_data.get("api_url", os.environ.get("NPCSH_API_URL", None))
         use_global_tools = npc_data.get("use_global_tools", True)
-        print(use_global_tools)
+        # print(use_global_tools)
         # Load tools from global and project-specific directories
         all_tools = []
         # 1. Load tools defined within the NPC profile

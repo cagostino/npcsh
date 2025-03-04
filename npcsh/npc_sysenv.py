@@ -4,8 +4,9 @@ from typing import Any
 import os
 import io
 import chromadb
-
+import sqlite3
 from dotenv import load_dotenv
+from PIL import Image
 
 
 def get_model_and_provider(command: str, available_models: list) -> tuple:
@@ -340,10 +341,7 @@ def compress_image(image_bytes, max_size=(800, 600)):
     out_buffer = io.BytesIO()
     img.save(out_buffer, format="JPEG", quality=95, optimize=False)
     return out_buffer.getvalue()
-
-
 load_env_from_execution_dir()
-
 deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", None)
 gemini_api_key = os.getenv("GEMINI_API_KEY", None)
 
@@ -362,18 +360,13 @@ NPCSH_VECTOR_DB_PATH = os.path.expanduser(
 )
 NPCSH_VISION_MODEL = os.environ.get("NPCSH_VISION_MODEL", "llava7b")
 NPCSH_VISION_PROVIDER = os.environ.get("NPCSH_VISION_PROVIDER", "ollama")
-
 NPCSH_IMAGE_GEN_MODEL = os.environ.get(
     "NPCSH_IMAGE_GEN_MODEL", "runwayml/stable-diffusion-v1-5"
 )
 NPCSH_IMAGE_GEN_PROVIDER = os.environ.get("NPCSH_IMAGE_GEN_PROVIDER", "diffusers")
-
 NPCSH_EMBEDDING_MODEL = os.environ.get("NPCSH_EMBEDDING_MODEL", "nomic-embed-text")
 NPCSH_EMBEDDING_PROVIDER = os.environ.get("NPCSH_EMBEDDING_PROVIDER", "ollama")
-
 NPCSH_REASONING_MODEL = os.environ.get("NPCSH_REASONING_MODEL", "deepseek-r1")
 NPCSH_REASONING_PROVIDER = os.environ.get("NPCSH_REASONING_PROVIDER", "ollama")
-
-NPCSH_API_URL = os.environ.get("NPCSH_API_URL","https://localhost:123")
-
-NPCSH_STREAM_OUTPUT = os.environ.get("NPCSH_STREAM_OUTPUT", 0)
+NPCSH_STREAM_OUTPUT = eval(os.environ.get("NPCSH_STREAM_OUTPUT", "0")) == 1
+NPCSH_API_URL = os.environ.get("NPCSH_API_URL", None)

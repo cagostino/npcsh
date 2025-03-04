@@ -50,6 +50,7 @@ from .npc_sysenv import (
     NPCSH_REASONING_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
+    NPCSH_API_URL,
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     chroma_client,
@@ -79,6 +80,10 @@ from .response import (
     get_openai_like_response,
     get_deepseek_response,
     get_gemini_response,
+)
+from .image_gen import (
+    generate_image_openai,
+    generate_image_hf_diffusion,
 )
 
 from .embeddings import (
@@ -131,7 +136,11 @@ def generate_image(
     # if provider == "ollama":
     #    image = generate_image_ollama(prompt, model)
     if provider == "openai":
-        image = generate_image_openai(prompt, model, openai_api_key)
+        image = generate_image_openai(
+            prompt,
+            model,
+            npc=npc,
+        )
     # elif provider == "anthropic":
     #    image = generate_image_anthropic(prompt, model, anthropic_api_key)
     # elif provider == "openai-like":
@@ -224,7 +233,7 @@ def get_llm_response(
             model = "llava:7b"
         else:
             model = "llama3.2"
-    print(provider, model)
+    # print(provider, model)
     # print(provider, model)
     if provider == "ollama":
         if model is None:
@@ -304,7 +313,8 @@ def get_stream(
     provider: str = NPCSH_CHAT_PROVIDER,
     model: str = NPCSH_CHAT_MODEL,
     npc: Any = None,
-    api_url: str = None,
+    images: List[Dict[str, str]] = None,
+    api_url: str = NPCSH_API_URL,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:
@@ -336,16 +346,26 @@ def get_stream(
     else:
         provider = "ollama"
         model = "llama3.2"
-    print(model, provider)
+    # print(model, provider)
     if provider == "ollama":
-        return get_ollama_stream(messages, model, npc=npc, **kwargs)
+        return get_ollama_stream(messages, model, npc=npc, images=images, **kwargs)
     elif provider == "openai":
-        return get_openai_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
+        return get_openai_stream(
+            messages, model, npc=npc, api_key=api_key, images=images, **kwargs
+        )
     elif provider == "anthropic":
-        return get_anthropic_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
+        return get_anthropic_stream(
+            messages, model, npc=npc, api_key=api_key, images=images, **kwargs
+        )
     elif provider == "openai-like":
         return get_openai_like_stream(
-            messages, model, npc=npc, api_url=api_url, api_key=api_key, **kwargs
+            messages,
+            model,
+            api_url,
+            npc=npc,
+            api_key=api_key,
+            images=images,
+            **kwargs,
         )
     elif provider == "deepseek":
         return get_deepseek_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
@@ -361,7 +381,7 @@ def get_conversation(
     model: str = NPCSH_CHAT_MODEL,
     images: List[Dict[str, str]] = None,
     npc: Any = None,
-    api_url: str = None,
+    api_url: str = NPCSH_API_URL,
     **kwargs,
 ) -> List[Dict[str, str]]:
     """
@@ -391,15 +411,21 @@ def get_conversation(
 
     # print(provider, model)
     if provider == "ollama":
-        return get_ollama_conversation(messages, model, npc=npc, **kwargs)
+        return get_ollama_conversation(
+            messages, model, npc=npc, images=images, **kwargs
+        )
     elif provider == "openai":
-        return get_openai_conversation(messages, model, npc=npc, **kwargs)
+        return get_openai_conversation(
+            messages, model, npc=npc, images=images, **kwargs
+        )
     elif provider == "openai-like":
-        return get_openai_like_conversation(messages, model, npc=npc,api_url=api_url,  **kwargs)
-
- 
+        return get_openai_like_conversation(
+            messages, model, api_url, npc=npc, images=images, **kwargs
+        )
     elif provider == "anthropic":
-        return get_anthropic_conversation(messages, model, npc=npc, **kwargs)
+        return get_anthropic_conversation(
+            messages, model, npc=npc, images=images, **kwargs
+        )
     elif provider == "gemini":
         return get_gemini_conversation(messages, model, npc=npc, **kwargs)
     elif provider == "deepseek":
@@ -414,6 +440,8 @@ def execute_llm_question(
     command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     npc: Any = None,
     api_url=None,
     api_key=None, 
@@ -421,6 +449,7 @@ def execute_llm_question(
     retrieved_docs=None,
     n_docs: int = 5,
     stream: bool = False,
+    images: List[Dict[str, str]] = None,
 ):
     location = os.getcwd()
     if messages is None or len(messages) == 0:
@@ -446,8 +475,16 @@ def execute_llm_question(
 
     # Use the existing messages list
     if stream:
-        print("beginning stream")
-        response = get_stream(messages, model=model, provider=provider, npc=npc)
+        # print("beginning stream")
+        response = get_stream(
+            messages,
+            model=model,
+            provider=provider,
+            npc=npc,
+            images=images,
+            api_url=api_url,
+            api_key=api_key,
+        )
         # let streamer deal with the diff response data and messages
         return response
         # print("Response from get_stream:", response)
@@ -460,8 +497,18 @@ def execute_llm_question(
         # messages.append({"role": "assistant", "content": output})
 
     else:
-        response = get_conversation(messages, model=model, provider=provider, npc=npc, api_url = api_url)
 
+      response = get_conversation(
+            messages,
+            model=model,
+            provider=provider,
+            npc=npc,
+            images=images,
+            api_url=api_url,
+            api_key=api_key,
+        )
+
+      
     # Print response from get_conversation for debugging
     # print("Response from get_conversation:", response)
 
@@ -486,12 +533,15 @@ def execute_llm_command(
     command_history: Any,
     model: Optional[str] = None,
     provider: Optional[str] = None,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     npc: Optional[Any] = None,
     api_url =None, 
     api_key =None,
     messages: Optional[List[Dict[str, str]]] = None,
     retrieved_docs=None,
     n_docs=5,
+    stream=False,
 ) -> str:
     """
     Function Description:
@@ -548,6 +598,8 @@ def execute_llm_command(
             prompt,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             messages=[],
             npc=npc,
             format="json",
@@ -605,15 +657,18 @@ def execute_llm_command(
                     messages,
                     model=model,
                     provider=provider,
+                    api_url=api_url,
+                    api_key=api_key,
                     npc=npc,
                 )
 
             else:
-
                 response = get_llm_response(
                     prompt,
                     model=model,
                     provider=provider,
+                    api_url=api_url,
+                    api_key=api_key,
                     npc=npc,
                     messages=messages,
                 )
@@ -648,6 +703,8 @@ def execute_llm_command(
                 model=model,
                 provider=provider,
                 npc=npc,
+                api_url=api_url,
+                api_key=api_key,
                 format="json",
                 messages=messages,
             )
@@ -687,11 +744,14 @@ def check_llm_command(
     command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     npc: Any = None,
     api_url : str =None, 
     api_key : str =None,
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
+    images: list = None,
     n_docs=5,
     stream=False,
 ):
@@ -728,10 +788,14 @@ def check_llm_command(
     Determine the nature of the user's request:
     1. Is it a specific request for a task that could be accomplished via a bash command or a simple python script that could be executed in a single bash call?
     2. Should a tool be invoked to fulfill the request?
-    3. Is it a general question that requires an informative answer?
+    3. Is it a general question that requires an informative answer or a highly specific question that
+        requires inforrmation on the web?
     4. Would this question be best answered by an alternative NPC?
     5. Is it a complex request that actually requires more than one
     tool to be called, perhaps in a sequence?
+    6. is there a need for the user to provide additional input to fulfill the request?
+
+
 
     Available tools:
     """
@@ -761,11 +825,23 @@ def check_llm_command(
 
     prompt += f"""
     In considering how to answer this, consider:
-    - Whether it can be answered via a bash command on the user's computer.
+    - Whether it can be answered via a bash command on the user's computer. e.g. if a user is curious about file sizes within a directory or about processes running on their computer, these are likely best handled by a bash command.
+    - Whether more context from the user is required to adequately answer the question. e.g. if a user asks for a joke about their favorite city but they don't include the city , it would be helpful to ask for that information. Similarly, if a user asks to open a browser and to check the weather in a city, it would be helpful to ask for the city and which website or source to use.
     - Whether a tool should be used.
 
+    Excluding time-sensitive phenomena,
+    most general questions can be answered without any
+    extra tools or agent passes.
+    Only use tools or pass to other NPCs
+    when it is obvious that the answer needs to be as up-to-date as possible. For example,
+    a question about where mount everest is does not necessarily need to be answered by a tool call or an agent pass.
+    Similarly, if a user asks to explain the plot of the aeneid, this can be answered without a tool call or agent pass.
+    If a user were to ask for the current weather in tokyo or the current price of bitcoin or who the mayor of a city is, then a tool call or agent pass may be appropriate. If a user asks about the process using the most ram or the biggest file in a directory, a bash command will be most appropriate.
+    Tools are valuable but their use should be limited and purposeful to
+    ensure the best user experience.
+
     Respond with a JSON object containing:
-    - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc", "execute_sequence"]
+    - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc", "execute_sequence", "request_input"]
     - "tool_name": : if action is "invoke_tool": the name of the tool to use.
                      else if action is "execute_sequence", a list of tool names to use.
     - "explanation": a brief explanation of why you chose this action.
@@ -776,7 +852,7 @@ def check_llm_command(
 
     The format of the JSON object is:
     {{
-        "action": "execute_command" | "invoke_tool" | "answer_question" | "pass_to_npc" | "execute_sequence",
+        "action": "execute_command" | "invoke_tool" | "answer_question" | "pass_to_npc" | "execute_sequence" | "request_input",
         "tool_name": "<tool_name(s)_if_applicable>",
         "explanation": "<your_explanation>",
         "npc_name": "<npc_name_if_applicable>"
@@ -798,14 +874,14 @@ def check_llm_command(
         prompt,
         model=model,
         provider=provider,
+        api_url=api_url,
+        api_key=api_key,
         npc=npc,
         api_url=api_url, 
         api_key=api_key,
         format="json",
         messages=[],
     )
-    
-    #print(action_response)
     if "Error" in action_response:
         print(f"LLM Error: {action_response['error']}")
         return action_response["error"]
@@ -835,6 +911,8 @@ def check_llm_command(
             command_history,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             messages=[],
             npc=npc,
             api_key=api_key, 
@@ -856,11 +934,15 @@ def check_llm_command(
             command_history,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             messages=messages,
             npc=npc,
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
+        if stream:
+            return result
         messages = result.get("messages", messages)
         output = result.get("output", "")
         return {"messages": messages, "output": output}
@@ -871,11 +953,14 @@ def check_llm_command(
             command_history,
             model=model,
             provider=provider,
+            api_url=api_url,
+            api_key=api_key,
             messages=messages,
             npc=npc,
             api_url = api_url, 
             retrieved_docs=retrieved_docs,
             stream=stream,
+            images=images,
         )
         if stream:
             return result
@@ -894,6 +979,48 @@ def check_llm_command(
             retrieved_docs=retrieved_docs,
             n_docs=n_docs,
         )
+    elif action == "request_input":
+        explanation = response_content_parsed.get("explanation")
+
+        request_input = handle_request_input(
+            f"Explanation from check_llm_command:  {explanation} \n for the user input command: {command}",
+            model=model,
+            provider=provider,
+        )
+        # pass it back through with the request input added to the end of the messages
+        # so that we can re-pass the result through the check_llm_command.
+
+        messages.append(
+            {
+                "role": "assistant",
+                "content": f"""its clear that extra input is required.
+                                could you please provide it? Here is the reason:
+
+                                {explanation},
+
+                                and the prompt: {command}""",
+            }
+        )
+        messages.append(
+            {
+                "role": "user",
+                "content": command + " \n \n \n extra context: " + request_input,
+            }
+        )
+
+        return check_llm_command(
+            command + " \n \n \n extra context: " + request_input,
+            command_history,
+            model=model,
+            provider=provider,
+            api_url=api_url,
+            api_key=api_key,
+            npc=npc,
+            messages=messages,
+            retrieved_docs=retrieved_docs,
+            n_docs=n_docs,
+        )
+
     elif action == "execute_sequence":
         tool_names = response_content_parsed.get("tool_name")
         output = ""
@@ -905,6 +1032,8 @@ def check_llm_command(
                 command_history,
                 model=model,
                 provider=provider,
+                api_url=api_url,
+                api_key=api_key,
                 messages=messages,
                 npc=npc,
                 retrieved_docs=retrieved_docs,
@@ -928,6 +1057,8 @@ def handle_tool_call(
     command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
     messages: List[Dict[str, str]] = None,
     npc: Any = None,
     api_url = None,
@@ -935,6 +1066,8 @@ def handle_tool_call(
     retrieved_docs=None,
     n_docs: int = 5,
     stream=False,
+    n_attempts=3,
+    attempt=0,
 ) -> Union[str, Dict[str, Any]]:
     """
     Function Description:
@@ -957,21 +1090,21 @@ def handle_tool_call(
     """
     print(f"handle_tool_call invoked with tool_name: {tool_name}")
     # print(npc)
-    if not npc or not npc.tools_dict:
+    if not npc or not npc.all_tools_dict:
         print("not available")
-        available_tools = npc.tools_dict if npc else None
+        available_tools = npc.all_tools_dict if npc else None
         print(
             f"No tools available for NPC '{npc.name}' or tools_dict is empty. Available tools: {available_tools}"
         )
         return f"No tools are available for NPC '{npc.name or 'default'}'."
 
-    if tool_name not in npc.tools_dict:
+    if tool_name not in npc.all_tools_dict:
         print("not available")
         print(f"Tool '{tool_name}' not found in NPC's tools_dict.")
-        print("available tools", npc.tools_dict)
+        print("available tools", npc.all_tools_dict)
         return f"Tool '{tool_name}' not found."
 
-    tool = npc.tools_dict[tool_name]
+    tool = npc.all_tools_dict[tool_name]
     print(f"Tool found: {tool.tool_name}")
     jinja_env = Environment(loader=FileSystemLoader("."), undefined=Undefined)
 
@@ -979,9 +1112,12 @@ def handle_tool_call(
     The user wants to use the tool '{tool_name}' with the following request:
     '{command}'
     Here is the tool file:
-    {tool}
+    ```
+    {tool.to_dict()}
+    ```
 
     Please extract the required inputs for the tool as a JSON object.
+    They must be exactly as they are named in the tool.
     Return only the JSON object without any markdown formatting.
     """
     if npc and hasattr(npc, "shared_context"):
@@ -994,11 +1130,14 @@ def handle_tool_call(
 
     # print(f"Tool prompt: {prompt}")
 
+    # print(prompt)
     response = get_llm_response(
         prompt,
         format="json",
         model=model,
         provider=provider,
+        api_url=api_url,
+        api_key=api_key,
         npc=npc,
         api_key = api_key, 
         api_url = api_url
@@ -1026,20 +1165,55 @@ def handle_tool_call(
     for inp in required_inputs:
         if not isinstance(inp, dict):
             # dicts contain the keywords so its fine if theyre missing from the inputs.
-            if inp not in input_values:
+            if inp not in input_values or input_values[inp] == "":
                 missing_inputs.append(inp)
     if len(missing_inputs) > 0:
-        print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
-        return f"Missing inputs for tool '{tool_name}': {missing_inputs}"
+        # print(f"Missing required inputs for tool '{tool_name}': {missing_inputs}")
+        if attempt < n_attempts:
+            print(f"attempt {attempt+1} to generate inputs failed, trying again")
+            print("missing inputs", missing_inputs)
+            # print("llm response", response)
+            print("input values", input_values)
+            return handle_tool_call(
+                command,
+                tool_name,
+                command_history,
+                model=model,
+                provider=provider,
+                messages=messages,
+                npc=npc,
+                api_url=api_url,
+                api_key=api_key,
+                retrieved_docs=retrieved_docs,
+                n_docs=n_docs,
+                stream=stream,
+                attempt=attempt + 1,
+                n_attempts=n_attempts,
+            )
+        return {
+            "output": f"Missing inputs for tool '{tool_name}': {missing_inputs}",
+            "messages": messages,
+        }
 
     # try:
+    print("Executing tool with input values:", input_values)
     tool_output = tool.execute(
-        input_values, npc.tools_dict, jinja_env, command, npc=npc
+        input_values,
+        npc.all_tools_dict,
+        jinja_env,
+        command,
+        model=model,
+        provider=provider,
+        npc=npc,
+        stream=stream,
+        messages=messages,
     )
+    if stream:
+        return tool_output
     # print(f"Tool output: {tool_output}")
     # render_markdown(str(tool_output))
     if messages is not None:  # Check if messages is not None
-        messages.append({"role": "assistant", "content": str(tool_output)})
+        messages.append({"role": "assistant", "content": tool_output})
     return {"messages": messages, "output": tool_output}
     # except Exception as e:
     #    print(f"Error executing tool {tool_name}: {e}")
@@ -1372,3 +1546,244 @@ def get_data_response(
             failures.append(str(e))
 
     return {"response": "Max retries exceeded", "code": 400}
+
+
+def enter_reasoning_human_in_the_loop(
+    messages: List[Dict[str, str]],
+    reasoning_model: str = NPCSH_REASONING_MODEL,
+    reasoning_provider: str = NPCSH_REASONING_PROVIDER,
+    chat_model: str = NPCSH_CHAT_MODEL,
+    chat_provider: str = NPCSH_CHAT_PROVIDER,
+    npc: Any = None,
+    answer_only: bool = False,
+) -> Generator[str, None, None]:
+    """
+    Stream responses while checking for think tokens and handling human input when needed.
+
+    Args:
+        messages: List of conversation messages
+        model: LLM model to use
+        provider: Model provider
+        npc: NPC instance if applicable
+
+    Yields:
+        Streamed response chunks
+    """
+    # Get the initial stream
+    if answer_only:
+        messages[-1]["content"] = (
+            messages[-1]["content"].replace(
+                "Think first though and use <think> tags", ""
+            )
+            + " Do not think just answer. "
+        )
+    else:
+        messages[-1]["content"] = (
+            messages[-1]["content"]
+            + "         Think first though and use <think> tags.  "
+        )
+
+    response_stream = get_stream(
+        messages, model=reasoning_model, provider=reasoning_provider, npc=npc
+    )
+
+    thoughts = []
+    response_chunks = []
+    in_think_block = False
+
+    for chunk in response_stream:
+        # Extract content based on provider/model type
+        if reasoning_provider == "ollama":
+            chunk_content = chunk.get("message", {}).get("content", "")
+        elif reasoning_provider == "openai" or reasoning_provider == "deepseek":
+            chunk_content = "".join(
+                choice.delta.content
+                for choice in chunk.choices
+                if choice.delta.content is not None
+            )
+        elif reasoning_provider == "anthropic":
+            if chunk.type == "content_block_delta":
+                chunk_content = chunk.delta.text
+            else:
+                chunk_content = ""
+        else:
+            # Default extraction
+            chunk_content = str(chunk)
+
+        # Always yield the chunk whether in think block or not
+        response_chunks.append(chunk_content)
+        # Track think block state and accumulate thoughts
+        if answer_only:
+            yield chunk
+        else:
+            if "<th" in "".join(response_chunks) and "/th" not in "".join(
+                response_chunks
+            ):
+                in_think_block = True
+
+            if in_think_block:
+                thoughts.append(chunk_content)
+                yield chunk  # Show the thoughts as they come
+
+            if "</th" in "".join(response_chunks):
+                thought_text = "".join(thoughts)
+                # Analyze thoughts before stopping
+                input_needed = analyze_thoughts_for_input(
+                    thought_text, model=chat_model, provider=chat_provider
+                )
+
+                if input_needed:
+                    # If input needed, get it and restart with new context
+                    user_input = request_user_input(input_needed)
+
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": f"""its clear that extra input is required.
+                                            could you please provide it? Here is the reason:
+
+                                            {input_needed['reason']},
+
+                                            and the prompt: {input_needed['prompt']}""",
+                        }
+                    )
+
+                    messages.append({"role": "user", "content": user_input})
+                    yield from enter_reasoning_human_in_the_loop(
+                        messages,
+                        reasoning_model=reasoning_model,
+                        reasoning_provider=reasoning_provider,
+                        chat_model=chat_model,
+                        chat_provider=chat_provider,
+                        npc=npc,
+                        answer_only=True,
+                    )
+                else:
+                    # If no input needed, just get the answer
+                    messages.append({"role": "assistant", "content": thought_text})
+                    messages.append(
+                        {"role": "user", "content": messages[-2]["content"]}
+                    )
+                    yield from enter_reasoning_human_in_the_loop(  # Restart with new context
+                        messages,
+                        reasoning_model=reasoning_model,
+                        reasoning_provider=reasoning_provider,
+                        chat_model=chat_model,
+                        chat_provider=chat_provider,
+                        npc=npc,
+                        answer_only=True,
+                    )
+
+                return  # Stop the original stream in either case
+
+
+def handle_request_input(
+    context: str,
+    model: str = NPCSH_CHAT_MODEL,
+    provider: str = NPCSH_CHAT_PROVIDER,
+):
+    """
+    Analyze text and decide what to request from the user
+    """
+    prompt = f"""
+    Analyze the text:
+    {context}
+    and determine what additional input is needed.
+    Return a JSON object with:
+    {{
+        "input_needed": boolean,
+        "request_reason": string explaining why input is needed,
+        "request_prompt": string to show user if input needed
+    }}
+
+    Do not include any additional markdown formatting or leading ```json tags. Your response
+    must be a valid JSON object.
+    """
+
+    response = get_llm_response(
+        prompt, model=model, provider=provider, messages=[], format="json"
+    )
+
+    result = response.get("response", {})
+    if isinstance(result, str):
+        result = json.loads(result)
+
+    user_input = request_user_input(
+        {"reason": result["request_reason"], "prompt": result["request_prompt"]}
+    )
+    return user_input
+
+
+def analyze_thoughts_for_input(
+    thought_text: str,
+    model: str = NPCSH_CHAT_MODEL,
+    provider: str = NPCSH_CHAT_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
+) -> Optional[Dict[str, str]]:
+    """
+    Analyze accumulated thoughts to determine if user input is needed.
+
+    Args:
+        thought_text: Accumulated text from think block
+        messages: Conversation history
+
+    Returns:
+        Dict with input request details if needed, None otherwise
+    """
+
+    prompt = (
+        f"""
+         Analyze these thoughts:
+         {thought_text}
+         and determine if additional user input would be helpful.
+        Return a JSON object with:"""
+        + """
+        {
+            "input_needed": boolean,
+            "request_reason": string explaining why input is needed,
+            "request_prompt": string to show user if input needed
+        }
+        Consider things like:
+        - Ambiguity in the user's request
+        - Missing context that would help provide a better response
+        - Clarification needed about user preferences/requirements
+        Only request input if it would meaningfully improve the response.
+        Do not include any additional markdown formatting or leading ```json tags. Your response
+        must be a valid JSON object.
+        """
+    )
+
+    response = get_llm_response(
+        prompt,
+        model=model,
+        provider=provider,
+        api_url=api_url,
+        api_key=api_key,
+        messages=[],
+        format="json",
+    )
+
+    result = response.get("response", {})
+    if isinstance(result, str):
+        result = json.loads(result)
+
+    if result.get("input_needed"):
+        return {
+            "reason": result["request_reason"],
+            "prompt": result["request_prompt"],
+        }
+
+
+def request_user_input(input_request: Dict[str, str]) -> str:
+    """
+    Request and get input from user.
+
+    Args:
+        input_request: Dict with reason and prompt for input
+
+    Returns:
+        User's input text
+    """
+    print(f"\nAdditional input needed: {input_request['reason']}")
+    return input(f"{input_request['prompt']}: ")

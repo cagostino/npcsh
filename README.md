@@ -142,6 +142,28 @@ For cases where you wish to set up a project specific set of NPCs, tools, and as
 └── assembly_lines/    # Project workflows
 ```
 
+## IMPORTANT: migrations and deprecations
+
+### v0.3.4
+-In v0.3.4, the structure for tools was adjusted. If you have made custom tools please refer to the structure within npc_compiler to ensure that they are in the correct format. Otherwise, do the following
+```bash
+rm ~/.npcsh/npc_team/tools/*.tool
+```
+and then
+```bash
+npcsh
+```
+and the updated tools will be copied over into the correct location.
+
+### v0.3.5
+-Version 0.3.5 included a complete overhaul and refactoring of the llm_funcs module. This was done to make it not as horribly long and to make it easier to add new models and providers
+
+
+-in version 0.3.5, a change was introduced to the database schema for messages to add npcs, models, providers, and associated attachments to data. If you have used `npcsh` before this version, you will need to run this migration script to update your database schema:   [migrate_conversation_history_v0.3.5.py](https://github.com/cagostino/npcsh/blob/cfb9dc226e227b3e888f3abab53585693e77f43d/npcsh/migrations/migrate_conversation_history_%3Cv0.3.4-%3Ev0.3.5.py)
+
+-additionally, NPCSH_MODEL and NPCSH_PROVIDER have been renamed to NPCSH_CHAT_MODEL and NPCSH_CHAT_PROVIDER
+to provide a more consistent naming scheme now that we have additionally introduced `NPCSH_VISION_MODEL` and `NPCSH_VISION_PROVIDER`, `NPCSH_EMBEDDING_MODEL`, `NPCSH_EMBEDDING_PROVIDER`, `NPCSH_REASONING_MODEL`, `NPCSH_REASONING_PROVIDER`, `NPCSH_IMAGE_GEN_MODEL`, and `NPCSH_IMAGE_GEN_PROVIDER`.
+- In addition, we have added NPCSH_API_URL to better accommodate openai-like apis that require a specific url to be set as well as `NPCSH_STREAM_OUTPUT` to indicate whether or not to use streaming in one's responses. It will be set to 0 (false) by default as it has only been tested  and verified for a small subset of the models and providers we have available (openai, anthropic, and ollama). If you try it and run into issues, please post them here so we can correct them as soon as possible !
 
 
 ## npcsh usage
@@ -169,6 +191,16 @@ npcsh> What is the capital of France?
 The capital of France is Paris. It is the largest city in the country and is known for its rich history, art, culture, and architecture, including famous landmarks such as the Eiffel Tower, Notre-Dame Cathedral, and the Louvre Museum.
 ```
 
+```npcsh
+npcsh> can you tell me a joke about my favorite city?
+
+Additional input needed: The user did not specify their favorite city, which is necessary to generate a relevant joke.
+Please tell me your favorite city so I can share a joke about it!: boston
+
+Sure! Here's a joke about Boston:
+Why do Bostonians like to play hide and seek?
+Because good luck hiding when everyone yells, "Wicked awesome, ya gotta be here!"
+```
 
 ```npcsh
 npcsh> What's the weather in Tokyo?
@@ -477,12 +509,15 @@ npcsh> /sample What is the capital of France?
 
 
 ### Search
-Search can be accomplished through the `/search` macro. You can specify the provider as being "google" or "perplexity" or "duckduckgo".  The default is google.
+Search can be accomplished through the `/search` macro. You can specify the provider as being "perplexity" or "duckduckgo". For the former,
+you must set a perplexity api key as an environment variable as described above. The default provider is duckduckgo.
 
+NOTE: while google is an available search engine, they recently implemented changes (early 2025) that make the python google search package no longer as reliable.
+For now, we will use duckduckgo and revisit this issue when other more critical aspects are handled.
 
 
 ```npcsh
-npcsh!> /search -p google  who is the current us president
+npcsh!> /search -p duckduckgo  who is the current us president
 
 
 President Donald J. Trump entered office on January 20, 2025. News, issues, and photos of the President Footer Disclaimer This is the official website of the U.S. Mission to the United Nations. External links to other Internet sites should not be construed as an endorsement of the views or privacy policies contained therein.

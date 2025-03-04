@@ -1,14 +1,18 @@
 import json
 import time
-import pyautogui
+
+try:
+    import pyautogui
+except KeyError as e:
+    print(f"Could not load pyautogui due to the following error: {e}")
 
 from .image import capture_screenshot
 from .llm_funcs import get_llm_response
 
 import subprocess
 import os
-import pyautogui
-import time
+
+
 from typing import Any
 
 action_space = {

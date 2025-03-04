@@ -7,9 +7,18 @@
 ######## IMAGE GENERATION
 ########
 
+import os
+
+from openai import OpenAI
+from diffusers import StableDiffusionPipeline
+
 
 def generate_image_openai(
-    prompt: str, model: str, api_key: str, size: str = None
+    prompt: str,
+    model: str,
+    api_key: str = None,
+    size: str = None,
+    npc=None,
 ) -> str:
     """
     Function Description:
@@ -64,5 +73,6 @@ def generate_image_hf_diffusion(
     image = pipe(prompt)
     image = image.images[0]
     # ["sample"][0]
+    image.show()
 
     return image

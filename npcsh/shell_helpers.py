@@ -44,6 +44,7 @@ from .embeddings import search_similar_texts, chroma_client
 from .llm_funcs import (
     execute_llm_command,
     execute_llm_question,
+    get_stream,
     get_conversation,
     check_llm_command,
     generate_image,
@@ -571,15 +572,18 @@ def get_multiline_input(prompt: str) -> str:
     while True:
         try:
             line = input(current_prompt)
-            if line.endswith("\\"):
-                lines.append(line[:-1])  # Remove the backslash
-                # Use a continuation prompt for the next line
-                current_prompt = readline_safe_prompt("> ")
-            else:
-                lines.append(line)
-                break
         except EOFError:
-            break  # Handle EOF (Ctrl+D)
+            print("Goodbye!")
+            break
+
+        if line.endswith("\\"):
+            lines.append(line[:-1])  # Remove the backslash
+            # Use a continuation prompt for the next line
+            current_prompt = readline_safe_prompt("> ")
+        else:
+            lines.append(line)
+            break
+
     return "\n".join(lines)
 
 
@@ -841,7 +845,9 @@ def execute_rag_command(
                 else:
                     with open(filename, "r", encoding="utf-8") as file:
                         file_texts = file.readlines()
-                    file_texts = [line.strip() for line in file_texts if len(line) > 0]
+                    file_texts = [
+                        line.strip() for line in file_texts if line.strip() != ""
+                    ]
                     docs_to_embed.extend(file_texts)
             else:
                 return {
@@ -1131,6 +1137,7 @@ def execute_slash_command(
     command_parts = command.split()
     command_name = command_parts[0]
     args = command_parts[1:]
+    current_npc = None
 
     if command_name in valid_npcs:
         npc_path = get_npc_path(command_name, db_path)
@@ -1165,11 +1172,16 @@ def execute_slash_command(
                 compiled_script = npc_compiler.compile(current_npc)
                 output = f"Compiled NPC profile: {compiled_script}"
             else:  # Compile all NPCs in the directory
+                output = ""
                 for filename in os.listdir(npc_compiler.npc_directory):
                     if filename.endswith(".npc"):
                         try:
-                            compiled_script = npc_compiler.compile(filename)
-                            output += f"Compiled NPC profile: {compiled_script}\n"
+                            compiled_script = npc_compiler.compile(
+                                npc_compiler.npc_directory + "/" + filename
+                            )
+                            output += (
+                                f"Compiled NPC profile: {compiled_script['name']}\n"
+                            )
                         except Exception as e:
                             output += f"Error compiling {filename}: {str(e)}\n"
 
@@ -1398,7 +1410,11 @@ Bash commands and other programs can be executed directly. """
         # output = enter_observation_mode(command_history, npc=npc)
     elif command_name == "cmd" or command_name == "command":
         output = execute_llm_command(
-            command, command_history, npc=npc, stream=NPCSH_STREAM_OUTPUT
+            command,
+            command_history,
+            npc=npc,
+            stream=stream,
+            messages=messages,
         )
     elif command_name == "rag":
         output = execute_rag_command(command, command_history, messages=messages)
@@ -1653,10 +1669,11 @@ def parse_piped_command(current_command):
 
     try:
         command_parts = shlex.split(current_command)
+        # print(command_parts)
     except ValueError:
         # Fallback if quote parsing fails
         command_parts = current_command.split()
-
+        # print(command_parts)
     # Base command is the first part
     base_command = command_parts[0]
 
@@ -1721,13 +1738,16 @@ def execute_command(
     output = ""
     location = os.getcwd()
     db_conn = sqlite3.connect(db_path)
+    # print(f"Executing command: {command}")
     if len(command.strip()) == 0:
         return {"messages": messages, "output": output}
+
     if messages is None:
         messages = []
 
     # Split commands by pipe, preserving the original parsing logic
     commands = command.split("|")
+    # print(commands)
     available_models = get_available_models()
 
     # Track piped output between commands
@@ -1771,6 +1791,7 @@ def execute_command(
             if npc_name is None:
                 npc_name = "sibiji"  # Default NPC
             npc_path = get_npc_path(npc_name, db_path)
+
             npc = load_npc_from_file(npc_path, db_conn)
         else:
             npc = current_npc
@@ -1797,21 +1818,22 @@ def execute_command(
             subcommands = result.get("subcommands", [])
 
         else:
+            # print(single_command)
             try:
                 command_parts = shlex.split(single_command)
+                # print(command_parts)
             except ValueError as e:
                 if "No closing quotation" in str(e):
                     # Attempt to close unclosed quotes
-                    single_command += '"'
+                    if single_command.count('"') % 2 == 1:
+                        single_command += '"'
+                    elif single_command.count("'") % 2 == 1:
+                        single_command += "'"
                     try:
                         command_parts = shlex.split(single_command)
                     except ValueError:
-                        return {
-                            "messages": messages,
-                            "output": "Error: Unmatched quotation in command",
-                        }
-                else:
-                    return {"messages": messages, "output": f"Error: {str(e)}"}
+                        # fall back to regular split
+                        command_parts = single_command.split()
 
             # ALL EXISTING COMMAND HANDLING LOGIC REMAINS UNCHANGED
             if command_parts[0] in interactive_commands:
@@ -1908,6 +1930,8 @@ def execute_command(
                         output = colored(f"Error executing command: {e}", "red")
 
             else:
+                # print("LLM command")
+                # print(single_command)
                 # LLM command processing with existing logic
                 print(api_key, api_url)
                 output = check_llm_command(
@@ -1996,7 +2020,18 @@ def execute_command(
             except Exception as e:
                 print(f"Warning: Failed to store embeddings: {str(e)}")
 
-    return {"messages": messages, "output": output}
+    # return following
+
+    return {
+        "messages": messages,
+        "output": output,
+        "conversation_id": conversation_id,
+        "model": model,
+        "current_path": os.getcwd(),
+        "provider": provider,
+        "npc": npc.name if npc else None,
+        command_history: command_history,
+    }
 
 
 def execute_command_stream(
@@ -2576,6 +2611,10 @@ def enter_spool_mode(
 
     loaded_content = {}  # New dictionary to hold loaded content
 
+    # Create conversation ID if not provided
+    if not conversation_id:
+        conversation_id = start_new_conversation()
+
     # Load specified files if any
     if files:
         for file in files:
@@ -2638,19 +2677,64 @@ def enter_spool_mode(
 
             if user_input.lower() == "/whisper":  # Check for whisper command
                 messages = enter_whisper_mode(command_history, spool_context, npc)
-                print(messages)  # Optionally print output from whisper mode
+                # print(messages)  # Optionally print output from whisper mode
                 continue  # Continue with spool mode after exiting whisper mode
 
             if user_input.startswith("/ots"):
                 command_parts = user_input.split()
+                file_path = None
+                filename = None
+
+                # Handle image loading/capturing
                 if len(command_parts) > 1:
                     filename = command_parts[1]
                     file_path = os.path.join(os.getcwd(), filename)
-                    # Get user prompt about the image
-                    user_prompt = input(
-                        "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                else:
+                    output = capture_screenshot(npc=npc)
+                    if output and "file_path" in output:
+                        file_path = output["file_path"]
+                        filename = output["filename"]
+
+                if not file_path or not os.path.exists(file_path):
+                    print(f"Error: Image file not found at {file_path}")
+                    continue
+
+                # Get user prompt about the image
+                user_prompt = input(
+                    "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                )
+
+                # Read image file as binary data
+                try:
+                    with open(file_path, "rb") as img_file:
+                        img_data = img_file.read()
+
+                    # Create an attachment for the image
+                    image_attachment = {
+                        "name": filename,
+                        "type": guess_mime_type(filename),
+                        "data": img_data,
+                        "size": len(img_data),
+                    }
+
+                    # Save user message with image attachment
+                    message_id = save_conversation_message(
+                        command_history,
+                        conversation_id,
+                        "user",
+                        (
+                            user_prompt
+                            if user_prompt
+                            else f"Please analyze this image: {filename}"
+                        ),
+                        wd=os.getcwd(),
+                        model=model,
+                        provider=provider,
+                        npc=npc.name if npc else None,
+                        attachments=[image_attachment],
                     )
 
+                    # Now use analyze_image which will process the image
                     output = analyze_image(
                         command_history,
                         user_prompt,
@@ -2658,37 +2742,43 @@ def enter_spool_mode(
                         filename,
                         npc=npc,
                         stream=stream,
+                        message_id=message_id,  # Pass the message ID for reference
                     )
 
-                else:
-                    output = capture_screenshot(npc=npc)
-                    user_prompt = input(
-                        "Enter a prompt for the LLM about this image (or press Enter to skip): "
+                    # Save assistant's response
+                    if output and isinstance(output, str):
+                        save_conversation_message(
+                            command_history,
+                            conversation_id,
+                            "assistant",
+                            output,
+                            wd=os.getcwd(),
+                            model=model,
+                            provider=provider,
+                            npc=npc.name if npc else None,
+                        )
+
+                    # Update spool context with this exchange
+                    spool_context.append(
+                        {"role": "user", "content": user_prompt, "image": file_path}
                     )
-                    output = analyze_image(
-                        command_history,
-                        user_prompt,
-                        output["file_path"],
-                        output["filename"],
-                        npc=npc,
-                        stream=stream,
-                        **output["model_kwargs"],
-                    )
-                if output:
+                    spool_context.append({"role": "assistant", "content": output})
+
                     if isinstance(output, dict) and "filename" in output:
                         message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
-                    else:  # This handles both LLM responses and error messages (both strings)
+                    else:
                         message = output
-                    return {
-                        "messages": messages,
-                        "output": message,
-                    }  # Return the message
-                else:  # Handle the case where capture_screenshot returns None
-                    print("Screenshot capture failed.")
-                    return {
-                        "messages": messages,
-                        "output": None,
-                    }  # Return None to indicate failure
+
+                    render_markdown(
+                        output["response"]
+                        if isinstance(output["response"], str)
+                        else str(output["response"])
+                    )
+                    continue
+
+                except Exception as e:
+                    print(f"Error processing image: {str(e)}")
+                    continue
 
             # Prepare kwargs for get_conversation
             kwargs_to_pass = {}
@@ -2696,6 +2786,7 @@ def enter_spool_mode(
                 kwargs_to_pass["npc"] = npc
                 if npc.model:
                     kwargs_to_pass["model"] = npc.model
+
                 if npc.provider:
                     kwargs_to_pass["provider"] = npc.provider
 
@@ -2724,14 +2815,26 @@ def enter_spool_mode(
             # Add user input to spool context
             spool_context.append({"role": "user", "content": user_input})
 
+            # Save user message to conversation history
+            message_id = save_conversation_message(
+                command_history,
+                conversation_id,
+                "user",
+                user_input,
+                wd=os.getcwd(),
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
+            )
+
             # Get the conversation
             if stream:
                 conversation_result = ""
-                output = get_conversation(spool_context, **kwargs_to_pass)
+                output = get_stream(spool_context, **kwargs_to_pass)
                 for chunk in output:
                     print(chunk)
             else:
-                conversation_result = get_stream(spool_context, **kwargs_to_pass)
+                conversation_result = get_conversation(spool_context, **kwargs_to_pass)
 
             # Handle potential errors in conversation_result
             if isinstance(conversation_result, str) and "Error" in conversation_result:
@@ -2769,11 +2872,17 @@ def enter_spool_mode(
                 assistant_reply,
                 os.getcwd(),
             )
+
+            # Save assistant's response to conversation history
             save_conversation_message(
-                command_history, conversation_id, "user", user_input
-            )
-            save_conversation_message(
-                command_history, conversation_id, "assistant", assistant_reply
+                command_history,
+                conversation_id,
+                "assistant",
+                assistant_reply,
+                wd=os.getcwd(),
+                model=model,
+                provider=provider,
+                npc=npc.name if npc else None,
             )
 
             # sometimes claude responds with unfinished markdown notation. so we need to check if there are two sets
@@ -2793,3 +2902,22 @@ def enter_spool_mode(
             [msg["content"] for msg in spool_context if msg["role"] == "assistant"]
         ),
     }
+
+
+def guess_mime_type(filename):
+    """Guess the MIME type of a file based on its extension."""
+    extension = os.path.splitext(filename)[1].lower()
+    mime_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".bmp": "image/bmp",
+        ".webp": "image/webp",
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".csv": "text/csv",
+        ".json": "application/json",
+        ".md": "text/markdown",
+    }
+    return mime_types.get(extension, "application/octet-stream")

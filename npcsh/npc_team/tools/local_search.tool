@@ -2,10 +2,11 @@ tool_name: local_search
 description: |
     Searches files in current and downstream directories to find items related to the user's query using fuzzy matching.
     Returns only relevant snippets (10 lines around matches) to avoid including too much irrelevant content.
+    Intended for fuzzy searches, not for understanding file sizes.
 inputs:
   - query
   - summarize: false  # Optional - set to true to summarize the results
-  - file_filter: None  # Optional - can be filename patterns or folder names
+  - file_filter: 'none'  # Optional - can be filename patterns or folder names
   - depth: 2  # Optional - search depth for nested directories
   - fuzzy_threshold: 70  # Optional - minimum fuzzy match score (0-100)
 steps:
@@ -13,7 +14,7 @@ steps:
     code: |
         # Search parameters are directly available
         query = "{{ query }}"
-        file_filter = {{ file_filter | default(None) | tojson }}
+        file_filter = "{{ file_filter | default('None') }}"
         if isinstance(file_filter, str) and file_filter.lower() == 'none':
             file_filter = None
         max_depth = {{ depth | default(2) }}

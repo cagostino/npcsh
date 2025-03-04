@@ -37,6 +37,15 @@ def get_openai_embeddings(
     return [embedding.embedding for embedding in response.data]
 
 
+def get_openai_like_embeddings(
+    texts: List[str], model, api_url=None, api_key=None
+) -> List[List[float]]:
+    """Generate embeddings using OpenAI."""
+    client = OpenAI(api_key=openai_api_key, base_url=api_url)
+    response = client.embeddings.create(input=texts, model=model)
+    return [embedding.embedding for embedding in response.data]
+
+
 def get_anthropic_embeddings(
     texts: List[str], model: str = "claude-3-haiku-20240307"
 ) -> List[List[float]]:
@@ -97,7 +106,7 @@ def search_similar_texts(
 
     print(f"\nQuery to embed: {query}")
     embedded_search_term = get_ollama_embeddings([query], embedding_model)[0]
-    print(f"Query embedding: {embedded_search_term}")
+    # print(f"Query embedding: {embedded_search_term}")
 
     if docs_to_embed is None:
         # Fetch from the database if no documents to embed are provided

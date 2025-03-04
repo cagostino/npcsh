@@ -6,6 +6,8 @@ import ollama  # Add to setup.py if missing
 from openai import OpenAI
 from diffusers import StableDiffusionPipeline
 from google.generativeai import types
+from google import genai
+
 import google.generativeai as genai
 from .npc_sysenv import (
     get_system_message,
@@ -51,7 +53,7 @@ def get_deepseek_response(
         api_key = os.getenv("DEEPSEEK_API_KEY", None)
     client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
-    print(client)
+    # print(client)
 
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
     if messages is None or len(messages) == 0:
@@ -75,7 +77,7 @@ def get_deepseek_response(
                         },
                     }
                 )
-    print(messages)
+    # print(messages)
     # print(model)
     response_format = None if format == "json" else format
     if response_format is None:
@@ -143,23 +145,28 @@ def get_ollama_response(
     """
     # try:
     # Prepare the message payload
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+    if messages is None or len(messages) == 0:
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ]
 
-    message = {"role": "user", "content": prompt}
     if images:
-        message["images"] = [image["file_path"] for image in images]
+        messages[-1]["images"] = [image["file_path"] for image in images]
 
     # Prepare format
     if isinstance(format, type):
         schema = format.model_json_schema()
-        res = ollama.chat(model=model, messages=[message], format=schema)
+        res = ollama.chat(model=model, messages=messages, format=schema)
 
     elif isinstance(format, str):
         if format == "json":
-            res = ollama.chat(model=model, messages=[message], format=format)
+            res = ollama.chat(model=model, messages=messages, format=format)
         else:
-            res = ollama.chat(model=model, messages=[message])
+            res = ollama.chat(model=model, messages=messages)
     else:
-        res = ollama.chat(model=model, messages=[message])
+        res = ollama.chat(model=model, messages=messages)
     response_content = res.get("message", {}).get("content")
 
     # Prepare the return dictionary
@@ -175,7 +182,15 @@ def get_ollama_response(
         if model in available_reasoning_models:
             raise NotImplementedError("Reasoning models do not support JSON output.")
         try:
-            result["response"] = json.loads(response_content)
+            if isinstance(response_content, str):
+                if response_content.startswith("```json"):
+                    response_content = (
+                        response_content.replace("```json", "")
+                        .replace("```", "")
+                        .strip()
+                    )
+                response_content = json.loads(response_content)
+            result["response"] = response_content
         except json.JSONDecodeError:
             return {"error": f"Invalid JSON response: {response_content}"}
 
@@ -194,6 +209,7 @@ def get_openai_response(
     format: Union[str, BaseModel] = None,
     api_key: str = None,
     messages: List[Dict[str, str]] = None,
+    **kwargs,
 ):
     """
     Function Description:
@@ -254,9 +270,17 @@ def get_openai_response(
                     "Reasoning models do not support JSON output."
                 )
             try:
-                items_to_return["response"] = json.loads(llm_response)
-
+                if isinstance(llm_response, str):
+                    if llm_response.startswith("```json"):
+                        llm_response = (
+                            llm_response.replace("```json", "")
+                            .replace("```", "")
+                            .strip()
+                        )
+                    llm_response = json.loads(llm_response)
+                items_to_return["response"] = llm_response
                 return items_to_return
+
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
                 return {"error": "Invalid JSON response"}
@@ -366,7 +390,15 @@ def get_anthropic_response(
         # Handle JSON format if requested
         if format == "json":
             try:
-                items_to_return["response"] = json.loads(llm_response)
+                if isinstance(llm_response, str):
+                    if llm_response.startswith("```json"):
+                        llm_response = (
+                            llm_response.replace("```json", "")
+                            .replace("```", "")
+                            .strip()
+                        )
+                    llm_response = json.loads(llm_response)
+                items_to_return["response"] = llm_response
                 return items_to_return
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
@@ -414,9 +446,6 @@ def get_openai_like_response(
     if api_key is None:
         api_key = 'dummy_api_key'
     client = OpenAI(api_key=api_key, base_url=api_url)
-
-    print(client)
-
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
     if messages is None or len(messages) == 0:
         messages = [
@@ -439,21 +468,30 @@ def get_openai_like_response(
                         },
                     }
                 )
-    #print(messages)
-    # print(model)
+
     response_format = None if format == "json" else format
     if response_format is None:
         completion = client.chat.completions.create(model=model, messages=messages)
-        #print(completion)
         llm_response = completion.choices[0].message.content
         items_to_return = {"response": llm_response}
 
         items_to_return["messages"] = messages
         # print(llm_response, model)
         if format == "json":
+            if model in available_reasoning_models:
+                raise NotImplementedError(
+                    "Reasoning models do not support JSON output."
+                )
             try:
-                items_to_return["response"] = json.loads(llm_response)
-
+                if isinstance(llm_response, str):
+                    if llm_response.startswith("```json"):
+                        llm_response = (
+                            llm_response.replace("```json", "")
+                            .replace("```", "")
+                            .strip()
+                        )
+                    # print(llm_response)
+                    items_to_return["response"] = json.loads(llm_response)
                 return items_to_return
             except json.JSONDecodeError:
                 print(f"Warning: Expected JSON response, but received: {llm_response}")
@@ -469,17 +507,18 @@ def get_openai_like_response(
             raise NotImplementedError("Reasoning models do not support JSON output.")
        
         completion = client.beta.chat.completions.parse(
-         model=model, messages=messages, response_format=response_format
+        model=model, messages=messages, response_format=response_format
             )
+     
         items_to_return = {"response": completion.choices[0].message.parsed.dict()}
         items_to_return["messages"] = messages
 
         items_to_return["messages"].append(
-                {"role": "assistant", "content": completion.choices[0].message.parsed}
-            )
+            {"role": "assistant", "content": completion.choices[0].message.parsed}
+        )
         return items_to_return
-        
 
+      
 
 def get_gemini_response(
     prompt: str,
@@ -554,11 +593,12 @@ def get_gemini_response(
 
     # Handle JSON format if specified
     if format == "json":
-        if type(llm_response) == str:
+        if isinstance(llm_response, str):
             if llm_response.startswith("```json"):
                 llm_response = (
                     llm_response.replace("```json", "").replace("```", "").strip()
                 )
+
         try:
             items_to_return["response"] = json.loads(llm_response)
         except json.JSONDecodeError:

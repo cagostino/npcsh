@@ -9,6 +9,7 @@ import termios
 import tty
 import shlex
 import json
+
 from datetime import datetime
 
 # Third-party imports
@@ -20,17 +21,26 @@ from dotenv import load_dotenv
 import subprocess
 from typing import Dict, Any, List, Optional
 
+
 try:
     from sentence_transformers import SentenceTransformer
 except:
     print("Could not load the sentence-transformers package.")
 # Local imports
-from .npc_sysenv import get_system_message, lookup_provider, NPCSH_STREAM_OUTPUT, NPCSH_API_URL, NPCSH_CHAT_MODEL, NPCSH_CHAT_PROVIDER
-print(f'using api at : {NPCSH_API_URL}')
+
+from .npc_sysenv import (
+    get_system_message,
+    lookup_provider,
+    NPCSH_STREAM_OUTPUT,
+    NPCSH_CHAT_MODEL,
+    NPCSH_CHAT_PROVIDER,
+)
+
 from .command_history import (
     CommandHistory,
     start_new_conversation,
     save_conversation_message,
+    save_attachment_to_message,
 )
 from .llm_funcs import (
     execute_llm_command,
@@ -56,7 +66,7 @@ from .shell_helpers import (
     execute_command,
     orange,  # For colored prompt
 )
-from .npc_compiler import NPCCompiler, load_tools_from_directory
+from .npc_compiler import NPCCompiler, load_tools_from_directory, NPC
 
 import argparse
 from .serve import (
@@ -70,6 +80,16 @@ def main() -> None:
     Starts either the Flask server or the interactive shell based on the argument provided.
     """
     # Set up argument parsing to handle 'serve' and regular commands
+
+    check_old_par_name = os.environ.get("NPCSH_MODEL", None)
+    if check_old_par_name is not None:
+        # raise a deprecation warning
+        print(
+            """Deprecation Warning: NPCSH_MODEL and NPCSH_PROVIDER were deprecated in v0.3.5 in favor of NPCSH_CHAT_MODEL and NPCSH_CHAT_PROVIDER instead.\
+                Please update your environment variables to use the new names.
+                """
+        )
+
     parser = argparse.ArgumentParser(description="npcsh CLI")
     parser.add_argument(
         "command",
@@ -114,22 +134,26 @@ def main() -> None:
     # Initialize base NPCs and tools
     initialize_base_npcs_if_needed(db_path)
 
-    user_npc_directory = os.path.expanduser("~/.npcsh/npc_team")
-    project_npc_directory = os.path.abspath("./npc_team/")
+    # check if ./npc_team exists
+    if os.path.exists("./npc_team"):
 
-    npc_compiler = NPCCompiler(user_npc_directory, db_path)
+        npc_directory = os.path.abspath("./npc_team/")
+    else:
+        npc_directory = os.path.expanduser("~/.npcsh/npc_team/")
+
+    npc_compiler = NPCCompiler(npc_directory, db_path)
 
     # Compile all NPCs in the user's npc_team directory
-    for filename in os.listdir(user_npc_directory):
+    for filename in os.listdir(npc_directory):
         if filename.endswith(".npc"):
-            npc_file_path = os.path.join(user_npc_directory, filename)
+            npc_file_path = os.path.join(npc_directory, filename)
             npc_compiler.compile(npc_file_path)
 
     # Compile NPCs from project-specific npc_team directory
-    if os.path.exists(project_npc_directory):
-        for filename in os.listdir(project_npc_directory):
+    if os.path.exists(npc_directory):
+        for filename in os.listdir(npc_directory):
             if filename.endswith(".npc"):
-                npc_file_path = os.path.join(project_npc_directory, filename)
+                npc_file_path = os.path.join(npc_directory, filename)
                 npc_compiler.compile(npc_file_path)
 
     if not is_npcsh_initialized():
@@ -159,7 +183,7 @@ Welcome to \033[1;94mnpc\033[0m\033[1;38;5;202msh\033[0m!
          \033[1;94m|_|
 
 Begin by asking a question, issuing a bash command, or typing '/help' for more information.
-"""
+        """
     )
 
     current_npc = None
@@ -192,6 +216,8 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 db_path,
                 npc_compiler,
                 current_npc,
+                model=NPCSH_CHAT_MODEL,
+                provider=NPCSH_CHAT_PROVIDER,
                 messages=messages,
                 conversation_id=current_conversation_id,
                 stream=NPCSH_STREAM_OUTPUT,
@@ -210,15 +236,80 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 current_npc = result["current_npc"]
 
             output = result.get("output")
-            save_conversation_message(
-                command_history, current_conversation_id, "user", user_input
+            conversation_id = result.get("conversation_id")
+            model = result.get("model")
+            provider = result.get("provider")
+            npc = result.get("npc")
+
+            messages = result.get("messages")
+            current_path = result.get("current_path")
+            attachments = result.get("attachments")
+
+            if npc is not None:
+                if isinstance(npc, NPC):
+                    npc_name = npc.name
+                elif isinstance(npc, str):
+                    npc_name = npc
+            else:
+                npc_name = None
+            message_id = save_conversation_message(
+                command_history,
+                conversation_id,
+                "user",
+                user_input,
+                wd=current_path,
+                model=model,
+                provider=provider,
+                npc=npc_name,
+                attachments=attachments,
             )
+            str_output = ""
+
+            if NPCSH_STREAM_OUTPUT:
+                for chunk in output:
+                    if provider == "anthropic":
+                        if chunk.type == "content_block_delta":
+                            chunk_content = chunk.delta.text
+                            if chunk_content:
+                                str_output += chunk_content
+                                print(chunk_content, end="")
+
+                    elif (
+                        provider == "openai"
+                        or provider == "deepseek"
+                        or provider == "openai-like"
+                    ):
+                        chunk_content = "".join(
+                            choice.delta.content
+                            for choice in chunk.choices
+                            if choice.delta.content is not None
+                        )
+                        if chunk_content:
+                            str_output += chunk_content
+                            print(chunk_content, end="")
+
+                    elif provider == "ollama":
+                        chunk_content = chunk["message"]["content"]
+                        if chunk_content:
+                            str_output += chunk_content
+                            print(chunk_content, end="")
+                print("\n")
+
+            if len(str_output) > 0:
+                output = str_output
             save_conversation_message(
                 command_history,
-                current_conversation_id,
+                conversation_id,
                 "assistant",
-                result.get("output", ""),
+                output,
+                wd=current_path,
+                model=model,
+                provider=provider,
+                npc=npc_name,
             )
+
+            # if there are attachments in most recent user sent message, save them
+            # save_attachment_to_message(command_history, message_id, # file_path, attachment_name, attachment_type)
 
             if (
                 result["output"] is not None

@@ -58,7 +58,11 @@ def search_perplexity(
 
 
 def search_web(
-    query: str, num_results: int = 5, provider: str = "google", api_key=None, **kwargs
+    query: str,
+    num_results: int = 5,
+    provider: str = "duckduckgo",
+    api_key=None,
+    **kwargs,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -82,42 +86,49 @@ def search_web(
     if provider == "duckduckgo":
         ddgs = DDGS()
         search_results = ddgs.text(query, max_results=num_results)
-        urls = [r["link"] for r in search_results]
+        print(search_results, type(search_results))
+        urls = [r["href"] for r in search_results]
+        results = [
+            {"title": r["title"], "link": r["href"], "content": r["body"]}
+            for r in search_results
+        ]
     else:  # google
         urls = list(search(query, num_results=num_results))
-
-    for url in urls:
-        try:
-            # Fetch the webpage content
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            }
-            response = requests.get(url, headers=headers, timeout=5)
-            response.raise_for_status()
-
-            # Parse with BeautifulSoup
-            soup = BeautifulSoup(response.text, "html.parser")
-
-            # Get title and content
-            title = soup.title.string if soup.title else url
-
-            # Extract text content and clean it up
-            content = " ".join([p.get_text() for p in soup.find_all("p")])
-            content = " ".join(content.split())  # Clean up whitespace
-
-            results.append(
-                {
-                    "title": title,
-                    "link": url,
-                    "content": (
-                        content[:500] + "..." if len(content) > 500 else content
-                    ),
+        # google shit doesnt seem to be working anymore, apparently a lbock they made on browsers without js?
+        print("urls", urls)
+        print(provider)
+        for url in urls:
+            try:
+                # Fetch the webpage content
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                 }
-            )
+                response = requests.get(url, headers=headers, timeout=5)
+                response.raise_for_status()
 
-        except Exception as e:
-            print(f"Error fetching {url}: {str(e)}")
-            continue
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(response.text, "html.parser")
+
+                # Get title and content
+                title = soup.title.string if soup.title else url
+
+                # Extract text content and clean it up
+                content = " ".join([p.get_text() for p in soup.find_all("p")])
+                content = " ".join(content.split())  # Clean up whitespace
+
+                results.append(
+                    {
+                        "title": title,
+                        "link": url,
+                        "content": (
+                            content[:500] + "..." if len(content) > 500 else content
+                        ),
+                    }
+                )
+
+            except Exception as e:
+                print(f"Error fetching {url}: {str(e)}")
+                continue
 
     # except Exception as e:
     #    print(f"Search error: {str(e)}")

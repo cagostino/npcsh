@@ -20,6 +20,7 @@ def get_ollama_conversation(
     model: str,
     npc: Any = None,
     tools: list = None,
+    images=None,
 ) -> List[Dict[str, str]]:
     """
     Function Description:
@@ -50,6 +51,7 @@ def get_openai_conversation(
     npc: Any = None,
     tools: list = None,
     api_key: str = None,
+    images=None,
     **kwargs,
 ) -> List[Dict[str, str]]:
     """
@@ -100,9 +102,10 @@ def get_openai_conversation(
 def get_openai_like_conversation(
     messages: List[Dict[str, str]],
     model: str,
+    api_url: str,
     npc: Any = None,
+    images=None,
     tools: list = None,
-    api_url: str = None,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:
@@ -120,33 +123,41 @@ def get_openai_like_conversation(
         List[Dict[str, str]]: The list of messages in the conversation.
     """
 
-    
-
     if api_url is None:
         raise ValueError("api_url is required for openai-like provider")
     if api_key is None:
         api_key = 'dummy_api_key'
-    client = OpenAI(api_key=api_key, base_url=api_url)
-    system_message = (
+    try:
+      client = OpenAI(api_key=api_key, base_url=api_url)
+
+        system_message = (
             get_system_message(npc) if npc else "You are a helpful assistant."
         )
 
-    if messages is None:
-        messages = []
+        if messages is None:
+            messages = []
 
         # Ensure the system message is at the beginning
-    if not any(msg["role"] == "system" for msg in messages):
-        messages.insert(0, {"role": "system", "content": system_message})
+        if not any(msg["role"] == "system" for msg in messages):
+            messages.insert(0, {"role": "system", "content": system_message})
 
         # messages should already include the user's latest message
 
         # Make the API call with the messages including the latest user input
-    completion = client.chat.completions.create(
-            model=model, messages=messages, **kwargs
-        )
-    response_message = completion.choices[0].message
-    messages.append({"role": "assistant", "content": response_message.content})
 
+        completion = client.chat.completions.create(
+              model=model, messages=messages, **kwargs
+          )
+        response_message = completion.choices[0].message
+        messages.append({"role": "assistant", "content": response_message.content})
+
+  
+        return messages
+
+    except Exception as e:
+        return f"Error interacting with OpenAI: {e}"
+
+      
     return messages
 
 def get_anthropic_conversation(
@@ -154,6 +165,7 @@ def get_anthropic_conversation(
     model: str,
     npc: Any = None,
     tools: list = None,
+    images=None,
     api_key: str = None,
     **kwargs,
 ) -> List[Dict[str, str]]:

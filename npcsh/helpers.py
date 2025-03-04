@@ -97,14 +97,14 @@ def ensure_npcshrc_exists() -> str:
             npcshrc.write("export NPCSH_VISION_PROVIDER='ollama'\n")
             npcshrc.write("export NPCSH_VISION_MODEL='llava7b'\n")
             npcshrc.write(
-                "export NPCSH_IMAGE_GEN_MODEL='runwayml/stable-diffusion-v1-5'"
+                "export NPCSH_IMAGE_GEN_MODEL='runwayml/stable-diffusion-v1-5'\n"
             )
-            npcshrc.write("export NPCSH_IMAGE_GEN_PROVIDER='diffusers'")
+            npcshrc.write("export NPCSH_IMAGE_GEN_PROVIDER='diffusers'\n")
 
-            npcshrc.write("export NPCSH_API_URL=''")
+            npcshrc.write("export NPCSH_API_URL=''\n")
             npcshrc.write("export NPCSH_DB_PATH='~/npcsh_history.db'\n")
             npcshrc.write("export NPCSH_VECTOR_DB_PATH='~/npcsh_chroma.db'\n")
-
+            npcshrc.write("export NPCSH_STREAM_OUTPUT=0")
     return npcshrc_path
 
 
@@ -200,6 +200,8 @@ def add_npcshrc_to_shell_config() -> None:
         None
     """
 
+    if os.getenv("NPCSH_INITIALIZED") is not None:
+        return
     config_file = get_shell_config_file()
     npcshrc_line = "\n# Source NPCSH configuration\nif [ -f ~/.npcshrc ]; then\n    . ~/.npcshrc\nfi\n"
 
@@ -394,7 +396,6 @@ def get_npc_path(npc_name: str, db_path: str) -> str:
             query = f"SELECT source_path FROM compiled_npcs WHERE name = '{npc_name}'"
             cursor.execute(query)
             result = cursor.fetchone()
-            print(result)
             if result:
                 return result[0]
 
@@ -405,7 +406,6 @@ def get_npc_path(npc_name: str, db_path: str) -> str:
                 query = f"SELECT source_path FROM compiled_npcs WHERE name = {npc_name}"
                 cursor.execute(query)
                 result = cursor.fetchone()
-                print(result)
                 if result:
                     return result[0]
         except Exception as e:
