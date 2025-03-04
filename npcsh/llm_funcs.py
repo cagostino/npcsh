@@ -293,7 +293,14 @@ def get_llm_response(
         if api_url is None:
             raise ValueError("api_url is required for openai-like provider")
         return get_openai_like_response(
-            prompt, model, api_url,api_key, npc=npc, messages=messages, images=images, **kwargs
+            prompt,
+            model,
+            api_url,
+            api_key,
+            npc=npc,
+            messages=messages,
+            images=images,
+            **kwargs,
         )
 
     elif provider == "anthropic":
@@ -443,8 +450,6 @@ def execute_llm_question(
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
     npc: Any = None,
-    api_url=None,
-    api_key=None, 
     messages: List[Dict[str, str]] = None,
     retrieved_docs=None,
     n_docs: int = 5,
@@ -498,7 +503,7 @@ def execute_llm_question(
 
     else:
 
-      response = get_conversation(
+        response = get_conversation(
             messages,
             model=model,
             provider=provider,
@@ -508,7 +513,6 @@ def execute_llm_question(
             api_key=api_key,
         )
 
-      
     # Print response from get_conversation for debugging
     # print("Response from get_conversation:", response)
 
@@ -536,8 +540,6 @@ def execute_llm_command(
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
     npc: Optional[Any] = None,
-    api_url =None, 
-    api_key =None,
     messages: Optional[List[Dict[str, str]]] = None,
     retrieved_docs=None,
     n_docs=5,
@@ -747,8 +749,6 @@ def check_llm_command(
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
     npc: Any = None,
-    api_url : str =None, 
-    api_key : str =None,
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
     images: list = None,
@@ -877,8 +877,6 @@ def check_llm_command(
         api_url=api_url,
         api_key=api_key,
         npc=npc,
-        api_url=api_url, 
-        api_key=api_key,
         format="json",
         messages=[],
     )
@@ -915,8 +913,6 @@ def check_llm_command(
             api_key=api_key,
             messages=[],
             npc=npc,
-            api_key=api_key, 
-            api_url=api_url, 
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
@@ -957,7 +953,6 @@ def check_llm_command(
             api_key=api_key,
             messages=messages,
             npc=npc,
-            api_url = api_url, 
             retrieved_docs=retrieved_docs,
             stream=stream,
             images=images,
@@ -1061,8 +1056,6 @@ def handle_tool_call(
     api_key: str = None,
     messages: List[Dict[str, str]] = None,
     npc: Any = None,
-    api_url = None,
-    api_key = None,
     retrieved_docs=None,
     n_docs: int = 5,
     stream=False,
@@ -1139,8 +1132,6 @@ def handle_tool_call(
         api_url=api_url,
         api_key=api_key,
         npc=npc,
-        api_key = api_key, 
-        api_url = api_url
     )
     try:
         # Clean the response of markdown formatting
