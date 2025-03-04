@@ -123,10 +123,12 @@ def get_openai_like_conversation(
         List[Dict[str, str]]: The list of messages in the conversation.
     """
 
+    if api_url is None:
+        raise ValueError("api_url is required for openai-like provider")
+    if api_key is None:
+        api_key = 'dummy_api_key'
     try:
-        if api_key is None:
-            api_key = "dummy"
-        client = OpenAI(api_key=api_key, base_url=api_url)
+      client = OpenAI(api_key=api_key, base_url=api_url)
 
         system_message = (
             get_system_message(npc) if npc else "You are a helpful assistant."
@@ -142,18 +144,21 @@ def get_openai_like_conversation(
         # messages should already include the user's latest message
 
         # Make the API call with the messages including the latest user input
-        completion = client.chat.completions.create(
-            model=model, messages=messages, **kwargs
-        )
 
+        completion = client.chat.completions.create(
+              model=model, messages=messages, **kwargs
+          )
         response_message = completion.choices[0].message
         messages.append({"role": "assistant", "content": response_message.content})
 
+  
         return messages
 
     except Exception as e:
         return f"Error interacting with OpenAI: {e}"
 
+      
+    return messages
 
 def get_anthropic_conversation(
     messages: List[Dict[str, str]],

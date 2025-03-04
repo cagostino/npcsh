@@ -49,6 +49,7 @@ from .llm_funcs import (
     check_llm_command,
     generate_image,
     get_embeddings,
+    get_stream
 )
 from .plonk import plonk, action_space
 from .helpers import get_db_npcs, get_npc_path, initialize_npc_project
@@ -1712,6 +1713,8 @@ def execute_command(
     current_npc: NPC = None,
     model: str = None,
     provider: str = None,
+    api_key : str = None,
+    api_url : str = None,
     messages: list = None,
     conversation_id: str = None,
     stream: bool = False,
@@ -1930,6 +1933,7 @@ def execute_command(
                 # print("LLM command")
                 # print(single_command)
                 # LLM command processing with existing logic
+                print(api_key, api_url)
                 output = check_llm_command(
                     single_command,
                     command_history,
@@ -1938,6 +1942,8 @@ def execute_command(
                     model=model_override,
                     provider=provider_override,
                     stream=stream,
+                    api_key=api_key,
+                    api_url = api_url
                 )
                 ## deal with stream here
 
