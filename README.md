@@ -138,8 +138,17 @@ export PERPLEXITY_API_KEY='your_perplexity_key'
 For cases where you wish to set up a project specific set of NPCs, tools, and assembly lines, add a `npc_team` directory to your project and `npcsh` should be able to pick up on its presence, like so:
 ```bash
 ./npc_team/            # Project-specific NPCs
-├── tools/             # Project tools
+├── tools/             # Project tools #example tool next
+│   └── example.tool
 └── assembly_lines/    # Project workflows
+    └── example.pipe
+└── models/    # Project workflows
+    └── example.model
+└── example1.npc        # Example NPC
+└── example2.npc        # Example NPC
+└── example1.ctx        # Example NPC
+└── example2.ctx        # Example NPC
+
 ```
 
 ## IMPORTANT: migrations and deprecations
@@ -732,8 +741,16 @@ npcsh> /<npc_name>:
 
 
 
-## Creating NPCs
+## NPC Data Layer
+
+What principally powers the capabilities of npcsh is the NPC Data Layer. In the `~/.npcsh/` directory after installation, you will find
+the npc teaam with its tools, models, contexts, assembly lines, and NPCs. By making tools, NPCs, contexts, and assembly lines simple data structures with
+a fixed set of parameters, we can let users define them in easy-to-read YAML files, allowing for a modular and extensible system that can be easily modified and expanded upon. Furthermore, this data layer relies heavily on jinja templating to allow for dynamic content generation and the ability to reference other NPCs, tools, and assembly lines in the system.
+
+### Creating NPCs
 NPCs are defined in YAML files within the npc_team directory. Each NPC has a name, primary directive, and optionally, a list of tools. See the examples in the npc_profiles directory for guidance.
+
+
 
 
 Here is a typical NPC file:
@@ -1155,7 +1172,7 @@ curl -s http://localhost:5337/api/conversation/test123/messages | jq '.'
 -npc run select +sql_model+  <run up and down>
 -npc run select sql_model+  <run down>
 -npc run line <assembly_line>
-
+-npc conjure fabrication_plan.fab
 
 ## Python Examples
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
