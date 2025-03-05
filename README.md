@@ -748,8 +748,7 @@ the npc teaam with its tools, models, contexts, assembly lines, and NPCs. By mak
 a fixed set of parameters, we can let users define them in easy-to-read YAML files, allowing for a modular and extensible system that can be easily modified and expanded upon. Furthermore, this data layer relies heavily on jinja templating to allow for dynamic content generation and the ability to reference other NPCs, tools, and assembly lines in the system.
 
 ### Creating NPCs
-NPCs are defined in YAML files within the npc_team directory. Each NPC has a name, primary directive, and optionally, a list of tools. See the examples in the npc_profiles directory for guidance.
-
+NPCs are defined in YAML files within the npc_team directory. Each NPC must have a name and a primary directive. Optionally, one can specify an LLM model/provider for the NPC as well as provide an explicit list of tools and whether or not to use the globally available tools. See the data models contained in `npcsh/data_models.py` for more explicit type details on the NPC data structure.
 
 
 
