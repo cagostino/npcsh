@@ -34,6 +34,7 @@ from .npc_sysenv import (
     NPCSH_STREAM_OUTPUT,
     NPCSH_CHAT_MODEL,
     NPCSH_CHAT_PROVIDER,
+    NPCSH_API_URL,
 )
 
 from .command_history import (
@@ -221,9 +222,7 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 messages=messages,
                 conversation_id=current_conversation_id,
                 stream=NPCSH_STREAM_OUTPUT,
-                api_url = NPCSH_API_URL, 
-                model = NPCSH_CHAT_MODEL, 
-                provider = NPCSH_CHAT_PROVIDER
+                api_url=NPCSH_API_URL,
             )
 
             messages = result.get("messages", messages)
