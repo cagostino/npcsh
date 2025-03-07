@@ -14,5 +14,33 @@ class NPC(BaseModel):
 
 class Tool(BaseModel):
     tool_name: str
-    tool_description: str
+    description: str
     steps: List[Dict[str, str]]
+
+
+class ToolStep(BaseModel):
+    engine: str
+    code: str
+
+
+class Context(BaseModel):
+    databases: List[str]
+    files: List[str]
+    vars: List[Dict[str, str]]
+
+
+class Pipeline(BaseModel):
+    steps: List[Dict[str, str]]
+
+
+class PipelineStep(BaseModel):
+    tool: str
+    args: List[str]
+    model: str
+    provider: str
+    task: str
+    npc: str
+
+
+class Fabrication(BaseModel):
+    spell: str

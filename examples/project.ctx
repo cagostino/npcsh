@@ -1,0 +1,8 @@
+
+databases:
+  -'~/npcsh_history.db'
+files:
+  -[ './*.npc',]
+vars:
+  -age: 30
+

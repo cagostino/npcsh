@@ -1043,7 +1043,6 @@ class NPCCompiler:
 
 
 def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
-
     if not npc_file.endswith(".npc"):
         # append it just incase
         name += ".npc"
@@ -1122,6 +1121,35 @@ import json
 from datetime import datetime
 from jinja2 import Template
 import re
+
+
+###
+###
+###
+###
+### What is a pipeline file?
+"""
+
+steps:
+  - step_name: "step_name"
+    npc: npc_name
+    task: "task"
+    tools: ['tool1', 'tool2']
+
+
+# results within the pipeline need to be referenceable by the shared context through the step name
+#
+# so if step name is review_email and a tool is called we can refer to the intermediate objects
+# as review_email['tool1']['{var_name_in_tool_definition'}]
+
+so in step 2 i can do in the task
+ task: "sort the emails by tone by reviewing the outputs from the email review tool: {{ review_email['email_review']['tone'] }}"
+"""
+
+
+"""
+adding in context and fabs
+"""
 
 
 class PipelineRunner:
@@ -1963,9 +1991,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df["ai_analysis"] = (
-                        synthesized_df  # Adjust as per what synthesize returns
-                    )
+                    df[
+                        "ai_analysis"
+                    ] = synthesized_df  # Adjust as per what synthesize returns
 
             return df
 
