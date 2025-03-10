@@ -10,11 +10,32 @@ def main():
     # Serve command
     serve_parser = subparsers.add_parser("serve", help="Start the Flask server")
     serve_parser.add_argument("--port", "-p", help="Optional port")
+    serve_parser.add_argument(
+        "--cors", "-c", help="CORS origins (comma-separated list)", type=str
+    )
+    serve_parser.add_argument(
+        "--templates", "-t", help="agent templates(comma-separated list)", type=str
+    )
+    serve_parser.add_argument(
+        "--context",
+        "-ctx",
+        help="important information when merging templates",
+        type=str,
+    )
 
     # Init command
     init_parser = subparsers.add_parser("init", help="Initialize a new NPC project")
     init_parser.add_argument(
         "directory", nargs="?", default=".", help="Directory to initialize project in"
+    )
+    init_parser.add_argument(
+        "--templates", "-t", help="agent templates(comma-separated list)", type=str
+    )
+    init_parser.add_argument(
+        "--context",
+        "-ctx",
+        help="important information when merging templates",
+        type=str,
     )
 
     build_parser = subparsers.add_parser(
@@ -50,9 +71,36 @@ def main():
     # npc spool
 
     if args.command == "serve":
-        start_flask_server(port=args.port if args.port else 5337)
+        if args.cors:
+            # Parse the CORS origins from the comma-separated string
+            cors_origins = [origin.strip() for origin in args.cors.split(",")]
+        else:
+            cors_origins = None
+        if args.templates:
+            templates = [template.strip() for origin in args.templates.split(",")]
+        else:
+            templates = None
+        if args.context:
+            context = args.context.strip()
+        else:
+            context = None
+        start_flask_server(
+            port=args.port if args.port else 5337,
+            cors_origins=cors_origins,
+            templates=templates,
+            context=context,
+        )
     elif args.command == "init":
-        initialize_npc_project(args.directory)
+        if args.templates:
+            templates = [template.strip() for origin in args.templates.split(",")]
+        else:
+            templates = None
+        if args.context:
+            context = args.context.strip()
+        else:
+            context = None
+
+        initialize_npc_project(args.directory, templates=templates, context=context)
     elif args.command == "new":
         # create a new npc, tool, or assembly line
         pass
