@@ -1,6 +1,11 @@
 import argparse
+from .npc_sysenv import NPCSH_CHAT_MODEL, NPCSH_CHAT_PROVIDER
 from .serve import start_flask_server
-from .helpers import initialize_npc_project
+from .npc_compiler import (
+    initialize_npc_project,
+    conjure_team,
+)
+import os
 
 
 def main():
@@ -20,6 +25,18 @@ def main():
         "--context",
         "-ctx",
         help="important information when merging templates",
+        type=str,
+    )
+    serve_parser.add_argument(
+        "--model",
+        "-m",
+        help="model",
+        type=str,
+    )
+    serve_parser.add_argument(
+        "--provider",
+        "-pr",
+        help="provider",
         type=str,
     )
 
@@ -77,22 +94,32 @@ def main():
         else:
             cors_origins = None
         if args.templates:
-            templates = [template.strip() for origin in args.templates.split(",")]
+            templates = [template.strip() for template in args.templates.split(",")]
         else:
             templates = None
         if args.context:
             context = args.context.strip()
         else:
             context = None
+        if args.model:
+            model = args.model
+        else:
+            model = NPCSH_CHAT_MODEL
+        if args.provider:
+            provider = args.provider
+        else:
+            provider = NPCSH_CHAT_PROVIDER
+
+        if context is not None and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+            conjure_team(context, templates=templates, model=model, provider=provider)
+
         start_flask_server(
             port=args.port if args.port else 5337,
             cors_origins=cors_origins,
-            templates=templates,
-            context=context,
         )
     elif args.command == "init":
         if args.templates:
-            templates = [template.strip() for origin in args.templates.split(",")]
+            templates = [template.strip() for template in args.templates.split(",")]
         else:
             templates = None
         if args.context:

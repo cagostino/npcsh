@@ -49,10 +49,10 @@ from .llm_funcs import (
     check_llm_command,
     generate_image,
     get_embeddings,
-    get_stream
+    get_stream,
 )
 from .plonk import plonk, action_space
-from .helpers import get_db_npcs, get_npc_path, initialize_npc_project
+from .helpers import get_db_npcs, get_npc_path
 
 from .npc_compiler import (
     NPCCompiler,
@@ -60,6 +60,7 @@ from .npc_compiler import (
     load_npc_from_file,
     PipelineRunner,
     Tool,
+    initialize_npc_project,
 )
 from .command_history import CommandHistory, save_conversation_message
 
@@ -1713,8 +1714,8 @@ def execute_command(
     current_npc: NPC = None,
     model: str = None,
     provider: str = None,
-    api_key : str = None,
-    api_url : str = None,
+    api_key: str = None,
+    api_url: str = None,
     messages: list = None,
     conversation_id: str = None,
     stream: bool = False,
@@ -1943,7 +1944,7 @@ def execute_command(
                     provider=provider_override,
                     stream=stream,
                     api_key=api_key,
-                    api_url = api_url
+                    api_url=api_url,
                 )
                 ## deal with stream here
 

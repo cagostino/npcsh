@@ -190,6 +190,7 @@ def get_ollama_response(
                         .strip()
                     )
                 response_content = json.loads(response_content)
+            print(response_content, type(response_content))
             result["response"] = response_content
         except json.JSONDecodeError:
             return {"error": f"Invalid JSON response: {response_content}"}
@@ -422,10 +423,9 @@ def get_openai_like_response(
     tools: list = None,
     images: list = None,
     messages: list = None,
-    format= None, 
+    format=None,
     **kwargs,
 ) -> Dict[str, Any]:
-
     """
     Function Description:
         This function generates a response using  API.
@@ -444,7 +444,7 @@ def get_openai_like_response(
 
     """
     if api_key is None:
-        api_key = 'dummy_api_key'
+        api_key = "dummy_api_key"
     client = OpenAI(api_key=api_key, base_url=api_url)
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
     if messages is None or len(messages) == 0:
@@ -505,11 +505,11 @@ def get_openai_like_response(
     else:
         if model in available_reasoning_models:
             raise NotImplementedError("Reasoning models do not support JSON output.")
-       
+
         completion = client.beta.chat.completions.parse(
-        model=model, messages=messages, response_format=response_format
-            )
-     
+            model=model, messages=messages, response_format=response_format
+        )
+
         items_to_return = {"response": completion.choices[0].message.parsed.dict()}
         items_to_return["messages"] = messages
 
@@ -518,7 +518,6 @@ def get_openai_like_response(
         )
         return items_to_return
 
-      
 
 def get_gemini_response(
     prompt: str,

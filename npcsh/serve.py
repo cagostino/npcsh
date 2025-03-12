@@ -1398,7 +1398,10 @@ def health_check():
     return jsonify({"status": "ok", "error": None})
 
 
-def start_flask_server(port=5337, cors_origins=None):
+def start_flask_server(
+    port=5337,
+    cors_origins=None,
+):
     try:
         # Ensure the database tables exist
         conn = get_db_connection()

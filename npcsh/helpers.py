@@ -231,60 +231,6 @@ def setup_npcsh_config() -> None:
     add_npcshrc_to_shell_config()
 
 
-def initialize_npc_project(directory=None, templates=None, context=None) -> str:
-    """
-    Function Description:
-        This function initializes an NPC project in the current directory.
-    Args:
-        None
-    Keyword Args:
-        None
-    Returns:
-        A message indicating the success or failure of the operation.
-    """
-    if directory is None:
-        directory = os.getcwd()
-
-    # Create 'npc_team' folder in current directory
-    npc_team_dir = os.path.join(directory, "npc_team")
-    os.makedirs(npc_team_dir, exist_ok=True)
-
-    # Create 'foreman.npc' file in 'npc_team' directory
-    foreman_npc_path = os.path.join(npc_team_dir, "sibiji.npc")
-    if templates is not None:
-        return conjure_team_from_templates(templates, context=context)
-    if context is not None:
-        return conjure_team_from_context(context)
-
-    if not os.path.exists(foreman_npc_path):
-        foreman_npc_content = """name: sibiji
-primary_directive: "You are sibiji, the foreman of an NPC team. You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately."
-model: llama3.2
-provider: ollama
-"""
-        with open(foreman_npc_path, "w") as f:
-            f.write(foreman_npc_content)
-    else:
-        print(f"{foreman_npc_path} already exists.")
-
-    # Create 'tools' folder within 'npc_team' directory
-    tools_dir = os.path.join(npc_team_dir, "tools")
-    os.makedirs(tools_dir, exist_ok=True)
-
-    # assembly_lines
-    assembly_lines_dir = os.path.join(npc_team_dir, "assembly_lines")
-    os.makedirs(assembly_lines_dir, exist_ok=True)
-    # sql models
-    sql_models_dir = os.path.join(npc_team_dir, "sql_models")
-    os.makedirs(sql_models_dir, exist_ok=True)
-    # jobs
-    jobs_dir = os.path.join(npc_team_dir, "jobs")
-    os.makedirs(jobs_dir, exist_ok=True)
-
-    # just copy all the base npcsh tools and npcs.
-    return f"NPC project initialized in {npc_team_dir}"
-
-
 def is_npcsh_initialized() -> bool:
     """
     Function Description:
