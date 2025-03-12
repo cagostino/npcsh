@@ -238,3 +238,8 @@ def test_conjure_team_from_templates():
     result = conjure_team(templates, context, model="gpt-4o-mini", provider="openai")
 
     # npc serve -t 'sales, marketing' -ctx 'im developing a team that will focus on sales and marketing within the logging industry. I need a team that can help me with the following: - generate leads - create marketing campaigns - build a sales funnel - close deals - manage customer relationships - manage sales pipeline - manage marketing campaigns - manage marketing budget'
+
+
+def test_init_team_from_templates():
+    return
+    # npc init -t 'sales, marketing' -ctx 'im developing a team that will focus on sales and marketing within the logging industry. I need a team that can help me with the following: - generate leads - create marketing campaigns - build a sales funnel - close deals - manage customer relationships - manage sales pipeline - manage marketing campaigns - manage marketing budget'
