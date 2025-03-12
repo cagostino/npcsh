@@ -414,7 +414,8 @@ Type '(e)dit', '(d)elete', or '(r)egenerate' or '(a)ccept': """
     }
 
 
-def initialize_npc_project(directory=None, templates=None, context=None) -> str:
+def initialize_npc_project(
+    directory=None, templates=None, context=None, model=None, provider=None, ) -> str:
     """
     Function Description:
         This function initializes an NPC project in the current directory.
@@ -435,7 +436,7 @@ def initialize_npc_project(directory=None, templates=None, context=None) -> str:
     # Create 'foreman.npc' file in 'npc_team' directory
     foreman_npc_path = os.path.join(npc_team_dir, "sibiji.npc")
     if context is not None:
-        team = conjure_team(context, templates=templates)
+        team = conjure_team(context, templates=templates, model=model, provider=provider)
 
     if not os.path.exists(foreman_npc_path):
         foreman_npc_content = """name: sibiji

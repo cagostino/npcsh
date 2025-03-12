@@ -54,6 +54,18 @@ def main():
         help="important information when merging templates",
         type=str,
     )
+    init_parser.add_argument(
+        "--model",
+        "-m",
+        help="model",
+        type=str,
+    )
+    init_parser.add_argument(
+        "--provider",
+        "-pr",
+        help="provider",
+        type=str,
+    )
 
     build_parser = subparsers.add_parser(
         "build", help="Build a NPC team into a standalone executable server"
@@ -126,8 +138,22 @@ def main():
             context = args.context.strip()
         else:
             context = None
+        if args.model:
+            model = args.model
+        else:
+            model = NPCSH_CHAT_MODEL
+        if args.provider:
+            provider = args.provider
+        else:
+            provider = NPCSH_CHAT_PROVIDER
 
-        initialize_npc_project(args.directory, templates=templates, context=context)
+        initialize_npc_project(
+            args.directory,
+            templates=templates,
+            context=context,
+            model=model,
+            provider=provider,
+        )
     elif args.command == "new":
         # create a new npc, tool, or assembly line
         pass
