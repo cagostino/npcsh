@@ -136,9 +136,6 @@ def main() -> None:
     else:
         readline.parse_and_bind("tab: complete")
 
-    # Initialize base NPCs and tools
-    initialize_base_npcs_if_needed(db_path)
-
     # check if ./npc_team exists
     if os.path.exists("./npc_team"):
 

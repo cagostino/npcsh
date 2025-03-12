@@ -394,10 +394,12 @@ def initialize_base_npcs_if_needed(db_path: str) -> None:
 
     # User's global npc_team directory
     user_npc_team_dir = os.path.expanduser("~/.npcsh/npc_team")
+
     user_tools_dir = os.path.join(user_npc_team_dir, "tools")
+    user_templates_dir = os.path.join(user_npc_team_dir, "templates")
     os.makedirs(user_npc_team_dir, exist_ok=True)
     os.makedirs(user_tools_dir, exist_ok=True)
-
+    os.makedirs(user_templates_dir, exist_ok=True)
     # Copy NPCs from package to user directory
     for filename in os.listdir(package_npc_team_dir):
         if filename.endswith(".npc"):
@@ -407,7 +409,6 @@ def initialize_base_npcs_if_needed(db_path: str) -> None:
                 source_path, destination_path
             ):
                 shutil.copy2(source_path, destination_path)
-                print(f"Copied {filename} to {destination_path}")
 
     # Copy tools from package to user directory
     package_tools_dir = os.path.join(package_npc_team_dir, "tools")
@@ -422,6 +423,24 @@ def initialize_base_npcs_if_needed(db_path: str) -> None:
                     shutil.copy2(source_tool_path, destination_tool_path)
                     print(f"Copied tool {filename} to {destination_tool_path}")
 
+    templates = os.path.join(package_npc_team_dir, "templates")
+    if os.path.exists(templates):
+        for folder in os.listdir(templates):
+            os.makedirs(os.path.join(user_templates_dir, folder), exist_ok=True)
+            for file in os.listdir(os.path.join(templates, folder)):
+                if file.endswith(".npc"):
+                    source_template_path = os.path.join(templates, folder, file)
+
+                    destination_template_path = os.path.join(
+                        user_templates_dir, folder, file
+                    )
+                    if not os.path.exists(
+                        destination_template_path
+                    ) or file_has_changed(
+                        source_template_path, destination_template_path
+                    ):
+                        shutil.copy2(source_template_path, destination_template_path)
+                        print(f"Copied template {file} to {destination_template_path}")
     conn.commit()
     conn.close()
     set_npcsh_initialized()
