@@ -123,7 +123,13 @@ def main():
             provider = NPCSH_CHAT_PROVIDER
 
         if context is not None and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
-            conjure_team(context, templates=templates, model=model, provider=provider)
+            initialize_npc_project(
+                args.directory,
+                templates=templates,
+                context=context,
+                model=model,
+                provider=provider,
+            )
 
         start_flask_server(
             port=args.port if args.port else 5337,
