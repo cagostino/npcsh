@@ -9,7 +9,7 @@ steps:
     task: "Give me an update on the latest events in the market: {{source('market_events')}}."
 
   - step_name: "summarize"
-    npc: "{{ ref('sibiji') }}"
-    model: llama3.2
-    provider: ollama
+    npc: "{{ ref('critic') }}"
+    model: gpt-4o-mini
+    provider: openai
     task: "Review the outputs from the {{review_email}} and {{market_update}} and provide me with a summary."

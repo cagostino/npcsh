@@ -231,69 +231,6 @@ def setup_npcsh_config() -> None:
     add_npcshrc_to_shell_config()
 
 
-def initialize_npc_project(directory=None) -> str:
-    """
-    Function Description:
-        This function initializes an NPC project in the current directory.
-    Args:
-        None
-    Keyword Args:
-        None
-    Returns:
-        A message indicating the success or failure of the operation.
-    """
-    if directory is None:
-        directory = os.getcwd()
-
-    # Create 'npc_team' folder in current directory
-    npc_team_dir = os.path.join(directory, "npc_team")
-    os.makedirs(npc_team_dir, exist_ok=True)
-
-    # Create 'foreman.npc' file in 'npc_team' directory
-    foreman_npc_path = os.path.join(npc_team_dir, "sibiji.npc")
-    if not os.path.exists(foreman_npc_path):
-        foreman_npc_content = """name: sibiji
-primary_directive: "You are sibiji, the foreman of an NPC team. You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately."
-model: llama3.2
-provider: ollama
-"""
-        with open(foreman_npc_path, "w") as f:
-            f.write(foreman_npc_content)
-    else:
-        print(f"{foreman_npc_path} already exists.")
-
-    # Create 'tools' folder within 'npc_team' directory
-    tools_dir = os.path.join(npc_team_dir, "tools")
-    os.makedirs(tools_dir, exist_ok=True)
-
-    # assembly_lines
-    assembly_lines_dir = os.path.join(npc_team_dir, "assembly_lines")
-    os.makedirs(assembly_lines_dir, exist_ok=True)
-    # sql models
-    sql_models_dir = os.path.join(npc_team_dir, "sql_models")
-    os.makedirs(sql_models_dir, exist_ok=True)
-    # jobs
-    jobs_dir = os.path.join(npc_team_dir, "jobs")
-    os.makedirs(jobs_dir, exist_ok=True)
-
-    # Create 'example.tool' file in 'tools' folder
-    example_tool_path = os.path.join(tools_dir, "example.tool")
-    if not os.path.exists(example_tool_path):
-        # Create initial content for 'example.tool'
-        example_tool_content = """tool_name: example
-inputs: []
-preprocess: ""
-prompt: ""
-postprocess: ""
-"""
-        with open(example_tool_path, "w") as f:
-            f.write(example_tool_content)
-    else:
-        print(f"{example_tool_path} already exists.")
-
-    return f"NPC project initialized in {npc_team_dir}"
-
-
 def is_npcsh_initialized() -> bool:
     """
     Function Description:
@@ -457,10 +394,12 @@ def initialize_base_npcs_if_needed(db_path: str) -> None:
 
     # User's global npc_team directory
     user_npc_team_dir = os.path.expanduser("~/.npcsh/npc_team")
+
     user_tools_dir = os.path.join(user_npc_team_dir, "tools")
+    user_templates_dir = os.path.join(user_npc_team_dir, "templates")
     os.makedirs(user_npc_team_dir, exist_ok=True)
     os.makedirs(user_tools_dir, exist_ok=True)
-
+    os.makedirs(user_templates_dir, exist_ok=True)
     # Copy NPCs from package to user directory
     for filename in os.listdir(package_npc_team_dir):
         if filename.endswith(".npc"):
@@ -470,7 +409,6 @@ def initialize_base_npcs_if_needed(db_path: str) -> None:
                 source_path, destination_path
             ):
                 shutil.copy2(source_path, destination_path)
-                print(f"Copied {filename} to {destination_path}")
 
     # Copy tools from package to user directory
     package_tools_dir = os.path.join(package_npc_team_dir, "tools")
@@ -485,6 +423,24 @@ def initialize_base_npcs_if_needed(db_path: str) -> None:
                     shutil.copy2(source_tool_path, destination_tool_path)
                     print(f"Copied tool {filename} to {destination_tool_path}")
 
+    templates = os.path.join(package_npc_team_dir, "templates")
+    if os.path.exists(templates):
+        for folder in os.listdir(templates):
+            os.makedirs(os.path.join(user_templates_dir, folder), exist_ok=True)
+            for file in os.listdir(os.path.join(templates, folder)):
+                if file.endswith(".npc"):
+                    source_template_path = os.path.join(templates, folder, file)
+
+                    destination_template_path = os.path.join(
+                        user_templates_dir, folder, file
+                    )
+                    if not os.path.exists(
+                        destination_template_path
+                    ) or file_has_changed(
+                        source_template_path, destination_template_path
+                    ):
+                        shutil.copy2(source_template_path, destination_template_path)
+                        print(f"Copied template {file} to {destination_template_path}")
     conn.commit()
     conn.close()
     set_npcsh_initialized()

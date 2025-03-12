@@ -1,6 +1,11 @@
 import argparse
+from .npc_sysenv import NPCSH_CHAT_MODEL, NPCSH_CHAT_PROVIDER
 from .serve import start_flask_server
-from .helpers import initialize_npc_project
+from .npc_compiler import (
+    initialize_npc_project,
+    conjure_team,
+)
+import os
 
 
 def main():
@@ -10,11 +15,56 @@ def main():
     # Serve command
     serve_parser = subparsers.add_parser("serve", help="Start the Flask server")
     serve_parser.add_argument("--port", "-p", help="Optional port")
+    serve_parser.add_argument(
+        "--cors", "-c", help="CORS origins (comma-separated list)", type=str
+    )
+    serve_parser.add_argument(
+        "--templates", "-t", help="agent templates(comma-separated list)", type=str
+    )
+    serve_parser.add_argument(
+        "--context",
+        "-ctx",
+        help="important information when merging templates",
+        type=str,
+    )
+    serve_parser.add_argument(
+        "--model",
+        "-m",
+        help="model",
+        type=str,
+    )
+    serve_parser.add_argument(
+        "--provider",
+        "-pr",
+        help="provider",
+        type=str,
+    )
 
     # Init command
     init_parser = subparsers.add_parser("init", help="Initialize a new NPC project")
     init_parser.add_argument(
         "directory", nargs="?", default=".", help="Directory to initialize project in"
+    )
+    init_parser.add_argument(
+        "--templates", "-t", help="agent templates(comma-separated list)", type=str
+    )
+    init_parser.add_argument(
+        "--context",
+        "-ctx",
+        help="important information when merging templates",
+        type=str,
+    )
+    init_parser.add_argument(
+        "--model",
+        "-m",
+        help="model",
+        type=str,
+    )
+    init_parser.add_argument(
+        "--provider",
+        "-pr",
+        help="provider",
+        type=str,
     )
 
     build_parser = subparsers.add_parser(
@@ -50,9 +100,66 @@ def main():
     # npc spool
 
     if args.command == "serve":
-        start_flask_server(port=args.port if args.port else 5337)
+        if args.cors:
+            # Parse the CORS origins from the comma-separated string
+            cors_origins = [origin.strip() for origin in args.cors.split(",")]
+        else:
+            cors_origins = None
+        if args.templates:
+            templates = [template.strip() for template in args.templates.split(",")]
+        else:
+            templates = None
+        if args.context:
+            context = args.context.strip()
+        else:
+            context = None
+        if args.model:
+            model = args.model
+        else:
+            model = NPCSH_CHAT_MODEL
+        if args.provider:
+            provider = args.provider
+        else:
+            provider = NPCSH_CHAT_PROVIDER
+
+        if context is not None and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+            initialize_npc_project(
+                args.directory,
+                templates=templates,
+                context=context,
+                model=model,
+                provider=provider,
+            )
+
+        start_flask_server(
+            port=args.port if args.port else 5337,
+            cors_origins=cors_origins,
+        )
     elif args.command == "init":
-        initialize_npc_project(args.directory)
+        if args.templates:
+            templates = [template.strip() for template in args.templates.split(",")]
+        else:
+            templates = None
+        if args.context:
+            context = args.context.strip()
+        else:
+            context = None
+        if args.model:
+            model = args.model
+        else:
+            model = NPCSH_CHAT_MODEL
+        if args.provider:
+            provider = args.provider
+        else:
+            provider = NPCSH_CHAT_PROVIDER
+
+        initialize_npc_project(
+            args.directory,
+            templates=templates,
+            context=context,
+            model=model,
+            provider=provider,
+        )
     elif args.command == "new":
         # create a new npc, tool, or assembly line
         pass

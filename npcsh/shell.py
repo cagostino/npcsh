@@ -54,7 +54,6 @@ from .llm_funcs import (
 from .search import rag_search, search_web
 from .helpers import (
     load_all_files,
-    initialize_npc_project,
     setup_npcsh_config,
     is_npcsh_initialized,
     initialize_base_npcs_if_needed,
@@ -67,12 +66,17 @@ from .shell_helpers import (
     execute_command,
     orange,  # For colored prompt
 )
-from .npc_compiler import NPCCompiler, load_tools_from_directory, NPC
+from .npc_compiler import (
+    NPCCompiler,
+    load_tools_from_directory,
+    NPC,
+    initialize_npc_project,
+)
 
 import argparse
 from .serve import (
     start_flask_server,
-)  # Assuming you move the Flask logic to a separate `serve.py`
+)
 
 
 def main() -> None:
@@ -131,9 +135,6 @@ def main() -> None:
         readline.parse_and_bind("bind ^I rl_complete")
     else:
         readline.parse_and_bind("tab: complete")
-
-    # Initialize base NPCs and tools
-    initialize_base_npcs_if_needed(db_path)
 
     # check if ./npc_team exists
     if os.path.exists("./npc_team"):

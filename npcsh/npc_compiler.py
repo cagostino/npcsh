@@ -11,6 +11,7 @@ import json
 import pathlib
 import fnmatch
 import re
+import ast
 import random
 from datetime import datetime
 import hashlib
@@ -48,6 +49,422 @@ def create_or_replace_table(db_path: str, table_name: str, data: pd.DataFrame):
         print(f"Error creating/replacing table '{table_name}': {e}")
     finally:
         conn.close()
+
+
+def load_npc_team(template_path):
+    """
+    Load an NPC team from a template directory.
+
+    Args:
+        template_path: Path to the NPC team template directory
+
+    Returns:
+        A dictionary containing the NPC team definition with loaded NPCs and tools
+    """
+    template_path = os.path.expanduser(template_path)
+
+    if not os.path.exists(template_path):
+        raise FileNotFoundError(f"Template directory not found: {template_path}")
+
+    # Initialize team structure
+    npc_team = {
+        "name": os.path.basename(template_path),
+        "npcs": [],
+        "tools": [],
+        "assembly_lines": [],
+        "sql_models": [],
+        "jobs": [],
+    }
+
+    # Load NPCs
+    npc_objects = {}
+    db_conn = sqlite3.connect(os.path.expanduser("~/npcsh_history.db"))
+
+    for filename in os.listdir(template_path):
+        if filename.endswith(".npc"):
+            npc_path = os.path.join(template_path, filename)
+
+            with open(npc_path, "r") as f:
+                npc_content = f.read()
+                npc_data = yaml.safe_load(npc_content)
+                npc_team["npcs"].append(npc_data)
+
+                # Load as NPC object
+
+                npc_obj = load_npc_from_file(npc_path, db_conn)
+                npc_name = npc_data.get("name", os.path.splitext(filename)[0])
+                npc_objects[npc_name] = npc_obj
+
+    # Load tools
+    tools_dir = os.path.join(template_path, "tools")
+    tool_objects = {}
+
+    if os.path.exists(tools_dir):
+        for filename in os.listdir(tools_dir):
+            if filename.endswith(".tool"):
+                tool_path = os.path.join(tools_dir, filename)
+                with open(tool_path, "r") as f:
+                    tool_content = f.read()
+                    tool_data = yaml.safe_load(tool_content)
+                    npc_team["tools"].append(tool_data)
+
+                    # Load as Tool object
+                    try:
+                        tool_obj = Tool(tool_data)
+                        tool_name = tool_data.get(
+                            "tool_name", os.path.splitext(filename)[0]
+                        )
+                        tool_objects[tool_name] = tool_obj
+                    except Exception as e:
+                        print(f"Warning: Could not load tool {filename}: {str(e)}")
+
+    # Load assembly lines
+    assembly_lines_dir = os.path.join(template_path, "assembly_lines")
+    if os.path.exists(assembly_lines_dir):
+        for filename in os.listdir(assembly_lines_dir):
+            if filename.endswith(".pipe"):
+                pipe_path = os.path.join(assembly_lines_dir, filename)
+                with open(pipe_path, "r") as f:
+                    pipe_content = f.read()
+                    pipe_data = yaml.safe_load(pipe_content)
+                    npc_team["assembly_lines"].append(pipe_data)
+
+    # Load SQL models
+    sql_models_dir = os.path.join(template_path, "sql_models")
+    if os.path.exists(sql_models_dir):
+        for filename in os.listdir(sql_models_dir):
+            if filename.endswith(".sql"):
+                sql_path = os.path.join(sql_models_dir, filename)
+                with open(sql_path, "r") as f:
+                    sql_content = f.read()
+                    npc_team["sql_models"].append(
+                        {"name": os.path.basename(sql_path), "content": sql_content}
+                    )
+
+    # Load jobs
+    jobs_dir = os.path.join(template_path, "jobs")
+    if os.path.exists(jobs_dir):
+        for filename in os.listdir(jobs_dir):
+            if filename.endswith(".job"):
+                job_path = os.path.join(jobs_dir, filename)
+                with open(job_path, "r") as f:
+                    job_content = f.read()
+                    job_data = yaml.safe_load(job_content)
+                    npc_team["jobs"].append(job_data)
+
+    # Add loaded objects to the team structure
+    npc_team["npc_objects"] = npc_objects
+    npc_team["tool_objects"] = tool_objects
+    npc_team["template_path"] = template_path
+
+    return npc_team
+
+
+def get_template_npc_team(template, template_dir="~/.npcsh/npc_team/templates/"):
+
+    # get the working directory where the
+
+    npc_team = load_npc_team(template_dir + template)
+    return npc_team
+
+
+def generate_npcs_from_area_of_expertise(
+    areas_of_expertise,
+    context,
+    templates: list = None,
+    model=None,
+    provider=None,
+    npc=None,
+):
+
+    prompt = f"""
+    Here are the areas of expertise that a user requires a team of agents to be developed for.
+
+    {areas_of_expertise}
+
+    Here is some additional context that may be useful:
+    {context}
+
+    """
+    # print(templates)
+    if templates is not None:
+        prompt += "the user has also provided the following templates to use as a base for the NPC team:\n"
+        for template in templates:
+            prompt += f"{template}\n"
+        prompt += "your output should use these templates and modify them accordingly. Your response must contain the specific named NPCs included in these templates, with their primary directives adjusted accordingly based on the context and the areas of expertise. any other new npcs should complement these template ones and should not overlap."
+
+    prompt += """
+    Now, generate a set of 2-5 NPCs that cover the required areas of expertise and adequatetly incorporate the context provided.
+    according to the following framework and return a json response
+    {"npc_team":    [
+    {
+        "name":"name of npc1",
+        "primary_directive": "a 2-3 sentence description of the NPCs duties and responsibilities in the second person"
+    },
+    {
+        "name":"name of npc2",
+        "primary_directive": "a 2-3 sentence description of the NPCs duties and responsibilities in the second person"
+    }
+    ]}
+
+    Each npc's name should be one word.
+    The npc's primary directive must be essentially an assistant system message, so ensure that when you
+    write it, you are writing it in that way.
+    For example, here is an npc named 'sibiji' with a primary directive:
+    {
+        "name":"sibiji",
+        "primary_directive": "You are sibiji, the foreman of an NPC team. You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately."
+    }
+    When writing out your response, you must ensure that the agents have distinct areas of
+    expertise such that they are not redundant in their abilities. Keeping the agent team
+    small is important and we do not wwish to clutter the team with agents that have overlapping
+    areas of expertise or responsibilities that make it difficult to know which agent should be
+    called upon in a specific situation.
+
+
+    do not include any additional markdown formatting or leading ```json tags.
+    """
+
+    response = get_llm_response(
+        prompt, model=model, provider=provider, npc=npc, format="json"
+    )
+    response = response.get("response").get("npc_team")
+    return response
+
+
+def edit_areas(areas):
+    for i, area in enumerate(areas):
+        print(f"{i+1}. {area}")
+
+    index = input("Which area would you like to edit? (number or 'c' to continue):   ")
+    if index.lower() in ["c", "continue"]:
+        return areas
+    else:
+        index = int(index)
+    if 0 <= index < len(areas):
+        new_value = input(f"Current value: {areas[index]}. Enter new value: ")
+        areas[index] = new_value
+    else:
+        print("invalid index, please try again")
+    return edit_areas(areas)
+
+
+def delete_areas(areas):
+    for i, area in enumerate(areas):
+        print(f"{i+1}. {area}")
+
+    index = (
+        int(input("Which area would you like to delete? (number or 'c' to continue): "))
+        - 1
+    )
+
+    if index.lower() in ["c", "continue"]:
+        return areas
+    if 0 <= index < len(areas):
+        del areas[index]
+
+    return delete_areas(areas)
+
+
+def conjure_team(
+    context,
+    templates,
+    npc=None,
+    model=None,
+    provider=None,
+):
+    """
+    Function to generate an NPC team using existing templates and identifying additional areas of expertise.
+
+    Args:
+        templates: List of template names to use as a base
+        context: Description of the project and what the team should do
+        npc: The NPC to use for generating the areas (optional)
+        model: The model to use for generation (optional)
+        provider: The provider to use for generation (optional)
+
+    Returns:
+        Dictionary with identified areas of expertise
+    """
+    teams = []
+    for team in templates:
+        npc_team = get_template_npc_team(team)
+        teams.append(npc_team)
+
+    # Extract existing areas of expertise from templates
+    prompt = f"""
+                The user has provided the following context:
+
+                {context}
+                """
+
+    if templates is not None:
+        prompt += f"""
+        The user has requested to generate an NPC team using the following templates:
+
+        {templates}
+
+        """
+
+    prompt += """
+    Now what is important in generating an NPC team is to ensure that the NPCs are balanced and distinctly necessary.
+    Each NPC should essentially focus on a single area of expertise. This does not mean that they should only focus on a
+    single function, but rather that they have a specific purview.
+
+    To first figure out what NPCs would be necessary in addition to the templates given the combination of the templates
+    and the user-provided context, we will need to generate a list of the abstract areas that the user requires in an NPC team.
+    Now, given that information, consider whether other potential areas of expertise would complement the provided templates and the user context?
+    Try to think carefully about this in a way to determine what other potential issues might arise for a team like this to anticipate whether it may be
+    necessary to cover additional areas of expertise.
+
+    Now, generate a list of 3-5 abstract areas explicitly required.
+    It is actually quite important that you consolidate and abstract away various areas
+        into general forms. Agents will be generated based on these descriptions, and an agentic team is more
+        useful when it is as small as reasonably possible.
+
+    Similarly, generate a list of 2-3 suggested areas of expertise that would complement the existing templates and the user context.
+
+    This will be provided to the user for confirmation and adjustment before the NPC team is generated.
+
+    Return a json response with two lists. It should be formatted like so:
+
+    {
+        "explicit_areas": ["area 1", "area 2"],
+        "suggested_areas": ["area 3", "area 4"]
+    }
+
+    Do not include any additional markdown formatting or leading ```json tags.
+
+    """
+
+    response = get_llm_response(
+        prompt, model=model, provider=provider, npc=npc, format="json"
+    )
+
+    response = response.get("response")
+    explicit_areas = response.get("explicit_areas", [])
+    suggested_areas = response.get("suggested_areas", [])
+    combined_areas = explicit_areas + suggested_areas
+    print("\nExplicit areas of expertise:")
+    for i, area in enumerate(explicit_areas):
+        print(f"{i+1}. {area}")
+
+    print("\nSuggested areas of expertise:")
+    for i, area in enumerate(suggested_areas):
+        print(f"{i+1}. {area}")
+
+    user_input = input(
+        """\n\n
+Above is the generated list of areas of expertise.
+
+Would you like to edit the suggestions, delete any of them, or regenerate the team with revised context?
+Type '(e)dit', '(d)elete', or '(r)egenerate' or '(a)ccept': """
+    )
+    if user_input.lower() in ["e", "edit"]:
+        revised_areas = edit_areas(combined_areas)
+    elif user_input.lower() in ["d", "delete"]:
+        revised_areas = delete_areas(combined_areas)
+    elif user_input.lower() in ["r", "regenerate"]:
+        updated_context = input(
+            f"Here is the context you provided: {context}\nPlease provide a fully revised version: "
+        )
+        print("Beginning again with updated context")
+        return conjure_team(
+            updated_context,
+            templates=templates,
+            npc=npc,
+            model=model,
+            provider=provider,
+        )
+
+    elif user_input.lower() in ["a", "accept"]:
+        # Return the finalized areas of expertise
+        revised_areas = combined_areas
+
+    # proceed now with generation of npc for each revised area
+    npc_out = generate_npcs_from_area_of_expertise(
+        revised_areas,
+        context,
+        templates=[team["npcs"] for team in teams],
+        model=model,
+        provider=provider,
+        npc=npc,
+    )
+    # print(npc_out)
+    # now save all of the npcs to the ./npc_team directory
+
+    for npc in npc_out:
+        # make the npc team dir if not existst
+
+        if isinstance(npc, str):
+            npc = ast.literal_eval(npc)
+
+        npc_team_dir = os.path.join(os.getcwd(), "npc_team")
+        os.makedirs(npc_team_dir, exist_ok=True)
+        # print(npc, type(npc))
+        npc_path = os.path.join(os.getcwd(), "npc_team", f"{npc['name']}.npc")
+        with open(npc_path, "w") as f:
+            f.write(yaml.dump(npc))
+
+    return {
+        "templates": templates,
+        "context": context,
+        "expertise_areas": response,
+        "npcs": npc_out,
+    }
+
+
+def initialize_npc_project(
+    directory=None, templates=None, context=None, model=None, provider=None, ) -> str:
+    """
+    Function Description:
+        This function initializes an NPC project in the current directory.
+    Args:
+        None
+    Keyword Args:
+        None
+    Returns:
+        A message indicating the success or failure of the operation.
+    """
+    if directory is None:
+        directory = os.getcwd()
+
+    # Create 'npc_team' folder in current directory
+    npc_team_dir = os.path.join(directory, "npc_team")
+    os.makedirs(npc_team_dir, exist_ok=True)
+
+    # Create 'foreman.npc' file in 'npc_team' directory
+    foreman_npc_path = os.path.join(npc_team_dir, "sibiji.npc")
+    if context is not None:
+        team = conjure_team(context, templates=templates, model=model, provider=provider)
+
+    if not os.path.exists(foreman_npc_path):
+        foreman_npc_content = """name: sibiji
+primary_directive: "You are sibiji, the foreman of an NPC team. You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately."
+model: llama3.2
+provider: ollama
+"""
+        with open(foreman_npc_path, "w") as f:
+            f.write(foreman_npc_content)
+    else:
+        print(f"{foreman_npc_path} already exists.")
+
+    # Create 'tools' folder within 'npc_team' directory
+    tools_dir = os.path.join(npc_team_dir, "tools")
+    os.makedirs(tools_dir, exist_ok=True)
+
+    # assembly_lines
+    assembly_lines_dir = os.path.join(npc_team_dir, "assembly_lines")
+    os.makedirs(assembly_lines_dir, exist_ok=True)
+    # sql models
+    sql_models_dir = os.path.join(npc_team_dir, "sql_models")
+    os.makedirs(sql_models_dir, exist_ok=True)
+    # jobs
+    jobs_dir = os.path.join(npc_team_dir, "jobs")
+    os.makedirs(jobs_dir, exist_ok=True)
+
+    # just copy all the base npcsh tools and npcs.
+    return f"NPC project initialized in {npc_team_dir}"
 
 
 def init_pipeline_runs(db_path: str = "~/npcsh_history.db"):
@@ -1991,9 +2408,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df[
-                        "ai_analysis"
-                    ] = synthesized_df  # Adjust as per what synthesize returns
+                    df["ai_analysis"] = (
+                        synthesized_df  # Adjust as per what synthesize returns
+                    )
 
             return df
 

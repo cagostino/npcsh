@@ -3,7 +3,7 @@ import os
 import tempfile
 import sqlite3
 from unittest.mock import patch, MagicMock
-from npcsh.npc_compiler import NPCCompiler, NPC, Tool
+from npcsh.npc_compiler import NPCCompiler, NPC, Tool, conjure_team
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def test_npc_compiler_compile_valid(temp_npc_directory):
     primary_directive: Test directive
     suggested_tools_to_use: [tool1, tool2]
     restrictions: []
-    model: gpt-3.5-turbo
+    model: gpt-4o-mini
     """
     create_npc_file(temp_npc_directory, "test.npc", npc_content)
     result = compiler.compile("test.npc")
@@ -53,7 +53,7 @@ def test_npc_compiler_compile_valid(temp_npc_directory):
     assert result["primary_directive"] == "Test directive"
     assert result["suggested_tools_to_use"] == ["tool1", "tool2"]
     assert result["restrictions"] == []
-    assert result["model"] == "gpt-3.5-turbo"
+    assert result["model"] == "gpt-4o-mini"
 
 
 def test_npc_compiler_compile_with_inheritance(temp_npc_directory):
@@ -63,7 +63,7 @@ def test_npc_compiler_compile_with_inheritance(temp_npc_directory):
     primary_directive: Parent directive
     suggested_tools_to_use: [tool1]
     restrictions: []
-    model: gpt-3.5-turbo
+    model: gpt-4o-mini
     """
     child_content = """
     inherits_from: parent
@@ -77,7 +77,7 @@ def test_npc_compiler_compile_with_inheritance(temp_npc_directory):
     assert result["primary_directive"] == "Parent directive"
     assert result["suggested_tools_to_use"] == ["tool1", "tool2"]
     assert result["restrictions"] == []
-    assert result["model"] == "gpt-3.5-turbo"
+    assert result["model"] == "gpt-4o-mini"
 
 
 def test_npc_compiler_compile_missing_required_key(temp_npc_directory):
@@ -100,14 +100,14 @@ def test_npc_init(mock_db_conn):
         primary_directive="Test directive",
         suggested_tools_to_use=["tool1", "tool2"],
         restrictions=[],
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         provider="openai",
     )
     assert npc.name == "Test NPC"
     assert npc.primary_directive == "Test directive"
     assert npc.tools == ["tool1", "tool2"]
     assert npc.restrictions == []
-    assert npc.model == "gpt-3.5-turbo"
+    assert npc.model == "gpt-4o-mini"
     assert npc.provider == "openai"
     assert npc.db_conn == mock_db_conn
     assert npc.tables == [("table1",), ("table2",)]
@@ -120,10 +120,10 @@ def test_npc_str(mock_db_conn):
         primary_directive="Test directive",
         suggested_tools_to_use=["tool1", "tool2"],
         restrictions=[],
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         provider="openai",
     )
-    assert str(npc) == "NPC: Test NPC\nDirective: Test directive\nModel: gpt-3.5-turbo"
+    assert str(npc) == "NPC: Test NPC\nDirective: Test directive\nModel: gpt-4o-mini"
 
 
 @patch("npcsh.npc_compiler.get_data_response")
@@ -134,7 +134,7 @@ def test_npc_get_data_response(mock_get_data_response, mock_db_conn):
         primary_directive="Test directive",
         suggested_tools_to_use=["tool1", "tool2"],
         restrictions=[],
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         provider="openai",
     )
     mock_get_data_response.return_value = "Data response"
@@ -153,7 +153,7 @@ def test_npc_get_llm_response(mock_get_llm_response, mock_db_conn):
         primary_directive="Test directive",
         suggested_tools_to_use=["tool1", "tool2"],
         restrictions=[],
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         provider="openai",
     )
     mock_get_llm_response.return_value = "LLM response"
@@ -162,7 +162,7 @@ def test_npc_get_llm_response(mock_get_llm_response, mock_db_conn):
     mock_get_llm_response.assert_called_once_with(
         "Test request",
         provider="openai",
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         npc=npc,
         temperature=0.7,
     )
@@ -190,7 +190,7 @@ def test_npc_compiler_resolve_npc_profile(temp_npc_directory):
     primary_directive: Test directive
     suggested_tools_to_use: [tool1, tool2]
     restrictions: []
-    model: gpt-3.5-turbo
+    model: gpt-4o-mini
     """
     create_npc_file(temp_npc_directory, "test.npc", npc_content)
     compiler.parse_all_npcs()
@@ -199,7 +199,7 @@ def test_npc_compiler_resolve_npc_profile(temp_npc_directory):
     assert resolved_profile["primary_directive"] == "Test directive"
     assert resolved_profile["suggested_tools_to_use"] == ["tool1", "tool2"]
     assert resolved_profile["restrictions"] == []
-    assert resolved_profile["model"] == "gpt-3.5-turbo"
+    assert resolved_profile["model"] == "gpt-4o-mini"
 
 
 def test_npc_compiler_finalize_npc_profile(temp_npc_directory):
@@ -209,7 +209,7 @@ def test_npc_compiler_finalize_npc_profile(temp_npc_directory):
     primary_directive: Test directive
     suggested_tools_to_use: [tool1, tool2]
     restrictions: []
-    model: gpt-3.5-turbo
+    model: gpt-4o-mini
     """
     create_npc_file(temp_npc_directory, "test.npc", npc_content)
     compiler.parse_all_npcs()
@@ -219,4 +219,27 @@ def test_npc_compiler_finalize_npc_profile(temp_npc_directory):
     assert finalized_profile["primary_directive"] == "Test directive"
     assert finalized_profile["suggested_tools_to_use"] == ["tool1", "tool2"]
     assert finalized_profile["restrictions"] == []
-    assert finalized_profile["model"] == "gpt-3.5-turbo"
+    assert finalized_profile["model"] == "gpt-4o-mini"
+
+
+def test_conjure_team_from_templates():
+    templates = ["sales", "marketing"]
+    context = """im developing a team that will focus on sales and marketing within the
+                    logging industry. I need a team that can help me with the following:
+                    - generate leads
+                    - create marketing campaigns
+                    - build a sales funnel
+                    - close deals
+                    - manage customer relationships
+                    - manage sales pipeline
+                    - manage marketing campaigns
+                    - manage marketing budget
+                    """
+    result = conjure_team(templates, context, model="gpt-4o-mini", provider="openai")
+
+    # npc serve -t 'sales, marketing' -ctx 'im developing a team that will focus on sales and marketing within the logging industry. I need a team that can help me with the following: - generate leads - create marketing campaigns - build a sales funnel - close deals - manage customer relationships - manage sales pipeline - manage marketing campaigns - manage marketing budget'
+
+
+def test_init_team_from_templates():
+    return
+    # npc init -t 'sales, marketing' -ctx 'im developing a team that will focus on sales and marketing within the logging industry. I need a team that can help me with the following: - generate leads - create marketing campaigns - build a sales funnel - close deals - manage customer relationships - manage sales pipeline - manage marketing campaigns - manage marketing budget'
