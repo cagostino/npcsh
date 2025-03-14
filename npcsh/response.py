@@ -190,7 +190,7 @@ def get_ollama_response(
                         .strip()
                     )
                 response_content = json.loads(response_content)
-            print(response_content, type(response_content))
+            # print(response_content, type(response_content))
             result["response"] = response_content
         except json.JSONDecodeError:
             return {"error": f"Invalid JSON response: {response_content}"}

@@ -922,8 +922,8 @@ class NPC:
                         print(f"Error loading tool from project directory: {e}")
                         continue
 
-            print(tool_name)
-            print(tool_data)
+            # print(tool_name)
+            # print(tool_data)
             tool = Tool(tool_data)
             self.all_tools.append(tool)
             self.all_tools_dict[tool.tool_name] = tool
@@ -1271,7 +1271,7 @@ class NPCCompiler:
         # print(self.dirs)
         for directory in self.dirs:
             if os.path.exists(directory):
-                print(directory)
+
                 for filename in os.listdir(directory):
                     if filename.endswith(".npc"):
                         npc_path = os.path.join(directory, filename)
