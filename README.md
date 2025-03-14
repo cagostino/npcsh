@@ -26,6 +26,9 @@
 Interested to stay in the loop and to hear the latest and greatest about `npcsh` ? Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A)!
 
 
+ADD A QUICK CLI SLASH COMMAND CHEAT SHEET TABLE
+
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=cagostino/npcsh&type=Date)](https://star-history.com/#cagostino/npcsh&Date)
