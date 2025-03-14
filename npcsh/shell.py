@@ -192,6 +192,92 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
     messages = None
     current_conversation_id = start_new_conversation()
 
+        # --- Minimal Piped Input Handling ---
+    if not sys.stdin.isatty():
+        for line in sys.stdin:
+            user_input = line.strip()
+            if not user_input:
+                continue  # Skip empty lines
+            if user_input.lower() in ["exit", "quit"]:
+                print("Goodbye!")
+                sys.exit(0)
+            result = execute_command(
+                user_input,
+                command_history,
+                db_path,
+                npc_compiler,
+                current_npc,
+                model=NPCSH_CHAT_MODEL,
+                provider=NPCSH_CHAT_PROVIDER,
+                messages=messages,
+                conversation_id=current_conversation_id,
+                stream=NPCSH_STREAM_OUTPUT,
+                api_url=NPCSH_API_URL,
+            )
+            messages = result.get("messages", messages)
+            if "current_npc" in result:
+                current_npc = result["current_npc"]
+            output = result.get("output")
+            conversation_id = result.get("conversation_id")
+            model = result.get("model")
+            provider = result.get("provider")
+            npc = result.get("npc")
+            messages = result.get("messages")
+            current_path = result.get("current_path")
+            attachments = result.get("attachments")
+            npc_name = npc.name if isinstance(npc, NPC) else npc if isinstance(npc, str) else None
+
+            save_conversation_message(
+                command_history,
+                conversation_id,
+                "user",
+                user_input,
+                wd=current_path,
+                model=model,
+                provider=provider,
+                npc=npc_name,
+                attachments=attachments,
+            )
+            str_output = ""
+            if NPCSH_STREAM_OUTPUT:
+                for chunk in output:
+                    # (The same logic for streaming output remains unchanged)
+                    if provider == "anthropic":
+                        if chunk.type == "content_block_delta":
+                            chunk_content = chunk.delta.text
+                            if chunk_content:
+                                str_output += chunk_content
+                                print(chunk_content, end="")
+                    elif provider in ["openai", "deepseek", "openai-like"]:
+                        chunk_content = "".join(
+                            choice.delta.content for choice in chunk.choices if choice.delta.content is not None
+                        )
+                        if chunk_content:
+                            str_output += chunk_content
+                            print(chunk_content, end="")
+                    elif provider == "ollama":
+                        chunk_content = chunk["message"]["content"]
+                        if chunk_content:
+                            str_output += chunk_content
+                            print(chunk_content, end="")
+                print("\n")
+            if len(str_output) > 0:
+                output = str_output
+
+            save_conversation_message(
+                command_history,
+                conversation_id,
+                "assistant",
+                output,
+                wd=current_path,
+                model=model,
+                provider=provider,
+                npc=npc_name,
+            )
+        sys.exit(0)
+    # --- End Minimal Piped Input Handling ---
+
+
     while True:
         try:
             if current_npc:
@@ -325,3 +411,5 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             else:
                 print("\nGoodbye!")
                 break
+if __name__ == "__main__":
+    main()
