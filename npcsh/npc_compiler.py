@@ -415,7 +415,12 @@ Type '(e)dit', '(d)elete', or '(r)egenerate' or '(a)ccept': """
 
 
 def initialize_npc_project(
-    directory=None, templates=None, context=None, model=None, provider=None, ) -> str:
+    directory=None,
+    templates=None,
+    context=None,
+    model=None,
+    provider=None,
+) -> str:
     """
     Function Description:
         This function initializes an NPC project in the current directory.
@@ -436,7 +441,9 @@ def initialize_npc_project(
     # Create 'foreman.npc' file in 'npc_team' directory
     foreman_npc_path = os.path.join(npc_team_dir, "sibiji.npc")
     if context is not None:
-        team = conjure_team(context, templates=templates, model=model, provider=provider)
+        team = conjure_team(
+            context, templates=templates, model=model, provider=provider
+        )
 
     if not os.path.exists(foreman_npc_path):
         foreman_npc_content = """name: sibiji
@@ -782,6 +789,20 @@ class NPC:
         else:
             self.parsed_npcs = []
 
+    def get_memory(self):
+        return
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "primary_directive": self.primary_directive,
+            "model": self.model,
+            "provider": self.provider,
+            "tools": [tool.to_dict() for tool in self.tools],
+            "use_global_tools": self.use_global_tools,
+            "api_url": self.api_url,
+        }
+
     def _check_llm_command(
         self,
         command,
@@ -1066,7 +1087,10 @@ class NPC:
     def finalize_npc_profile(self, npc_file: str) -> dict:
         profile = self.resolved_npcs.get(os.path.basename(npc_file))
         if not profile:
-            raise ValueError(f"NPC {npc_file} has not been resolved.")
+            # try to resolve it with load_npc_from_file
+            profile = load_npc_from_file(npc_file, self.db_conn).to_dict()
+
+        #    raise ValueError(f"NPC {npc_file} has not been resolved.")
 
         # Resolve any remaining references
         # Log the profile content before processing
@@ -1297,7 +1321,9 @@ class NPCCompiler:
     def finalize_npc_profile(self, npc_file: str) -> dict:
         profile = self.resolved_npcs.get(os.path.basename(npc_file))
         if not profile:
-            raise ValueError(f"NPC {npc_file} has not been resolved.")
+            # try to resolve it with load_npc_from_file
+            profile = load_npc_from_file(npc_file, sqlite3.connect(self.db_path)).to_dict()
+
 
         # Resolve any remaining references
         # Log the profile content before processing

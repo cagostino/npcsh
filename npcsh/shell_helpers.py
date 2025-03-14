@@ -1138,13 +1138,14 @@ def execute_slash_command(
     command_parts = command.split()
     command_name = command_parts[0]
     args = command_parts[1:]
-    current_npc = None
 
+    current_npc = npc
     if command_name in valid_npcs:
         npc_path = get_npc_path(command_name, db_path)
         current_npc = load_npc_from_file(npc_path, db_conn)
         output = f"Switched to NPC: {current_npc.name}"
-        print(output)
+        # print(output)
+
         return {"messages": messages, "output": output, "current_npc": current_npc}
 
     if command_name == "compile" or command_name == "com":
@@ -1204,7 +1205,7 @@ def execute_slash_command(
         plonk_call = plonk(
             request, action_space, model=model, provider=provider, npc=npc
         )
-        return {"messages": messages, "output": plonk_call}
+        return {"messages": messages, "output": plonk_call, "current_npc": current_npc}
     elif command_name == "wander":
         return enter_wander_mode(args, messages, npc_compiler, npc, model, provider)
 
@@ -1522,7 +1523,12 @@ Bash commands and other programs can be executed directly. """
         output = f"Unknown command: {command_name}"
 
     subcommands = [f"/{command}"]
-    return {"messages": messages, "output": output, "subcommands": subcommands}
+    return {
+        "messages": messages,
+        "output": output,
+        "subcommands": subcommands,
+        "current_npc": current_npc,
+    }
 
 
 def execute_set_command(command: str, value: str) -> str:
@@ -1710,7 +1716,6 @@ def execute_command(
     command_history: CommandHistory,
     db_path: str,
     npc_compiler: NPCCompiler,
-    embedding_model: Union[SentenceTransformer, Any] = None,
     current_npc: NPC = None,
     model: str = None,
     provider: str = None,
@@ -1719,6 +1724,7 @@ def execute_command(
     messages: list = None,
     conversation_id: str = None,
     stream: bool = False,
+    embedding_model: Union[SentenceTransformer, Any] = None,
 ):
     """
     Function Description:
@@ -1741,7 +1747,7 @@ def execute_command(
     db_conn = sqlite3.connect(db_path)
     # print(f"Executing command: {command}")
     if len(command.strip()) == 0:
-        return {"messages": messages, "output": output}
+        return {"messages": messages, "output": output, "current_npc": current_npc}
 
     if messages is None:
         messages = []
@@ -1785,6 +1791,7 @@ def execute_command(
 
         # Rest of the existing logic remains EXACTLY the same
         # print(model_override, provider_override)
+
         if current_npc is None:
             valid_npcs = get_db_npcs(db_path)
 
@@ -1796,6 +1803,7 @@ def execute_command(
             npc = load_npc_from_file(npc_path, db_conn)
         else:
             npc = current_npc
+
         # print(single_command.startswith("/"))
         if single_command.startswith("/"):
             result = execute_slash_command(
@@ -1817,6 +1825,7 @@ def execute_command(
             output = result.get("output", "")
             new_messages = result.get("messages", None)
             subcommands = result.get("subcommands", [])
+            current_npc = result.get("current_npc", None)
 
         else:
             # print(single_command)
@@ -1845,6 +1854,7 @@ def execute_command(
                 return {
                     "messages": messages,
                     "output": f"Interactive {command_parts[0]} session ended with return code {return_code}",
+                    "current_npc": current_npc,
                 }
             elif command_parts[0] == "cd":
                 change_dir_result = change_directory(command_parts, messages)
@@ -1855,6 +1865,7 @@ def execute_command(
                     return {
                         "messages": messages,
                         "output": open_terminal_editor(command),
+                        "current_npc": current_npc,
                     }
                 elif command_parts[0] in ["cat", "find", "who", "open", "which"]:
                     if not validate_bash_command(command_parts):
@@ -1934,7 +1945,7 @@ def execute_command(
                 # print("LLM command")
                 # print(single_command)
                 # LLM command processing with existing logic
-                print(api_key, api_url)
+                # print(api_key, api_url)
                 output = check_llm_command(
                     single_command,
                     command_history,
@@ -2022,7 +2033,7 @@ def execute_command(
                 print(f"Warning: Failed to store embeddings: {str(e)}")
 
     # return following
-
+    # print(current_npc)
     return {
         "messages": messages,
         "output": output,
@@ -2030,8 +2041,8 @@ def execute_command(
         "model": model,
         "current_path": os.getcwd(),
         "provider": provider,
-        "npc": npc.name if npc else None,
-        command_history: command_history,
+        "current_npc": current_npc if current_npc else npc,
+        "command_history": command_history,
     }
 
 
