@@ -1114,6 +1114,11 @@ class SilentUndefined(Undefined):
         return ""
 
 
+# perhaps the npc compiling is more than just for jinja reasons.
+# we can turn each agent into a referenceable program executable.
+
+
+# finish testing out a python based version rather than jinja only
 class NPCCompiler:
     def __init__(
         self,
@@ -1322,8 +1327,9 @@ class NPCCompiler:
         profile = self.resolved_npcs.get(os.path.basename(npc_file))
         if not profile:
             # try to resolve it with load_npc_from_file
-            profile = load_npc_from_file(npc_file, sqlite3.connect(self.db_path)).to_dict()
-
+            profile = load_npc_from_file(
+                npc_file, sqlite3.connect(self.db_path)
+            ).to_dict()
 
         # Resolve any remaining references
         # Log the profile content before processing
