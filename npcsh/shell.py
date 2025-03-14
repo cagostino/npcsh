@@ -145,6 +145,8 @@ def main() -> None:
 
     npc_compiler = NPCCompiler(npc_directory, db_path)
 
+    os.makedirs(npc_directory, exist_ok=True)
+
     # Compile all NPCs in the user's npc_team directory
     for filename in os.listdir(npc_directory):
         if filename.endswith(".npc"):
