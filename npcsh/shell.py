@@ -77,6 +77,15 @@ import argparse
 from .serve import (
     start_flask_server,
 )
+import importlib.metadata  # Python 3.8+
+
+# Fetch the version from the package metadata
+try:
+    VERSION = importlib.metadata.version(
+        "npcsh"
+    )  # Replace "npcsh" with your package name
+except importlib.metadata.PackageNotFoundError:
+    VERSION = "unknown"  # Fallback if the package is not installed
 
 
 def main() -> None:
@@ -97,14 +106,13 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="npcsh CLI")
     parser.add_argument(
-        "command",
-        nargs="?",
-        default=None,
-        help="The command to run ('serve' to start Flask server)",
+        "-v",
+        "--version",
+        action="version",
+        version=f"npcsh version {VERSION}",  # Use the dynamically fetched version
     )
     args = parser.parse_args()
 
-    # If 'serve' is not provided, proceed with the regular CLI
     setup_npcsh_config()
     if "NPCSH_DB_PATH" in os.environ:
         db_path = os.path.expanduser(os.environ["NPCSH_DB_PATH"])
