@@ -444,7 +444,6 @@ def get_conversation(
 
 def execute_llm_question(
     command: str,
-    command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
     api_url: str = NPCSH_API_URL,
@@ -528,13 +527,11 @@ def execute_llm_question(
     # print(f"LLM response: {output}")
     # print(f"Messages: {messages}")
     # print("type of output", type(output))
-    command_history.add_command(command, [], output, location)
     return {"messages": messages, "output": output}
 
 
 def execute_llm_command(
     command: str,
-    command_history: Any,
     model: Optional[str] = None,
     provider: Optional[str] = None,
     api_url: str = NPCSH_API_URL,
@@ -550,7 +547,7 @@ def execute_llm_command(
         This function executes an LLM command.
     Args:
         command (str): The command to execute.
-        command_history (Any): The command history.
+
     Keyword Args:
         model (Optional[str]): The model to use for executing the command.
         provider (Optional[str]): The provider to use for executing the command.
@@ -677,7 +674,6 @@ def execute_llm_command(
             output = response.get("response", "")
 
             # render_markdown(output)
-            command_history.add_command(command, subcommands, output, location)
 
             return {"messages": messages, "output": output}
         except subprocess.CalledProcessError as e:
@@ -734,7 +730,6 @@ def execute_llm_command(
 
         attempt += 1
 
-    command_history.add_command(command, subcommands, "Execution failed", location)
     return {
         "messages": messages,
         "output": "Max attempts reached. Unable to execute the command successfully.",
@@ -743,7 +738,6 @@ def execute_llm_command(
 
 def check_llm_command(
     command: str,
-    command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
     api_url: str = NPCSH_API_URL,
@@ -760,7 +754,6 @@ def check_llm_command(
         This function checks an LLM command.
     Args:
         command (str): The command to check.
-        command_history (Any): The command history.
     Keyword Args:
         model (str): The model to use for checking the command.
         provider (str): The provider to use for checking the command.
@@ -899,14 +892,13 @@ def check_llm_command(
 
     # Proceed according to the action specified
     action = response_content_parsed.get("action")
-
+    explanation = response_content["explanation"]
     # Include the user's command in the conversation messages
 
     if action == "execute_command":
         # Pass messages to execute_llm_command
         result = execute_llm_command(
             command,
-            command_history,
             model=model,
             provider=provider,
             api_url=api_url,
@@ -924,10 +916,13 @@ def check_llm_command(
     elif action == "invoke_tool":
         tool_name = response_content_parsed.get("tool_name")
         # print(npc)
+
+        print(f"handle_tool_call invoked with tool_name: {tool_name}")
+        print(f"tool choice made because: {explanation}")
+
         result = handle_tool_call(
             command,
             tool_name,
-            command_history,
             model=model,
             provider=provider,
             api_url=api_url,
@@ -946,7 +941,6 @@ def check_llm_command(
     elif action == "answer_question":
         result = execute_llm_question(
             command,
-            command_history,
             model=model,
             provider=provider,
             api_url=api_url,
@@ -969,7 +963,6 @@ def check_llm_command(
         return npc.handle_agent_pass(
             npc_to_pass,
             command,
-            command_history,
             messages=messages,
             retrieved_docs=retrieved_docs,
             n_docs=n_docs,
@@ -1005,7 +998,6 @@ def check_llm_command(
 
         return check_llm_command(
             command + " \n \n \n extra context: " + request_input,
-            command_history,
             model=model,
             provider=provider,
             api_url=api_url,
@@ -1024,7 +1016,6 @@ def check_llm_command(
             result = handle_tool_call(
                 command,
                 tool_name,
-                command_history,
                 model=model,
                 provider=provider,
                 api_url=api_url,
@@ -1049,7 +1040,6 @@ def check_llm_command(
 def handle_tool_call(
     command: str,
     tool_name: str,
-    command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
     api_url: str = NPCSH_API_URL,
@@ -1068,7 +1058,6 @@ def handle_tool_call(
     Args:
         command (str): The command.
         tool_name (str): The tool name.
-        command_history (Any): The command history.
     Keyword Args:
         model (str): The model to use for handling the tool call.
         provider (str): The provider to use for handling the tool call.
@@ -1081,7 +1070,6 @@ def handle_tool_call(
         the tool call.
 
     """
-    print(f"handle_tool_call invoked with tool_name: {tool_name}")
     # print(npc)
     if not npc or not npc.all_tools_dict:
         print("not available")
@@ -1168,7 +1156,6 @@ def handle_tool_call(
             return handle_tool_call(
                 command,
                 tool_name,
-                command_history,
                 model=model,
                 provider=provider,
                 messages=messages,
@@ -1213,7 +1200,6 @@ def handle_tool_call(
 
 def execute_data_operations(
     query: str,
-    command_history: Any,
     dataframes: Dict[str, pd.DataFrame],
     npc: Any = None,
     db_path: str = "~/npcsh_history.db",
@@ -1223,7 +1209,7 @@ def execute_data_operations(
         This function executes data operations.
     Args:
         query (str): The query to execute.
-        command_history (Any): The command history.
+
         dataframes (Dict[str, pd.DataFrame]): The dictionary of dataframes.
     Keyword Args:
         npc (Any): The NPC object.

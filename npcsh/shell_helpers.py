@@ -38,7 +38,11 @@ from .npc_sysenv import (
     get_system_message,
     NPCSH_STREAM_OUTPUT,
 )
-
+from .command_history import (
+    CommandHistory,
+    save_attachment_to_message,
+    save_conversation_message,
+)
 from .embeddings import search_similar_texts, chroma_client
 
 from .llm_funcs import (
@@ -62,7 +66,7 @@ from .npc_compiler import (
     Tool,
     initialize_npc_project,
 )
-from .command_history import CommandHistory, save_conversation_message
+
 
 from .search import rag_search, search_web
 from .image import capture_screenshot, analyze_image
@@ -760,7 +764,6 @@ def execute_splat_command():
 
 def execute_rag_command(
     command: str,
-    command_history: CommandHistory,
     messages=None,
 ) -> dict:
     """
@@ -925,7 +928,6 @@ def execute_search_command(
         Executes a search command.
     Args:
         command : str : Command
-        command_history : CommandHistory : Command history
         db_path : str : Database path
         npc_compiler : NPCCompiler : NPC compiler
     Keyword Args:
@@ -1100,7 +1102,6 @@ def execute_tool_command(
 
 def execute_slash_command(
     command: str,
-    command_history: CommandHistory,
     db_path: str,
     db_conn: sqlite3.Connection,
     npc_compiler: NPCCompiler,
@@ -1117,7 +1118,6 @@ def execute_slash_command(
         Executes a slash command.
     Args:
         command : str : Command
-        command_history : CommandHistory : Command history
         db_path : str : Database path
         npc_compiler : NPCCompiler : NPC compiler
     Keyword Args:
@@ -1237,7 +1237,7 @@ def execute_slash_command(
     # Handle /rehash command
     elif command_name == "rehash":
         rehash_result = rehash_last_message(
-            command_history, conversation_id, model=model, provider=provider, npc=npc
+            conversation_id, model=model, provider=provider, npc=npc
         )
         return rehash_result  # Return the result of rehashing last message
 
@@ -1313,7 +1313,6 @@ def execute_slash_command(
             )
 
             output = analyze_image(
-                command_history,
                 user_prompt,
                 file_path,
                 filename,
@@ -1327,7 +1326,6 @@ def execute_slash_command(
             )
             # print(output["model_kwargs"])
             output = analyze_image(
-                command_history,
                 user_prompt,
                 output["file_path"],
                 output["filename"],
@@ -1398,28 +1396,28 @@ Bash commands and other programs can be executed directly. """
 
     elif command_name == "whisper":
         # try:
-        messages = enter_whisper_mode(command_history, npc=npc)
+        messages = enter_whisper_mode(npc=npc)
         output = "Exited whisper mode."
         # except Exception as e:
         #    print(f"Error entering whisper mode: {str(e)}")
         #    output = "Error entering whisper mode"
 
     elif command_name == "notes":
-        output = enter_notes_mode(command_history, npc=npc)
+        output = enter_notes_mode(npc=npc)
     elif command_name == "data":
         # print("data")
-        output = enter_data_mode(command_history, npc=npc)
-        # output = enter_observation_mode(command_history, npc=npc)
+        output = enter_data_mode(npc=npc)
+        # output = enter_observation_mode(, npc=npc)
     elif command_name == "cmd" or command_name == "command":
         output = execute_llm_command(
             command,
-            command_history,
             npc=npc,
             stream=stream,
             messages=messages,
         )
+
     elif command_name == "rag":
-        output = execute_rag_command(command, command_history, messages=messages)
+        output = execute_rag_command(command, messages=messages)
         messages = output["messages"]
         output = output["output"]
 
@@ -1444,7 +1442,6 @@ Bash commands and other programs can be executed directly. """
     elif command_name == "sample":
         output = execute_llm_question(
             " ".join(command.split()[1:]),  # Skip the command name
-            command_history,
             npc=npc,
             messages=[],
             model=model,
@@ -1600,7 +1597,6 @@ def flush_messages(n: int, messages: list) -> dict:
 
 
 def rehash_last_message(
-    command_history: CommandHistory,
     conversation_id: str,
     model: str,
     provider: str,
@@ -1608,7 +1604,7 @@ def rehash_last_message(
     stream: bool = False,
 ) -> dict:
     # Fetch the last message or command related to this conversation ID
-
+    command_history = CommandHistory()
     last_message = command_history.get_last_conversation(conversation_id)
     if last_message is None:
         convo_id = command_history.get_most_recent_conversation_id()[0]
@@ -1617,7 +1613,6 @@ def rehash_last_message(
     user_command = last_message[3]  # Assuming content is in the 4th column
     return check_llm_command(
         user_command,
-        command_history,
         model=model,
         provider=provider,
         npc=npc,
@@ -1713,7 +1708,6 @@ def replace_pipe_outputs(command: str, piped_outputs: list, cmd_idx: int) -> str
 
 def execute_command(
     command: str,
-    command_history: CommandHistory,
     db_path: str,
     npc_compiler: NPCCompiler,
     current_npc: NPC = None,
@@ -1731,7 +1725,7 @@ def execute_command(
         Executes a command, with support for piping outputs between commands.
     Args:
         command : str : Command
-        command_history : CommandHistory : Command history
+
         db_path : str : Database path
         npc_compiler : NPCCompiler : NPC compiler
     Keyword Args:
@@ -1808,7 +1802,6 @@ def execute_command(
         if single_command.startswith("/"):
             result = execute_slash_command(
                 single_command,
-                command_history,
                 db_path,
                 db_conn,
                 npc_compiler,
@@ -1872,7 +1865,6 @@ def execute_command(
                         output = "Error: Invalid command syntax or arguments"
                         output = check_llm_command(
                             command,
-                            command_history,
                             npc=npc,
                             messages=messages,
                             model=model_override,
@@ -1948,7 +1940,6 @@ def execute_command(
                 # print(api_key, api_url)
                 output = check_llm_command(
                     single_command,
-                    command_history,
                     npc=npc,
                     messages=messages,
                     model=model_override,
@@ -2042,13 +2033,11 @@ def execute_command(
         "current_path": os.getcwd(),
         "provider": provider,
         "current_npc": current_npc if current_npc else npc,
-        "command_history": command_history,
     }
 
 
 def execute_command_stream(
     command: str,
-    command_history: CommandHistory,
     db_path: str,
     npc_compiler: NPCCompiler,
     embedding_model: Union[SentenceTransformer, Any] = None,
@@ -2063,7 +2052,7 @@ def execute_command_stream(
         Executes a command, with support for piping outputs between commands.
     Args:
         command : str : Command
-        command_history : CommandHistory : Command history
+
         db_path : str : Database path
         npc_compiler : NPCCompiler : NPC compiler
     Keyword Args:
@@ -2126,7 +2115,6 @@ def execute_command_stream(
         if single_command.startswith("/"):
             return execute_slash_command(
                 single_command,
-                command_history,
                 db_path,
                 db_conn,
                 npc_compiler,
@@ -2141,7 +2129,6 @@ def execute_command_stream(
         else:  # LLM command processing with existing logic
             return check_llm_command(
                 single_command,
-                command_history,
                 npc=npc,
                 messages=messages,
                 model=model_override,
@@ -2151,7 +2138,6 @@ def execute_command_stream(
 
 
 def enter_whisper_mode(
-    command_history: Any,
     messages: list = None,
     npc: Any = None,
     spool=False,
@@ -2162,7 +2148,6 @@ def enter_whisper_mode(
     Function Description:
         This function is used to enter the whisper mode.
     Args:
-        command_history : Any : The command history object.
     Keyword Args:
         npc : Any : The NPC object.
     Returns:
@@ -2220,7 +2205,7 @@ def enter_whisper_mode(
             break
         if not spool:
             llm_response = check_llm_command(
-                text, command_history, npc=npc, messages=messages, stream=stream
+                text, npc=npc, messages=messages, stream=stream
             )  # Use
 
             messages = llm_response["messages"]
@@ -2251,12 +2236,12 @@ def enter_whisper_mode(
     return messages
 
 
-def enter_notes_mode(command_history: Any, npc: Any = None) -> None:
+def enter_notes_mode(npc: Any = None) -> None:
     """
     Function Description:
 
     Args:
-        command_history : Any : The command history object.
+
     Keyword Args:
         npc : Any : The NPC object.
     Returns:
@@ -2264,7 +2249,7 @@ def enter_notes_mode(command_history: Any, npc: Any = None) -> None:
 
     """
 
-    npc_name = npc.name if npc else "base"
+    npc_name = npc.name if npc else "sibiji"
     print(f"Entering notes mode (NPC: {npc_name}). Type '/nq' to exit.")
 
     while True:
@@ -2273,18 +2258,18 @@ def enter_notes_mode(command_history: Any, npc: Any = None) -> None:
         if note.lower() == "/nq":
             break
 
-        save_note(note, command_history, npc)
+        save_note(note, npc)
 
     print("Exiting notes mode.")
 
 
-def save_note(note: str, command_history: Any, npc: Any = None) -> None:
+def save_note(note: str, db_conn, npc: Any = None) -> None:
     """
     Function Description:
         This function is used to save a note.
     Args:
         note : str : The note to save.
-        command_history : Any : The command history object.
+
     Keyword Args:
         npc : Any : The NPC object.
     Returns:
@@ -2293,9 +2278,6 @@ def save_note(note: str, command_history: Any, npc: Any = None) -> None:
     current_dir = os.getcwd()
     timestamp = datetime.datetime.now().isoformat()
     npc_name = npc.name if npc else "base"
-
-    # Assuming command_history has a method to access the database connection
-    conn = command_history.conn
     cursor = conn.cursor()
 
     # Create notes table if it doesn't exist
@@ -2328,12 +2310,12 @@ def save_note(note: str, command_history: Any, npc: Any = None) -> None:
         f.write(note)
 
 
-def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
+def enter_data_analysis_mode(npc: Any = None) -> None:
     """
     Function Description:
         This function is used to enter the data analysis mode.
     Args:
-        command_history : Any : The command history object.
+
     Keyword Args:
         npc : Any : The NPC object.
     Returns:
@@ -2371,10 +2353,6 @@ def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
                 df = pd.read_csv(file_path)
                 dataframes[df_name] = df
                 print(f"Data loaded into dataframe '{df_name}'")
-                # Record in command_history
-                command_history.add_command(
-                    user_input, ["load"], f"Loaded data into {df_name}", os.getcwd()
-                )
             except Exception as e:
                 print(f"Error loading data: {e}")
 
@@ -2387,9 +2365,7 @@ def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
                 # Optionally store result in a dataframe
                 dataframes["sql_result"] = df
                 print("Result stored in dataframe 'sql_result'")
-                command_history.add_command(
-                    user_input, ["sql"], "Executed SQL query", os.getcwd()
-                )
+
             except Exception as e:
                 print(f"Error executing SQL query: {e}")
 
@@ -2401,9 +2377,6 @@ def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
                 exec_globals = {"pd": pd, "plt": plt, **dataframes}
                 exec(code, exec_globals)
                 plt.show()
-                command_history.add_command(
-                    user_input, ["plot"], "Generated plot", os.getcwd()
-                )
             except Exception as e:
                 print(f"Error generating plot: {e}")
 
@@ -2421,9 +2394,6 @@ def enter_data_analysis_mode(command_history: Any, npc: Any = None) -> None:
                         for k, v in exec_globals.items()
                         if isinstance(v, pd.DataFrame)
                     }
-                )
-                command_history.add_command(
-                    user_input, ["exec"], "Executed code", os.getcwd()
                 )
             except Exception as e:
                 print(f"Error executing code: {e}")
@@ -2449,12 +2419,12 @@ Available commands:
     print("Exiting data analysis mode.")
 
 
-def enter_data_mode(command_history: Any, npc: Any = None) -> None:
+def enter_data_mode(npc: Any = None) -> None:
     """
     Function Description:
         This function is used to enter the data mode.
     Args:
-        command_history : Any : The command history object.
+
     Keyword Args:
         npc : Any : The NPC object.
     Returns:
@@ -2590,7 +2560,6 @@ def enter_data_mode(command_history: Any, npc: Any = None) -> None:
 
 
 def enter_spool_mode(
-    command_history: Any,
     inherit_last: int = 0,
     model: str = None,
     provider: str = None,
@@ -2606,7 +2575,7 @@ def enter_spool_mode(
     Function Description:
         This function is used to enter the spool mode where files can be loaded into memory.
     Args:
-        command_history : Any : The command history object.
+
         inherit_last : int : The number of last commands to inherit.
         npc : Any : The NPC object.
         files : List[str] : List of file paths to load into the context.
@@ -2614,6 +2583,7 @@ def enter_spool_mode(
         Dict : The messages and output.
 
     """
+    command_history = CommandHistory()
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")
 
@@ -2627,6 +2597,7 @@ def enter_spool_mode(
     if not conversation_id:
         conversation_id = start_new_conversation()
 
+    command_history = CommandHistory()
     # Load specified files if any
     if files:
         for file in files:
@@ -2676,7 +2647,6 @@ def enter_spool_mode(
                 # send the most recent message
                 print("Rehashing last message...")
                 output = rehash_last_message(
-                    command_history,
                     conversation_id,
                     model=model,
                     provider=provider,
@@ -2688,7 +2658,7 @@ def enter_spool_mode(
                 output = output.get("output", "")
 
             if user_input.lower() == "/whisper":  # Check for whisper command
-                messages = enter_whisper_mode(command_history, spool_context, npc)
+                messages = enter_whisper_mode(spool_context, npc)
                 # print(messages)  # Optionally print output from whisper mode
                 continue  # Continue with spool mode after exiting whisper mode
 
@@ -2877,13 +2847,6 @@ def enter_spool_mode(
                     f"Conversation result: {conversation_result}"
                 )  # Print for debugging
                 continue
-
-            command_history.add_command(
-                user_input,
-                ["spool", npc.name if npc else ""],
-                assistant_reply,
-                os.getcwd(),
-            )
 
             # Save assistant's response to conversation history
             save_conversation_message(

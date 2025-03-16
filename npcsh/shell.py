@@ -222,7 +222,6 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             # Execute the command and capture the result
             result = execute_command(
                 user_input,
-                command_history,
                 db_path,
                 npc_compiler,
                 current_npc=current_npc,

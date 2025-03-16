@@ -231,7 +231,6 @@ def analyze_image_base(
 
 
 def analyze_image(
-    command_history: Any,
     user_prompt: str,
     file_path: str,
     filename: str,
@@ -244,7 +243,7 @@ def analyze_image(
     Function Description:
         This function captures a screenshot, analyzes it using the LLM model, and returns the response.
     Args:
-        command_history: The command history object to add the command to.
+
         user_prompt: The user prompt to provide to the LLM model.
         file_path: The path to the image file.
         filename: The name of the image file.
@@ -276,12 +275,6 @@ def analyze_image(
 
                     print(response)
                     # Add to command history *inside* the try block
-                    command_history.add_command(
-                        f"screenshot with prompt: {user_prompt}",
-                        ["screenshot", npc.name if npc else ""],
-                        response,
-                        os.getcwd(),
-                    )
                     return response
 
             except Exception as e:

@@ -1,5 +1,5 @@
-tool_name: "generic_search"
-description: Searches the web for information based on a query
+tool_name: "internet_search"
+description: Searches the web for information based on a query in order to verify timiely details (e.g. current events) or to corroborate information in uncertain situations.
 inputs:
   - query
 steps:

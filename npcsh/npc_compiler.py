@@ -806,14 +806,12 @@ class NPC:
     def _check_llm_command(
         self,
         command,
-        command_history,
         retrieved_docs=None,
         messages=None,
         n_docs=5,
     ):
         return check_llm_command(
             command,
-            command_history,
             model=self.model,
             provider=self.provider,
             npc=self,
@@ -826,7 +824,6 @@ class NPC:
         self,
         npc_to_pass: Any,
         command: str,
-        command_history: Any,
         messages: List[Dict[str, str]] = None,
         retrieved_docs=None,
         n_docs: int = 5,
@@ -836,7 +833,7 @@ class NPC:
             This function handles an agent pass.
         Args:
             command (str): The command.
-            command_history (Any): The command history.
+
         Keyword Args:
             model (str): The model to use for handling the agent pass.
             provider (str): The provider to use for handling the agent pass.
@@ -873,7 +870,6 @@ class NPC:
         )
         return npc_to_pass_init._check_llm_command(
             updated_command,
-            command_history,
             retrieved_docs=retrieved_docs,
             messages=messages,
             n_docs=n_docs,
