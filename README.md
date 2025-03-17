@@ -27,7 +27,7 @@ Interested to stay in the loop and to hear the latest and greatest about `npcsh`
 
 
 ## TLDR Cheat Sheet
-Users can take advantage of `npcsh` through its custom shell or through a command-line interface (CLI) tool. Below is a cheat sheet that shows how to use `npcsh` commands in both the shell and the CLI.
+Users can take advantage of `npcsh` through its custom shell or through a command-line interface (CLI) tool. Below is a cheat sheet that shows how to use `npcsh` commands in both the shell and the CLI. For the npcsh commands to work, one must activate `npcsh` by typing it in a shell.
 
 | Task | npc CLI | npcsh |
 |----------|----------|----------|

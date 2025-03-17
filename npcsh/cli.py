@@ -17,7 +17,7 @@ from .serve import start_flask_server
 from .npc_compiler import (
     initialize_npc_project,
     conjure_team,
-    compile_npc,
+    NPCCompiler,
 )
 from .llm_funcs import (
     check_llm_command,
@@ -30,17 +30,33 @@ from .llm_funcs import (
     get_stream,
     get_conversation,
 )
+from .shell_helpers import *
 import os
+
+# check if ./npc_team exists
+if os.path.exists("./npc_team"):
+
+    npc_directory = os.path.abspath("./npc_team/")
+else:
+    npc_directory = os.path.expanduser("~/.npcsh/npc_team/")
+
+npc_compiler = NPCCompiler(npc_directory, NPCSH_DB_PATH)
 
 
 def main():
     parser = argparse.ArgumentParser(description="NPC utilities")
+    # parser.add_argument(
+    #    "prompt", nargs="?", help="Generic prompt to send to the default LLM"
+    # )
+
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # Generic prompt parser (for "npc 'prompt'")
-    parser.add_argument(
-        "prompt", nargs="?", help="Generic prompt to send to the default LLM"
-    )
+
+    # need it so that this prompt is just automatically resolved as the only argument if no positional ones are provided
+    # parser.add_argument(
+    #    "prompt", nargs="?", help="Generic prompt to send to the default LLM"
+    # )
 
     ### ASSEMBLY LINE PARSER
     assembly_parser = subparsers.add_parser("assemble", help="Run an NPC assembly line")
@@ -250,7 +266,8 @@ def main():
 
     # Image generation
     vixynt_parser = subparsers.add_parser("vixynt", help="generate an image")
-    vixynt_parser.add_argument("prompt", help="the prompt to generate the image")
+    vixynt_parser.add_argument("spell", help="the prompt to generate the image")
+
     vixynt_parser.add_argument(
         "--model", "-m", help="model", type=str, default=NPCSH_IMAGE_GEN_MODEL
     )
@@ -283,12 +300,14 @@ def main():
 
     # Handle generic prompt if provided
     if hasattr(args, "prompt") and args.prompt and not args.command:
-        from .llm_funcs import execute_llm_command
-
-        response = execute_llm_command(
-            args.prompt, model=NPCSH_CHAT_MODEL, provider=NPCSH_CHAT_PROVIDER
+        response = execute_command(
+            args.prompt,
+            db_path=NPCSH_DB_PATH,
+            model=NPCSH_CHAT_MODEL,
+            provider=NPCSH_CHAT_PROVIDER,
         )
-        return
+        print(response)
+        return response
 
     # Handle NPC chat if the command matches an NPC name
     if args.command and not args.command.startswith("-"):
@@ -383,10 +402,9 @@ def main():
             provider=args.provider,
         )
         print(result)
-
     elif args.command == "vixynt":
         image_path = generate_image(
-            args.prompt,
+            args.spell,
             model=args.model,
             provider=args.provider,
         )

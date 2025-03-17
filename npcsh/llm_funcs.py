@@ -46,6 +46,7 @@ from .npc_sysenv import (
     EMBEDDINGS_DB_PATH,
     NPCSH_EMBEDDING_MODEL,
     NPCSH_EMBEDDING_PROVIDER,
+    NPCSH_DEFAULT_MODE,
     NPCSH_REASONING_MODEL,
     NPCSH_REASONING_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
@@ -54,6 +55,8 @@ from .npc_sysenv import (
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     chroma_client,
+    available_reasoning_models,
+    available_chat_models,
 )
 
 from .stream import (
@@ -740,6 +743,8 @@ def check_llm_command(
     command: str,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    reasoning_model: str = NPCSH_REASONING_MODEL,
+    reasoning_provider: str = NPCSH_REASONING_PROVIDER,
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
     npc: Any = None,
@@ -763,7 +768,22 @@ def check_llm_command(
     Returns:
         Any: The result of checking the LLM command.
     """
+    ENTER_REASONING_FLOW = False
+    if model in available_reasoning_models:
+        print(
+            """
+Model provided is a reasoning model, defaulting to non reasoning model for
+ReAct choices then will enter reasoning flow
+            """
+        )
+        ENTER_REASONING_FLOW = True
+        reasoning_model = model
+        reasoning_provider = provider
 
+        model = NPCSH_CHAT_MODEL
+        provider = NPCSH_CHAT_PROVIDER
+    elif NPCSH_DEFAULT_MODE == "reasoning":
+        ENTER_REASONING_FLOW = True
     if messages is None:
         messages = []
 
@@ -792,6 +812,7 @@ def check_llm_command(
 
     Available tools:
     """
+
     if npc.all_tools_dict is None:
         prompt += "No tools available."
     else:
@@ -894,6 +915,8 @@ def check_llm_command(
     action = response_content_parsed.get("action")
     explanation = response_content["explanation"]
     # Include the user's command in the conversation messages
+    print(f"action chosen: {action}")
+    print(f"explanation given: {explanation}")
 
     if action == "execute_command":
         # Pass messages to execute_llm_command
@@ -917,9 +940,6 @@ def check_llm_command(
         tool_name = response_content_parsed.get("tool_name")
         # print(npc)
 
-        print(f"handle_tool_call invoked with tool_name: {tool_name}")
-        print(f"tool choice made because: {explanation}")
-
         result = handle_tool_call(
             command,
             tool_name,
@@ -939,18 +959,25 @@ def check_llm_command(
         return {"messages": messages, "output": output}
 
     elif action == "answer_question":
-        result = execute_llm_question(
-            command,
-            model=model,
-            provider=provider,
-            api_url=api_url,
-            api_key=api_key,
-            messages=messages,
-            npc=npc,
-            retrieved_docs=retrieved_docs,
-            stream=stream,
-            images=images,
-        )
+
+        if ENTER_REASONING_FLOW:
+            print("entering reasoning flow")
+            result = enter_reasoning_human_in_the_loop(
+                messages, reasoning_model, reasoning_provider
+            )
+        else:
+            result = execute_llm_question(
+                command,
+                model=model,
+                provider=provider,
+                api_url=api_url,
+                api_key=api_key,
+                messages=messages,
+                npc=npc,
+                retrieved_docs=retrieved_docs,
+                stream=stream,
+                images=images,
+            )
         if stream:
             return result
         messages = result.get("messages", messages)
