@@ -734,6 +734,7 @@ Citation Links: ['https://en.wikipedia.org/wiki/List_of_presidents_of_the_United
 
 Bash:
 
+```bash
 (npcsh) caug@pop-os:~/npcww/npcsh$ npc search 'simon bolivar' -sp perplexity
 Loaded .env file from /home/caug/npcww/npcsh
 urls ['https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar', 'https://www.britannica.com/biography/Simon-Bolivar', 'https://en.wikipedia.org/wiki/File:Sim%C3%B3n_Bol%C3%ADvar_2.jpg', 'https://www.historytoday.com/archive/simon-bolivar-and-spanish-revolutions', 'https://kids.britannica.com/kids/article/Sim%C3%B3n-Bol%C3%ADvar/352872']
