@@ -67,6 +67,7 @@ def get_available_models() -> list:
     available_reasoning_models = []
 
     ollama_chat_models = [
+        "gemma3",
         "llama3.3",
         "llama3.2",
         "llama3.1" "phi4",
@@ -96,8 +97,9 @@ def get_available_models() -> list:
     ]
     available_chat_models.extend(ollama_chat_models)
 
-    ollama_reasoning_models = ["deepseek-r1"]
+    ollama_reasoning_models = ["deepseek-r1", "qwq"]
     available_reasoning_models.extend(ollama_reasoning_models)
+
     # OpenAI models
     openai_chat_models = [
         "gpt-4-turbo",
@@ -184,7 +186,7 @@ def get_system_message(npc: Any) -> str:
     For these purposes, you may use any data contained within these sql tables
     {npc.tables}
 
-    which are contained in the database at {npcsh_db_path}.
+    which are contained in the database at {NPCSH_DB_PATH}.
 
     If you ever need to produce markdown texts for the user, please do so
     with less than 80 characters width for each line.
@@ -341,6 +343,8 @@ def compress_image(image_bytes, max_size=(800, 600)):
     out_buffer = io.BytesIO()
     img.save(out_buffer, format="JPEG", quality=95, optimize=False)
     return out_buffer.getvalue()
+
+
 load_env_from_execution_dir()
 deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", None)
 gemini_api_key = os.getenv("GEMINI_API_KEY", None)
@@ -352,12 +356,14 @@ NPCSH_CHAT_MODEL = os.environ.get("NPCSH_CHAT_MODEL", "llama3.2")
 # print("NPCSH_CHAT_MODEL", NPCSH_CHAT_MODEL)
 NPCSH_CHAT_PROVIDER = os.environ.get("NPCSH_CHAT_PROVIDER", "ollama")
 # print("NPCSH_CHAT_PROVIDER", NPCSH_CHAT_PROVIDER)
-npcsh_db_path = os.path.expanduser(
+NPCSH_DB_PATH = os.path.expanduser(
     os.environ.get("NPCSH_DB_PATH", "~/npcsh_history.db")
 )
 NPCSH_VECTOR_DB_PATH = os.path.expanduser(
     os.environ.get("NPCSH_VECTOR_DB_PATH", "~/npcsh_chroma.db")
 )
+NPCSH_DEFAULT_MODE = os.path.expanduser(os.environ.get("NPCSH_DEFAULT_MODE", "chat"))
+
 NPCSH_VISION_MODEL = os.environ.get("NPCSH_VISION_MODEL", "llava7b")
 NPCSH_VISION_PROVIDER = os.environ.get("NPCSH_VISION_PROVIDER", "ollama")
 NPCSH_IMAGE_GEN_MODEL = os.environ.get(
@@ -370,3 +376,4 @@ NPCSH_REASONING_MODEL = os.environ.get("NPCSH_REASONING_MODEL", "deepseek-r1")
 NPCSH_REASONING_PROVIDER = os.environ.get("NPCSH_REASONING_PROVIDER", "ollama")
 NPCSH_STREAM_OUTPUT = eval(os.environ.get("NPCSH_STREAM_OUTPUT", "0")) == 1
 NPCSH_API_URL = os.environ.get("NPCSH_API_URL", None)
+NPCSH_SEARCH_PROVIDER = os.environ.get("NPCSH_SEARCH_PROVIDER", "duckduckgo")

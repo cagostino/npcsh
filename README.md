@@ -26,6 +26,27 @@
 Interested to stay in the loop and to hear the latest and greatest about `npcsh` ? Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A)!
 
 
+## TLDR Cheat Sheet
+Users can take advantage of `npcsh` through its custom shell or through a command-line interface (CLI) tool. Below is a cheat sheet that shows how to use `npcsh` commands in both the shell and the CLI. For the npcsh commands to work, one must activate `npcsh` by typing it in a shell.
+
+| Task | npc CLI | npcsh |
+|----------|----------|----------|
+| Ask a generic question | npc 'prompt' | 'prompt' |
+| Compile an NPC | npc compile /path/to/npc.npc | /compile /path/to/npc.npc |
+| Computer use | npc plonk -n 'npc_name' -sp 'task for plonk to carry out '| /plonk -n 'npc_name' -sp 'task for plonk to carry out ' |
+| Conjure an NPC team from context and templates | npc init -t 'template1, template2' -ctx 'context'   | /conjure  -t 'template1, 'template2' -ctx 'context'  |
+| Enter a chat with an NPC (NPC needs to be compiled first) | npc npc_name | /npc_name |
+| Generate image    | npc vixynt 'prompt'  | /vixynt prompt   |
+| Get a sample LLM response  | npc sample 'prompt'   | /sample prompt for llm  |
+| Invoke a tool  | npc tool {tool_name} -args --flags | /tool_name -args --flags |
+| Search locally | npc tool local_search -args --flags | /local_search -args --flags |
+| Search for a term in the npcsh_db only in conversations with a specific npc | npc rag -n 'npc_name' -f 'filename' -q 'query' | /rag -n 'npc_name' -f 'filename' -q 'query' |
+| Search the web | npc search -p provider 'query' | /search -p provider 'query' |
+| Serve an NPC team | npc serve --port 5337 --cors='http://localhost:5137/' | /serve --port 5337 --cors='http://localhost:5137/' |
+| Screenshot analysis  | npc ots |  /ots  |
+| Voice Chat    | npc whisper 'npc_name'   | /whisper   |
+
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=cagostino/npcsh&type=Date)](https://star-history.com/#cagostino/npcsh&Date)
@@ -412,16 +433,139 @@ npcsh> vim file.txt
 
 ```
 
+### NPC CLI
+When npcsh is installed, it comes with the `npc` cli as well. The `npc` cli has various command to make initializing and serving NPC projects easier.
+
+Users can make queries like so:
+```bash
+$ npc 'whats the biggest filei  n my computer'
+Loaded .env file from /home/caug/npcww/npcsh
+action chosen: request_input
+explanation given: The user needs to provide more context about their operating system or specify which directory to search for the biggest file.
+
+Additional input needed: The user did not specify their operating system or the directory to search for the biggest file, making it unclear how to execute the command.
+Please specify your operating system (e.g., Windows, macOS, Linux) and the directory you want to search in.: linux and root
+action chosen: execute_command
+explanation given: The user is asking for the biggest file on their computer, which can be accomplished with a simple bash command that searches for the largest files.
+sibiji generating command
+LLM suggests the following bash command: sudo find / -type f -exec du -h {} + | sort -rh | head -n 1
+Running command: sudo find / -type f -exec du -h {} + | sort -rh | head -n 1
+Command executed with output: 11G       /home/caug/.cache/huggingface/hub/models--state-spaces--mamba-2.8b/blobs/39911a8470a2b256016b57cc71c68e0f96751cba5b229216ab1f4f9d82096a46
+
+I ran a command on your Linux system that searches for the largest files on your computer. The command `sudo find / -type f -exec du -h {} + | sort -rh | head -n 1` performs the following steps:
+
+1. **Find Command**: It searches for all files (`-type f`) starting from the root directory (`/`).
+2. **Disk Usage**: For each file found, it calculates its disk usage in a human-readable format (`du -h`).
+3. **Sort**: It sorts the results in reverse order based on size (`sort -rh`), so the largest files appear first.
+4. **Head**: Finally, it retrieves just the largest file using `head -n 1`.
+
+The output indicates that the biggest file on your system is located at `/home/caug/.cache/huggingface/hub/models--state-spaces--mamba-2.8b/blobs/39911a8470a2b256016b57cc71c68e0f96751cba5b229216ab1f4f9d82096a46` and is 11GB in size.
+
+```
+
+```bash
+$ npc 'whats the weather in tokyo'
+Loaded .env file from /home/caug/npcww/npcsh
+action chosen: invoke_tool
+explanation given: The user's request for the current weather in Tokyo requires up-to-date information, which can be best obtained through an internet search.
+Tool found: internet_search
+Executing tool with input values: {'query': 'whats the weather in tokyo'}
+QUERY in tool whats the weather in tokyo
+[{'title': 'Tokyo, Tokyo, Japan Weather Forecast | AccuWeather', 'href': 'https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396', 'body': 'Tokyo, Tokyo, Japan Weather Forecast, with current conditions, wind, air quality, and what to expect for the next 3 days.'}, {'title': 'Tokyo, Japan 14 day weather forecast - timeanddate.com', 'href': 'https://www.timeanddate.com/weather/japan/tokyo/ext', 'body': 'Tokyo Extended Forecast with high and low temperatures. °F. Last 2 weeks of weather'}, {'title': 'Tokyo, Tokyo, Japan Current Weather | AccuWeather', 'href': 'https://www.accuweather.com/en/jp/tokyo/226396/current-weather/226396', 'body': 'Current weather in Tokyo, Tokyo, Japan. Check current conditions in Tokyo, Tokyo, Japan with radar, hourly, and more.'}, {'title': 'Weather in Tokyo, Japan - timeanddate.com', 'href': 'https://www.timeanddate.com/weather/japan/tokyo', 'body': 'Current weather in Tokyo and forecast for today, tomorrow, and next 14 days'}, {'title': 'Tokyo Weather Forecast Today', 'href': 'https://japanweather.org/tokyo', 'body': "For today's mild weather in Tokyo, with temperatures between 13ºC to 16ºC (55.4ºF to 60.8ºF), consider wearing: - Comfortable jeans or slacks - Sun hat (if spending time outdoors) - Lightweight sweater or cardigan - Long-sleeve shirt or blouse. Temperature. Day. 14°C. Night. 10°C. Morning. 10°C. Afternoon."}] <class 'list'>
+RESULTS in tool ["Tokyo, Tokyo, Japan Weather Forecast, with current conditions, wind, air quality, and what to expect for the next 3 days.\n Citation: https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396\n\n\n\nTokyo Extended Forecast with high and low temperatures. °F. Last 2 weeks of weather\n Citation: https://www.timeanddate.com/weather/japan/tokyo/ext\n\n\n\nCurrent weather in Tokyo, Tokyo, Japan. Check current conditions in Tokyo, Tokyo, Japan with radar, hourly, and more.\n Citation: https://www.accuweather.com/en/jp/tokyo/226396/current-weather/226396\n\n\n\nCurrent weather in Tokyo and forecast for today, tomorrow, and next 14 days\n Citation: https://www.timeanddate.com/weather/japan/tokyo\n\n\n\nFor today's mild weather in Tokyo, with temperatures between 13ºC to 16ºC (55.4ºF to 60.8ºF), consider wearing: - Comfortable jeans or slacks - Sun hat (if spending time outdoors) - Lightweight sweater or cardigan - Long-sleeve shirt or blouse. Temperature. Day. 14°C. Night. 10°C. Morning. 10°C. Afternoon.\n Citation: https://japanweather.org/tokyo\n\n\n", 'https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396\n\nhttps://www.timeanddate.com/weather/japan/tokyo/ext\n\nhttps://www.accuweather.com/en/jp/tokyo/226396/current-weather/226396\n\nhttps://www.timeanddate.com/weather/japan/tokyo\n\nhttps://japanweather.org/tokyo\n']
+The current weather in Tokyo, Japan is mild, with temperatures ranging from 13°C to 16°C (approximately 55.4°F to 60.8°F). For today's conditions, it is suggested to wear comfortable jeans or slacks, a lightweight sweater or cardigan, and a long-sleeve shirt or blouse, especially if spending time outdoors. The temperature today is expected to reach a high of 14°C (57.2°F) during the day and a low of 10°C (50°F) at night.
+
+For more detailed weather information, you can check out the following sources:
+- [AccuWeather Forecast](https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396)
+- [Time and Date Extended Forecast](https://www.timeanddate.com/weather/japan/tokyo/ext)
+- [Current Weather on AccuWeather](https://www.accuweather.com/en/jp/tokyo/226396/current-weather/226396)
+- [More on Time and Date](https://www.timeanddate.com/weather/japan/tokyo)
+- [Japan Weather](https://japanweather.org/tokyo)
+```
+
+
+### Serving
+To serve an NPC project, first install redis-server and start it
+
+on Ubuntu:
+```bash
+sudo apt update && sudo apt install redis-server
+redis-server
+```
+
+on macOS:
+```bash
+brew install redis
+redis-server
+```
+Then navigate to the project directory and run:
+
+```bash
+npc serve
+```
+If you want to specify a certain port, you can do so with the `-p` flag:
+```bash
+npc serve -p 5337
+```
+or with the `--port` flag:
+```bash
+npc serve --port 5337
+
+```
+If you want to initialize a project based on templates and then make it available for serving, you can do so like this
+```bash
+npc serve -t 'sales, marketing' -ctx 'im developing a team that will focus on sales and marketing within the logging industry. I need a team that can help me with the following: - generate leads - create marketing campaigns - build a sales funnel - close deals - manage customer relationships - manage sales pipeline - manage marketing campaigns - manage marketing budget' -m llama3.2 -pr ollama
+```
+This will use the specified model and provider to generate a team of npcs to fit the templates and context provided.
+
+
+Once the server is up and running, you can access the API endpoints at `http://localhost:5337/api/`. Here are some example curl commands to test the endpoints:
+
+```bash
+echo "Testing health endpoint..."
+curl -s http://localhost:5337/api/health | jq '.'
+
+echo -e "\nTesting execute endpoint..."
+curl -s -X POST http://localhost:5337/api/execute \
+  -H "Content-Type: application/json" \
+  -d '{"commandstr": "hello world", "currentPath": "~/", "conversationId": "test124"}' | jq '.'
+
+echo -e "\nTesting conversations endpoint..."
+curl -s "http://localhost:5337/api/conversations?path=/tmp" | jq '.'
+
+echo -e "\nTesting conversation messages endpoint..."
+curl -s http://localhost:5337/api/conversation/test123/messages | jq '.'
+```
+
+###
+
+
+* **Planned:** -npc scripts
+-npc run select +sql_model   <run up>
+-npc run select +sql_model+  <run up and down>
+-npc run select sql_model+  <run down>
+-npc run line <assembly_line>
+-npc conjure fabrication_plan.fab
+
 
 
 ## Macros
 
-While npcsh can decide the best option to use based on the user's input, the user can also execute certain actions with a macro. Macros are commands that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros.
+While npcsh can decide the best option to use based on the user's input, the user can also execute certain actions with a macro. Macros are commands within the NPC shell that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros. Each macro is also available as a sub-program within the NPC CLI. In the following examples we demonstrate how to carry out the same operations from within npcsh and from a regular shell.
 
-To learn about them from within the shell, type:
+
+To learn about the available macros from within the shell, type:
 ```npcsh
 npcsh> /help
 ```
+
+or from bash
+```bash
+npc --help
+#alternatively
+npc -h
+```
+
 To exit the shell:
 ```npcsh
 npcsh> /exit
@@ -430,6 +574,11 @@ npcsh> /exit
 Otherwise, here are some more detailed examples of macros that can be used in npcsh:
 ### Conjure (under construction)
 Use the `/conjure` macro to generate an NPC, a NPC tool, an assembly line, a job, or an SQL model
+
+```bash
+npc conjure -n name -t 'templates'
+```
+
 
 ### Data Interaction and analysis (under construction)
 
@@ -464,6 +613,13 @@ Enter a prompt for the LLM about this image (or press Enter to skip): describe w
 The image displays a source control graph, likely from a version control system like Git. It features a series of commits represented by colored dots connected by lines, illustrating the project's development history. Each commit message provides a brief description of the changes made, including tasks like fixing issues, merging pull requests, updating README files, and adjusting code or documentation. Notably, several commits mention specific users, particularly "Chris Agostino," indicating collaboration and contributions to the project. The graph visually represents the branching and merging of code changes.
 ```
 
+In bash:
+```bash
+npc ots
+```
+
+
+
 Alternatively, pass an existing image in like :
 ```npcsh
 npcsh> /ots test_data/catfight.PNG
@@ -472,10 +628,19 @@ Enter a prompt for the LLM about this image (or press Enter to skip): whats in t
 The image features two cats, one calico and one orange tabby, playing with traditional Japanese-style toys. They are each holding sticks attached to colorful pom-pom balls, which resemble birds. The background includes stylized waves and a red sun, accentuating a vibrant, artistic style reminiscent of classic Japanese art. The playful interaction between the cats evokes a lively, whimsical scene.
 ```
 
+```bash
+npc ots -f test_data/catfight.PNG
+```
+
+
 ### Plan : Schedule tasks to be run at regular intervals (under construction)
 Use the /plan macro to schedule tasks to be run at regular intervals.
 ```npcsh
 npcsh> /plan run a rag search on the files in the current directory every 5 minutes
+```
+
+```bash
+npc plan -f 30m -t 'task'
 ```
 
 ### Plonk : Computer Control
@@ -484,6 +649,9 @@ Use the /plonk macro to allow the LLM to control your computer.
 npcsh> /plonk go to a web browser and  go to wikipedia and find out information about simon bolivar
 ```
 
+```bash
+npc plonk 'use a web browser to find out information about simon boliver'
+```
 
 ### RAG
 
@@ -501,6 +669,11 @@ npcsh> /rag  what is the best way to implement a linked list in Python?
 and it will automatically look through the recorded conversations in the ~/npcsh_history.db
 
 
+In bash:
+```bash
+npc rag -f *.py
+```
+
 ### Rehash
 
 Use the /rehash macro to re-send the last message to the LLM.
@@ -514,7 +687,11 @@ Send a one-shot question to the LLM.
 npcsh> /sample What is the capital of France?
 ```
 
+Bash:
+```bash
+npc sample 'thing' -m model -p provider
 
+```
 
 
 ### Search
@@ -541,7 +718,7 @@ Citation Links: https://usun.usmission.gov/our-leaders/the-president-of-the-unit
 https://www.whitehouse.gov/administration/
 https://www.instagram.com/potus/?hl=en
 https://en.wikipedia.org/wiki/President_of_the_United_States
-
+```
 
 
 ```npcsh
@@ -554,6 +731,53 @@ Citation Links: ['https://en.wikipedia.org/wiki/List_of_presidents_of_the_United
 'https://news.gallup.com/poll/329384/presidential-approval-ratings-joe-biden.aspx',
 'https://www.usa.gov/presidents']
 ```
+
+Bash:
+
+(npcsh) caug@pop-os:~/npcww/npcsh$ npc search 'simon bolivar' -sp perplexity
+Loaded .env file from /home/caug/npcww/npcsh
+urls ['https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar', 'https://www.britannica.com/biography/Simon-Bolivar', 'https://en.wikipedia.org/wiki/File:Sim%C3%B3n_Bol%C3%ADvar_2.jpg', 'https://www.historytoday.com/archive/simon-bolivar-and-spanish-revolutions', 'https://kids.britannica.com/kids/article/Sim%C3%B3n-Bol%C3%ADvar/352872']
+openai
+- Simón José Antonio de la Santísima Trinidad Bolívar Palacios Ponte y Blanco[c] (24 July 1783 – 17 December 1830) was a Venezuelan statesman and military officer who led what are currently the countries of Colombia, Venezuela, Ecuador, Peru, Panama, and Bolivia to independence from the Spanish Empire. He is known colloquially as El Libertador, or the Liberator of America. Simón Bolívar was born in Caracas in the Captaincy General of Venezuela into a wealthy family of American-born Spaniards (crio...
+ Citation: https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar
+
+
+
+Our editors will review what you’ve submitted and determine whether to revise the article. Simón Bolívar was a Venezuelan soldier and statesman who played a central role in the South American independence movement. Bolívar served as president of Gran Colombia (1819–30) and as dictator of Peru (1823–26). The country of Bolivia is named for him. Simón Bolívar was born on July 24, 1783, in Caracas, Venezuela. Neither Bolívar’s aristocrat father nor his mother lived to see his 10th birthday. Bolívar...
+ Citation: https://www.britannica.com/biography/Simon-Bolivar
+
+
+
+Original file (1,525 × 1,990 pixels, file size: 3.02 MB, MIME type: image/jpeg) Derivative works of this file: Simón Bolívar 5.jpg This work is in the public domain in its country of origin and other countries and areas where the copyright term is the author's life plus 100 years or fewer. This work is in the public domain in the United States because it was published (or registered with the U.S. Copyright Office) before January 1, 1930. https://creativecommons.org/publicdomain/mark/1.0/PDMCreat...
+ Citation: https://en.wikipedia.org/wiki/File:Sim%C3%B3n_Bol%C3%ADvar_2.jpg
+
+
+
+SubscriptionOffers Give a Gift Subscribe A map of Gran Colombia showing the 12 departments created in 1824 and territories disputed with neighboring countries. What role did Simon Bolivar play in the history of Latin America's independence from Spain? Simon Bolivar lived a short but comprehensive life. History records his extraordinary versatility. He was a revolutionary who freed six countries, an intellectual who argued the problems of national liberation, a general who fought a war of unremit...
+ Citation: https://www.historytoday.com/archive/simon-bolivar-and-spanish-revolutions
+
+
+
+Known as the Liberator, Simón Bolívar led revolutions against Spanish rule in South America. The countries of Venezuela, Colombia, Ecuador, Panama, Peru, and Bolivia all owe their independence largely to him. Bolívar was born on July 24, 1783, in Caracas, New Granada (now in Venezuela). After studying in Europe, he returned to South America and began to fight Spanish rule. Between 1810 and 1814 Venezuela made two failed tries to break free from Spain. After the second defeat, Bolívar fled to Jam...
+ Citation: https://kids.britannica.com/kids/article/Sim%C3%B3n-Bol%C3%ADvar/352872
+
+
+
+- https://en.wikipedia.org/wiki/Sim%C3%B3n_Bol%C3%ADvar
+
+https://www.britannica.com/biography/Simon-Bolivar
+
+https://en.wikipedia.org/wiki/File:Sim%C3%B3n_Bol%C3%ADvar_2.jpg
+
+https://www.historytoday.com/archive/simon-bolivar-and-spanish-revolutions
+
+https://kids.britannica.com/kids/article/Sim%C3%B3n-Bol%C3%ADvar/352872
+```
+
+```bash
+npc search 'snipers on the roof indiana university' -sp duckduckgo
+```
+
 
 ### Set: Changing defaults from within npcsh
 Users can change the default model and provider from within npcsh by using the following commands:
@@ -699,11 +923,15 @@ Start the spool with a specific llm model:
 npcsh> /spool model=llama3.3
 ```
 
+```bash
+npc spool -n npc.npc
+```
 
 
 
 ### Vixynt: Image Generation
 Image generation can be done with the /vixynt macro.
+
 Use /vixynt like so where you can also specify the model to use with an @ reference. This @ reference will override the default model in ~/.npcshrc.
 
 ```npcsh
@@ -715,6 +943,13 @@ npcsh> /vixynt A futuristic cityscape @dall-e-3
 npcsh> /vixynt A peaceful landscape @runwayml/stable-diffusion-v1-5
 ```
 ![peaceful landscape](test_data/peaceful_landscape_stable_diff.png)
+
+
+Similarly, use vixynt with the NPC CLI from a regular shell:
+```bash
+$ npc --model 'dall-e-2' --provider 'openai' vixynt 'whats a french man to do in the southern bayeaux'
+```
+
 
 
 
@@ -1115,70 +1350,6 @@ results = runner.execute_pipeline()
 Note, in the future we will aim to separate compilation and running so that we will have a compilation step that is more like a jinja rendering of the relevant information so that it can be more easily audited.
 
 
-## NPC CLI
-When npcsh is installed, it comes with the `npc` cli as well. The `npc` cli has various command to make initializing and serving NPC projects easier.
-
-### Serving
-To serve an NPC project, first install redis-server and start it
-
-on Ubuntu:
-```bash
-sudo apt update && sudo apt install redis-server
-redis-server
-```
-
-on macOS:
-```bash
-brew install redis
-redis-server
-```
-Then navigate to the project directory and run:
-
-```bash
-npc serve
-```
-If you want to specify a certain port, you can do so with the `-p` flag:
-```bash
-npc serve -p 5337
-```
-or with the `--port` flag:
-```bash
-npc serve --port 5337
-
-```
-If you want to initialize a project based on templates and then make it available for serving, you can do so like this
-```bash
-npc serve -t 'sales, marketing' -ctx 'im developing a team that will focus on sales and marketing within the logging industry. I need a team that can help me with the following: - generate leads - create marketing campaigns - build a sales funnel - close deals - manage customer relationships - manage sales pipeline - manage marketing campaigns - manage marketing budget' -m llama3.2 -pr ollama
-```
-This will use the specified model and provider to generate a team of npcs to fit the templates and context provided.
-
-
-Once the server is up and running, you can access the API endpoints at `http://localhost:5337/api/`. Here are some example curl commands to test the endpoints:
-
-```bash
-echo "Testing health endpoint..."
-curl -s http://localhost:5337/api/health | jq '.'
-
-echo -e "\nTesting execute endpoint..."
-curl -s -X POST http://localhost:5337/api/execute \
-  -H "Content-Type: application/json" \
-  -d '{"commandstr": "hello world", "currentPath": "~/", "conversationId": "test124"}' | jq '.'
-
-echo -e "\nTesting conversations endpoint..."
-curl -s "http://localhost:5337/api/conversations?path=/tmp" | jq '.'
-
-echo -e "\nTesting conversation messages endpoint..."
-curl -s http://localhost:5337/api/conversation/test123/messages | jq '.'
-```
-
-
-* **Planned:** -npc scripts
--npc run select +sql_model   <run up>
--npc run select +sql_model+  <run up and down>
--npc run select sql_model+  <run down>
--npc run line <assembly_line>
--npc conjure fabrication_plan.fab
-
 ## Python Examples
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
 
@@ -1256,7 +1427,7 @@ import os
 tool_data = {
     "tool_name": "pdf_analyzer",
     "inputs": ["request", "file"],
-    "preprocess": [{  # Make this a list with one dict inside
+    "steps": [{  # Make this a list with one dict inside
         "engine": "python",
         "code": """
 try:
@@ -1292,8 +1463,8 @@ except Exception as e:
     print(error_msg)
     shared_context['extracted_text'] = f"Error: {error_msg}"
 """
-    }],
-    "prompt": {
+    },
+     {
         "engine": "natural",
         "code": """
 {% if shared_context and shared_context.extracted_text %}
@@ -1310,9 +1481,7 @@ Please provide a response to user request: {{ inputs.request }} using the inform
 Error: No text was extracted from the PDF.
 {% endif %}
 """
-    },
-    "postprocess": []  # Empty list instead of empty dict
-}
+    },]
 
 # Instantiate the tool
 tool = Tool(tool_data)

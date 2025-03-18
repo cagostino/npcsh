@@ -415,7 +415,12 @@ Type '(e)dit', '(d)elete', or '(r)egenerate' or '(a)ccept': """
 
 
 def initialize_npc_project(
-    directory=None, templates=None, context=None, model=None, provider=None, ) -> str:
+    directory=None,
+    templates=None,
+    context=None,
+    model=None,
+    provider=None,
+) -> str:
     """
     Function Description:
         This function initializes an NPC project in the current directory.
@@ -436,7 +441,9 @@ def initialize_npc_project(
     # Create 'foreman.npc' file in 'npc_team' directory
     foreman_npc_path = os.path.join(npc_team_dir, "sibiji.npc")
     if context is not None:
-        team = conjure_team(context, templates=templates, model=model, provider=provider)
+        team = conjure_team(
+            context, templates=templates, model=model, provider=provider
+        )
 
     if not os.path.exists(foreman_npc_path):
         foreman_npc_content = """name: sibiji
@@ -782,17 +789,29 @@ class NPC:
         else:
             self.parsed_npcs = []
 
+    def get_memory(self):
+        return
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "primary_directive": self.primary_directive,
+            "model": self.model,
+            "provider": self.provider,
+            "tools": [tool.to_dict() for tool in self.tools],
+            "use_global_tools": self.use_global_tools,
+            "api_url": self.api_url,
+        }
+
     def _check_llm_command(
         self,
         command,
-        command_history,
         retrieved_docs=None,
         messages=None,
         n_docs=5,
     ):
         return check_llm_command(
             command,
-            command_history,
             model=self.model,
             provider=self.provider,
             npc=self,
@@ -805,7 +824,6 @@ class NPC:
         self,
         npc_to_pass: Any,
         command: str,
-        command_history: Any,
         messages: List[Dict[str, str]] = None,
         retrieved_docs=None,
         n_docs: int = 5,
@@ -815,7 +833,7 @@ class NPC:
             This function handles an agent pass.
         Args:
             command (str): The command.
-            command_history (Any): The command history.
+
         Keyword Args:
             model (str): The model to use for handling the agent pass.
             provider (str): The provider to use for handling the agent pass.
@@ -852,7 +870,6 @@ class NPC:
         )
         return npc_to_pass_init._check_llm_command(
             updated_command,
-            command_history,
             retrieved_docs=retrieved_docs,
             messages=messages,
             n_docs=n_docs,
@@ -901,8 +918,8 @@ class NPC:
                         print(f"Error loading tool from project directory: {e}")
                         continue
 
-            print(tool_name)
-            print(tool_data)
+            # print(tool_name)
+            # print(tool_data)
             tool = Tool(tool_data)
             self.all_tools.append(tool)
             self.all_tools_dict[tool.tool_name] = tool
@@ -1066,7 +1083,10 @@ class NPC:
     def finalize_npc_profile(self, npc_file: str) -> dict:
         profile = self.resolved_npcs.get(os.path.basename(npc_file))
         if not profile:
-            raise ValueError(f"NPC {npc_file} has not been resolved.")
+            # try to resolve it with load_npc_from_file
+            profile = load_npc_from_file(npc_file, self.db_conn).to_dict()
+
+        #    raise ValueError(f"NPC {npc_file} has not been resolved.")
 
         # Resolve any remaining references
         # Log the profile content before processing
@@ -1090,6 +1110,11 @@ class SilentUndefined(Undefined):
         return ""
 
 
+# perhaps the npc compiling is more than just for jinja reasons.
+# we can turn each agent into a referenceable program executable.
+
+
+# finish testing out a python based version rather than jinja only
 class NPCCompiler:
     def __init__(
         self,
@@ -1242,7 +1267,7 @@ class NPCCompiler:
         # print(self.dirs)
         for directory in self.dirs:
             if os.path.exists(directory):
-                print(directory)
+
                 for filename in os.listdir(directory):
                     if filename.endswith(".npc"):
                         npc_path = os.path.join(directory, filename)
@@ -1297,7 +1322,10 @@ class NPCCompiler:
     def finalize_npc_profile(self, npc_file: str) -> dict:
         profile = self.resolved_npcs.get(os.path.basename(npc_file))
         if not profile:
-            raise ValueError(f"NPC {npc_file} has not been resolved.")
+            # try to resolve it with load_npc_from_file
+            profile = load_npc_from_file(
+                npc_file, sqlite3.connect(self.db_path)
+            ).to_dict()
 
         # Resolve any remaining references
         # Log the profile content before processing
@@ -1465,6 +1493,8 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         name += ".npc"
 
     try:
+        if "~" in npc_file:
+            npc_file = os.path.expanduser(npc_file)
         if not os.path.isabs(npc_file):
             npc_file = os.path.abspath(npc_file)
 

@@ -6,6 +6,7 @@ import subprocess
 from typing import Dict, Any
 from PIL import ImageGrab  # Import ImageGrab from Pillow
 
+from .npc_sysenv import NPCSH_VISION_MODEL, NPCSH_VISION_PROVIDER, NPCSH_API_URL
 from .llm_funcs import get_llm_response, get_stream
 import os
 
@@ -231,20 +232,22 @@ def analyze_image_base(
 
 
 def analyze_image(
-    command_history: Any,
     user_prompt: str,
     file_path: str,
     filename: str,
     npc: Any = None,
     stream: bool = False,
     messages: list = None,
-    **model_kwargs,
+    model: str = NPCSH_VISION_MODEL,
+    provider: str = NPCSH_VISION_PROVIDER,
+    api_key: str = None,
+    api_url: str = NPCSH_API_URL,
 ) -> Dict[str, str]:
     """
     Function Description:
         This function captures a screenshot, analyzes it using the LLM model, and returns the response.
     Args:
-        command_history: The command history object to add the command to.
+
         user_prompt: The user prompt to provide to the LLM model.
         file_path: The path to the image file.
         filename: The name of the image file.
@@ -271,17 +274,17 @@ def analyze_image(
 
                 else:
                     response = get_llm_response(
-                        user_prompt, images=[image_info], npc=npc, **model_kwargs
+                        user_prompt,
+                        images=[image_info],
+                        npc=npc,
+                        model=model,
+                        provider=provider,
+                        api_url=api_url,
+                        api_key=api_key,
                     )
 
                     print(response)
                     # Add to command history *inside* the try block
-                    command_history.add_command(
-                        f"screenshot with prompt: {user_prompt}",
-                        ["screenshot", npc.name if npc else ""],
-                        response,
-                        os.getcwd(),
-                    )
                     return response
 
             except Exception as e:

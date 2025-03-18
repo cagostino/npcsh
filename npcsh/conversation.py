@@ -21,6 +21,7 @@ def get_ollama_conversation(
     npc: Any = None,
     tools: list = None,
     images=None,
+    **kwargs,
 ) -> List[Dict[str, str]]:
     """
     Function Description:

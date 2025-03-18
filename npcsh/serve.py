@@ -1335,9 +1335,6 @@ def get_db_connection():
     return conn
 
 
-# Remove the global command_history instance
-# command_history = CommandHistory(db_path)  # Remove this line
-
 extension_map = {
     "PNG": "images",
     "JPG": "images",

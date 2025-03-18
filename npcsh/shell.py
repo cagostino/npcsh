@@ -77,6 +77,15 @@ import argparse
 from .serve import (
     start_flask_server,
 )
+import importlib.metadata  # Python 3.8+
+
+# Fetch the version from the package metadata
+try:
+    VERSION = importlib.metadata.version(
+        "npcsh"
+    )  # Replace "npcsh" with your package name
+except importlib.metadata.PackageNotFoundError:
+    VERSION = "unknown"  # Fallback if the package is not installed
 
 
 def main() -> None:
@@ -97,14 +106,13 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="npcsh CLI")
     parser.add_argument(
-        "command",
-        nargs="?",
-        default=None,
-        help="The command to run ('serve' to start Flask server)",
+        "-v",
+        "--version",
+        action="version",
+        version=f"npcsh version {VERSION}",  # Use the dynamically fetched version
     )
     args = parser.parse_args()
 
-    # If 'serve' is not provided, proceed with the regular CLI
     setup_npcsh_config()
     if "NPCSH_DB_PATH" in os.environ:
         db_path = os.path.expanduser(os.environ["NPCSH_DB_PATH"])
@@ -212,14 +220,13 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 else:
                     print("Goodbye!")
                     break
-
+            # print(current_npc, "current npc fore command execution")
             # Execute the command and capture the result
             result = execute_command(
                 user_input,
-                command_history,
                 db_path,
                 npc_compiler,
-                current_npc,
+                current_npc=current_npc,
                 model=NPCSH_CHAT_MODEL,
                 provider=NPCSH_CHAT_PROVIDER,
                 messages=messages,
@@ -235,23 +242,22 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             # also messages
 
             if "current_npc" in result:
-                current_npc = result["current_npc"]
 
+                current_npc = result["current_npc"]
             output = result.get("output")
             conversation_id = result.get("conversation_id")
             model = result.get("model")
             provider = result.get("provider")
-            npc = result.get("npc")
 
             messages = result.get("messages")
             current_path = result.get("current_path")
             attachments = result.get("attachments")
 
-            if npc is not None:
-                if isinstance(npc, NPC):
-                    npc_name = npc.name
-                elif isinstance(npc, str):
-                    npc_name = npc
+            if current_npc is not None:
+                if isinstance(current_npc, NPC):
+                    npc_name = current_npc.name
+                elif isinstance(current_npc, str):
+                    npc_name = current_npc
             else:
                 npc_name = None
             message_id = save_conversation_message(

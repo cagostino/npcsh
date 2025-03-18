@@ -46,6 +46,7 @@ from .npc_sysenv import (
     EMBEDDINGS_DB_PATH,
     NPCSH_EMBEDDING_MODEL,
     NPCSH_EMBEDDING_PROVIDER,
+    NPCSH_DEFAULT_MODE,
     NPCSH_REASONING_MODEL,
     NPCSH_REASONING_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
@@ -54,6 +55,8 @@ from .npc_sysenv import (
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     chroma_client,
+    available_reasoning_models,
+    available_chat_models,
 )
 
 from .stream import (
@@ -444,7 +447,6 @@ def get_conversation(
 
 def execute_llm_question(
     command: str,
-    command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
     api_url: str = NPCSH_API_URL,
@@ -528,13 +530,11 @@ def execute_llm_question(
     # print(f"LLM response: {output}")
     # print(f"Messages: {messages}")
     # print("type of output", type(output))
-    command_history.add_command(command, [], output, location)
     return {"messages": messages, "output": output}
 
 
 def execute_llm_command(
     command: str,
-    command_history: Any,
     model: Optional[str] = None,
     provider: Optional[str] = None,
     api_url: str = NPCSH_API_URL,
@@ -550,7 +550,7 @@ def execute_llm_command(
         This function executes an LLM command.
     Args:
         command (str): The command to execute.
-        command_history (Any): The command history.
+
     Keyword Args:
         model (Optional[str]): The model to use for executing the command.
         provider (Optional[str]): The provider to use for executing the command.
@@ -654,6 +654,8 @@ def execute_llm_command(
 
                 {context}
                 """
+            messages.append({"role": "user", "content": prompt})
+            # print(messages, stream)
             if stream:
                 response = get_stream(
                     messages,
@@ -663,6 +665,7 @@ def execute_llm_command(
                     api_key=api_key,
                     npc=npc,
                 )
+                return response
 
             else:
                 response = get_llm_response(
@@ -677,7 +680,6 @@ def execute_llm_command(
             output = response.get("response", "")
 
             # render_markdown(output)
-            command_history.add_command(command, subcommands, output, location)
 
             return {"messages": messages, "output": output}
         except subprocess.CalledProcessError as e:
@@ -734,7 +736,6 @@ def execute_llm_command(
 
         attempt += 1
 
-    command_history.add_command(command, subcommands, "Execution failed", location)
     return {
         "messages": messages,
         "output": "Max attempts reached. Unable to execute the command successfully.",
@@ -743,9 +744,10 @@ def execute_llm_command(
 
 def check_llm_command(
     command: str,
-    command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    reasoning_model: str = NPCSH_REASONING_MODEL,
+    reasoning_provider: str = NPCSH_REASONING_PROVIDER,
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
     npc: Any = None,
@@ -760,7 +762,6 @@ def check_llm_command(
         This function checks an LLM command.
     Args:
         command (str): The command to check.
-        command_history (Any): The command history.
     Keyword Args:
         model (str): The model to use for checking the command.
         provider (str): The provider to use for checking the command.
@@ -771,6 +772,21 @@ def check_llm_command(
         Any: The result of checking the LLM command.
     """
 
+    ENTER_REASONING_FLOW = False
+    if NPCSH_DEFAULT_MODE == "reasoning":
+        ENTER_REASONING_FLOW = True
+    if model in available_reasoning_models:
+        print(
+            """
+Model provided is a reasoning model, defaulting to non reasoning model for
+ReAct choices then will enter reasoning flow
+            """
+        )
+        reasoning_model = model
+        reasoning_provider = provider
+
+        model = NPCSH_CHAT_MODEL
+        provider = NPCSH_CHAT_PROVIDER
     if messages is None:
         messages = []
 
@@ -799,6 +815,7 @@ def check_llm_command(
 
     Available tools:
     """
+
     if npc.all_tools_dict is None:
         prompt += "No tools available."
     else:
@@ -899,14 +916,15 @@ def check_llm_command(
 
     # Proceed according to the action specified
     action = response_content_parsed.get("action")
-
+    explanation = response_content["explanation"]
     # Include the user's command in the conversation messages
+    print(f"action chosen: {action}")
+    print(f"explanation given: {explanation}")
 
     if action == "execute_command":
         # Pass messages to execute_llm_command
         result = execute_llm_command(
             command,
-            command_history,
             model=model,
             provider=provider,
             api_url=api_url,
@@ -916,6 +934,8 @@ def check_llm_command(
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
+        if stream:
+            return result
 
         output = result.get("output", "")
         messages = result.get("messages", messages)
@@ -924,10 +944,10 @@ def check_llm_command(
     elif action == "invoke_tool":
         tool_name = response_content_parsed.get("tool_name")
         # print(npc)
+
         result = handle_tool_call(
             command,
             tool_name,
-            command_history,
             model=model,
             provider=provider,
             api_url=api_url,
@@ -944,19 +964,26 @@ def check_llm_command(
         return {"messages": messages, "output": output}
 
     elif action == "answer_question":
-        result = execute_llm_question(
-            command,
-            command_history,
-            model=model,
-            provider=provider,
-            api_url=api_url,
-            api_key=api_key,
-            messages=messages,
-            npc=npc,
-            retrieved_docs=retrieved_docs,
-            stream=stream,
-            images=images,
-        )
+
+        if ENTER_REASONING_FLOW:
+            print("entering reasoning flow")
+            result = enter_reasoning_human_in_the_loop(
+                messages, reasoning_model, reasoning_provider
+            )
+        else:
+            result = execute_llm_question(
+                command,
+                model=model,
+                provider=provider,
+                api_url=api_url,
+                api_key=api_key,
+                messages=messages,
+                npc=npc,
+                retrieved_docs=retrieved_docs,
+                stream=stream,
+                images=images,
+            )
+
         if stream:
             return result
         messages = result.get("messages", messages)
@@ -969,7 +996,6 @@ def check_llm_command(
         return npc.handle_agent_pass(
             npc_to_pass,
             command,
-            command_history,
             messages=messages,
             retrieved_docs=retrieved_docs,
             n_docs=n_docs,
@@ -1005,7 +1031,6 @@ def check_llm_command(
 
         return check_llm_command(
             command + " \n \n \n extra context: " + request_input,
-            command_history,
             model=model,
             provider=provider,
             api_url=api_url,
@@ -1014,6 +1039,7 @@ def check_llm_command(
             messages=messages,
             retrieved_docs=retrieved_docs,
             n_docs=n_docs,
+            stream=stream,
         )
 
     elif action == "execute_sequence":
@@ -1024,7 +1050,6 @@ def check_llm_command(
             result = handle_tool_call(
                 command,
                 tool_name,
-                command_history,
                 model=model,
                 provider=provider,
                 api_url=api_url,
@@ -1049,7 +1074,6 @@ def check_llm_command(
 def handle_tool_call(
     command: str,
     tool_name: str,
-    command_history: Any,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
     api_url: str = NPCSH_API_URL,
@@ -1068,7 +1092,6 @@ def handle_tool_call(
     Args:
         command (str): The command.
         tool_name (str): The tool name.
-        command_history (Any): The command history.
     Keyword Args:
         model (str): The model to use for handling the tool call.
         provider (str): The provider to use for handling the tool call.
@@ -1081,7 +1104,6 @@ def handle_tool_call(
         the tool call.
 
     """
-    print(f"handle_tool_call invoked with tool_name: {tool_name}")
     # print(npc)
     if not npc or not npc.all_tools_dict:
         print("not available")
@@ -1168,7 +1190,6 @@ def handle_tool_call(
             return handle_tool_call(
                 command,
                 tool_name,
-                command_history,
                 model=model,
                 provider=provider,
                 messages=messages,
@@ -1213,7 +1234,6 @@ def handle_tool_call(
 
 def execute_data_operations(
     query: str,
-    command_history: Any,
     dataframes: Dict[str, pd.DataFrame],
     npc: Any = None,
     db_path: str = "~/npcsh_history.db",
@@ -1223,7 +1243,7 @@ def execute_data_operations(
         This function executes data operations.
     Args:
         query (str): The query to execute.
-        command_history (Any): The command history.
+
         dataframes (Dict[str, pd.DataFrame]): The dictionary of dataframes.
     Keyword Args:
         npc (Any): The NPC object.
