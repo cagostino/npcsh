@@ -161,6 +161,12 @@ def main():
         "sample", help="sample question one shot to an llm"
     )
     sampler_parser.add_argument("prompt", help="prompt for llm")
+    sampler_parser.add_argument(
+        "--npc",
+        "-n",
+        help="name of the NPC",
+        type=str,
+    )
     select_parser = subparsers.add_parser("select", help="Select a SQL model to run")
     select_parser.add_argument("model", help="Model to run")
 
@@ -332,12 +338,18 @@ def main():
         )
 
     elif args.command == "sample":
-        result = sample_llm_response(
+        db_conn = sqlite3.connect(NPCSH_DB_PATH)
+        if args.npc is None or args.npc == "sibiji":
+            npc = load_npc_from_file("~/.npcsh/npc_team/sibiji.npc", db_conn)
+        else:
+            npc = load_npc_from_file("./npc_team/" + args.npc + ".npc", db_conn)
+
+        result = get_llm_response(
             args.prompt,
             model=args.model,
             provider=args.provider,
         )
-        print(result)
+        print(result["response"])
     elif args.command == "vixynt":
         if args.model == NPCSH_CHAT_MODEL:
             model = NPCSH_IMAGE_GEN_MODEL
