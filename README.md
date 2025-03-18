@@ -88,7 +88,7 @@ ollama pull llava:7b
 ollama pull nomic-embed-text
 pip install npcsh
 ```
-### Widows Install
+### Windows Install
 
 Download and install ollama exe.
 
