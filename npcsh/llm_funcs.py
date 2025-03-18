@@ -654,6 +654,8 @@ def execute_llm_command(
 
                 {context}
                 """
+            messages.append({"role": "user", "content": prompt})
+            # print(messages, stream)
             if stream:
                 response = get_stream(
                     messages,
@@ -663,6 +665,7 @@ def execute_llm_command(
                     api_key=api_key,
                     npc=npc,
                 )
+                return response
 
             else:
                 response = get_llm_response(
@@ -768,7 +771,10 @@ def check_llm_command(
     Returns:
         Any: The result of checking the LLM command.
     """
+
     ENTER_REASONING_FLOW = False
+    if NPCSH_DEFAULT_MODE == "reasoning":
+        ENTER_REASONING_FLOW = True
     if model in available_reasoning_models:
         print(
             """
@@ -776,14 +782,11 @@ Model provided is a reasoning model, defaulting to non reasoning model for
 ReAct choices then will enter reasoning flow
             """
         )
-        ENTER_REASONING_FLOW = True
         reasoning_model = model
         reasoning_provider = provider
 
         model = NPCSH_CHAT_MODEL
         provider = NPCSH_CHAT_PROVIDER
-    elif NPCSH_DEFAULT_MODE == "reasoning":
-        ENTER_REASONING_FLOW = True
     if messages is None:
         messages = []
 
@@ -931,6 +934,8 @@ ReAct choices then will enter reasoning flow
             retrieved_docs=retrieved_docs,
             stream=stream,
         )
+        if stream:
+            return result
 
         output = result.get("output", "")
         messages = result.get("messages", messages)
@@ -978,6 +983,7 @@ ReAct choices then will enter reasoning flow
                 stream=stream,
                 images=images,
             )
+
         if stream:
             return result
         messages = result.get("messages", messages)
@@ -1033,6 +1039,7 @@ ReAct choices then will enter reasoning flow
             messages=messages,
             retrieved_docs=retrieved_docs,
             n_docs=n_docs,
+            stream=stream,
         )
 
     elif action == "execute_sequence":

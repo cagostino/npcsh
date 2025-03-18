@@ -49,10 +49,9 @@ npc_compiler = NPCCompiler(npc_directory, NPCSH_DB_PATH)
 
 def main():
     parser = argparse.ArgumentParser(description="NPC utilities")
-    # parser.add_argument(
-    #    "prompt", nargs="?", help="Generic prompt to send to the default LLM"
-    # )
-
+    parser.add_argument(
+        "prompt", nargs="?", help="Generic prompt to send to the default LLM"
+    )
     parser.add_argument(
         "--model", "-m", help="model to use", type=str, default=NPCSH_CHAT_MODEL
     )
@@ -63,6 +62,54 @@ def main():
         type=str,
         default=NPCSH_CHAT_PROVIDER,
     )
+    parser.add_argument(
+        "-n", "--npc", help="name of the NPC", type=str, default="sibiji"
+    )
+
+    # Handle the prompt BEFORE defining subparsers
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+        args = parser.parse_args()
+        db_conn = sqlite3.connect(NPCSH_DB_PATH)
+        if args.npc is None or args.npc == "sibiji":
+            npc = load_npc_from_file("~/.npcsh/npc_team/sibiji.npc", db_conn)
+        else:
+            npc = load_npc_from_file("./npc_team/" + args.npc + ".npc", db_conn)
+
+        response = check_llm_command(
+            args.prompt, model=args.model, provider=args.provider, npc=npc, stream=True
+        )
+        provider = args.provider
+        model = args.model
+        conversation_result = ""
+        for chunk in response:
+            if provider == "anthropic":
+                if chunk.type == "content_block_delta":
+                    chunk_content = chunk.delta.text
+                    if chunk_content:
+                        conversation_result += chunk_content
+                        print(chunk_content, end="")
+
+            elif (
+                provider == "openai"
+                or provider == "deepseek"
+                or provider == "openai-like"
+            ):
+                chunk_content = "".join(
+                    choice.delta.content
+                    for choice in chunk.choices
+                    if choice.delta.content is not None
+                )
+                if chunk_content:
+                    conversation_result += chunk_content
+                    print(chunk_content, end="")
+
+            elif provider == "ollama":
+                chunk_content = chunk["message"]["content"]
+                if chunk_content:
+                    conversation_result += chunk_content
+                    print(chunk_content, end="")
+        print("\n")
+        return
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # Generic prompt parser (for "npc 'prompt'")
@@ -239,17 +286,6 @@ def main():
     whisper_parser.add_argument("npc_name", help="name of the NPC to chat with")
 
     args = parser.parse_args()
-
-    # Handle generic prompt if provided
-    if hasattr(args, "prompt") and args.prompt and not args.command:
-        response = execute_command(
-            args.prompt,
-            db_path=NPCSH_DB_PATH,
-            model=NPCSH_CHAT_MODEL,
-            provider=NPCSH_CHAT_PROVIDER,
-        )
-        print(response)
-        return response
 
     # Handle NPC chat if the command matches an NPC name
     if args.command and not args.command.startswith("-"):
@@ -449,13 +485,6 @@ def main():
             stream=True,
             npc=npc,
         )
-    else:
-        response = check_llm_command(
-            args.command,
-            model=args.model,
-            provider=args.provider,
-        )
-        parser.print_help()
 
 
 if __name__ == "__main__":

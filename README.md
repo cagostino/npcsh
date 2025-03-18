@@ -436,6 +436,34 @@ npcsh> vim file.txt
 ### NPC CLI
 When npcsh is installed, it comes with the `npc` cli as well. The `npc` cli has various command to make initializing and serving NPC projects easier.
 
+Users can make queries like so:
+```bash
+$ npc 'whats the biggest filei  n my computer'
+Loaded .env file from /home/caug/npcww/npcsh
+action chosen: request_input
+explanation given: The user needs to provide more context about their operating system or specify which directory to search for the biggest file.
+
+Additional input needed: The user did not specify their operating system or the directory to search for the biggest file, making it unclear how to execute the command.
+Please specify your operating system (e.g., Windows, macOS, Linux) and the directory you want to search in.: linux and root
+action chosen: execute_command
+explanation given: The user is asking for the biggest file on their computer, which can be accomplished with a simple bash command that searches for the largest files.
+sibiji generating command
+LLM suggests the following bash command: sudo find / -type f -exec du -h {} + | sort -rh | head -n 1
+Running command: sudo find / -type f -exec du -h {} + | sort -rh | head -n 1
+Command executed with output: 11G       /home/caug/.cache/huggingface/hub/models--state-spaces--mamba-2.8b/blobs/39911a8470a2b256016b57cc71c68e0f96751cba5b229216ab1f4f9d82096a46
+
+I ran a command on your Linux system that searches for the largest files on your computer. The command `sudo find / -type f -exec du -h {} + | sort -rh | head -n 1` performs the following steps:
+
+1. **Find Command**: It searches for all files (`-type f`) starting from the root directory (`/`).
+2. **Disk Usage**: For each file found, it calculates its disk usage in a human-readable format (`du -h`).
+3. **Sort**: It sorts the results in reverse order based on size (`sort -rh`), so the largest files appear first.
+4. **Head**: Finally, it retrieves just the largest file using `head -n 1`.
+
+The output indicates that the biggest file on your system is located at `/home/caug/.cache/huggingface/hub/models--state-spaces--mamba-2.8b/blobs/39911a8470a2b256016b57cc71c68e0f96751cba5b229216ab1f4f9d82096a46` and is 11GB in size.
+
+```
+
+
 ### Serving
 To serve an NPC project, first install redis-server and start it
 
