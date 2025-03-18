@@ -6,6 +6,7 @@ import subprocess
 from typing import Dict, Any
 from PIL import ImageGrab  # Import ImageGrab from Pillow
 
+from .npc_sysenv import NPCSH_VISION_MODEL, NPCSH_VISION_PROVIDER, NPCSH_API_URL
 from .llm_funcs import get_llm_response, get_stream
 import os
 
@@ -237,7 +238,10 @@ def analyze_image(
     npc: Any = None,
     stream: bool = False,
     messages: list = None,
-    **model_kwargs,
+    model: str = NPCSH_VISION_MODEL,
+    provider: str = NPCSH_VISION_PROVIDER,
+    api_key: str = None,
+    api_url: str = NPCSH_API_URL,
 ) -> Dict[str, str]:
     """
     Function Description:
@@ -270,7 +274,13 @@ def analyze_image(
 
                 else:
                     response = get_llm_response(
-                        user_prompt, images=[image_info], npc=npc, **model_kwargs
+                        user_prompt,
+                        images=[image_info],
+                        npc=npc,
+                        model=model,
+                        provider=provider,
+                        api_url=api_url,
+                        api_key=api_key,
                     )
 
                     print(response)

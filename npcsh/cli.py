@@ -7,6 +7,7 @@ from .npc_sysenv import (
     NPCSH_API_URL,
     NPCSH_REASONING_MODEL,
     NPCSH_REASONING_PROVIDER,
+    NPCSH_DB_PATH,
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     NPCSH_DB_PATH,
@@ -18,6 +19,8 @@ from .npc_compiler import (
     initialize_npc_project,
     conjure_team,
     NPCCompiler,
+    NPC,
+    load_npc_from_file,
 )
 from .llm_funcs import (
     check_llm_command,
@@ -30,6 +33,7 @@ from .llm_funcs import (
     get_stream,
     get_conversation,
 )
+from .search import search_web
 from .shell_helpers import *
 import os
 
@@ -49,6 +53,16 @@ def main():
     #    "prompt", nargs="?", help="Generic prompt to send to the default LLM"
     # )
 
+    parser.add_argument(
+        "--model", "-m", help="model to use", type=str, default=NPCSH_CHAT_MODEL
+    )
+    parser.add_argument(
+        "--provider",
+        "-pr",
+        help="provider to use",
+        type=str,
+        default=NPCSH_CHAT_PROVIDER,
+    )
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # Generic prompt parser (for "npc 'prompt'")
@@ -88,19 +102,6 @@ def main():
         help="important information when merging templates",
         type=str,
     )
-    init_parser.add_argument(
-        "--model",
-        "-m",
-        help="model",
-        type=str,
-    )
-    init_parser.add_argument(
-        "--provider",
-        "-pr",
-        help="provider",
-        type=str,
-    )
-
     ### NEW PARSER
     new_parser = subparsers.add_parser(
         "new", help="Create a new [NPC, tool, assembly_line, ]"
@@ -131,18 +132,7 @@ def main():
         help="description",
         type=str,
     )
-    new_parser.add_argument(
-        "--model",
-        "-m",
-        help="model",
-        type=str,
-    )
-    new_parser.add_argument(
-        "--provider",
-        "-pr",
-        help="provider",
-        type=str,
-    )
+
     new_parser.add_argument("--autogen", help="whether to auto gen", default=False)
 
     ### plonk
@@ -165,39 +155,12 @@ def main():
         help="task for plonk to carry out",
         type=str,
     )
-    plonk_parser.add_argument(
-        "--model",
-        "-m",
-        help="model",
-        type=str,
-    )
-    plonk_parser.add_argument(
-        "--provider",
-        "-pr",
-        help="provider",
-        type=str,
-    )
 
     # sample
     sampler_parser = subparsers.add_parser(
         "sample", help="sample question one shot to an llm"
     )
     sampler_parser.add_argument("prompt", help="prompt for llm")
-    sampler_parser.add_argument(
-        "--model",
-        "-m",
-        help="model to use",
-        type=str,
-        default=NPCSH_CHAT_MODEL,
-    )
-    sampler_parser.add_argument(
-        "--provider",
-        "-pr",
-        help="provider to use",
-        type=str,
-        default=NPCSH_CHAT_PROVIDER,
-    )
-
     select_parser = subparsers.add_parser("select", help="Select a SQL model to run")
     select_parser.add_argument("model", help="Model to run")
 
@@ -216,18 +179,9 @@ def main():
         help="important information when merging templates",
         type=str,
     )
-    serve_parser.add_argument(
-        "--model",
-        "-m",
-        help="model",
-        type=str,
-    )
-    serve_parser.add_argument(
-        "--provider",
-        "-pr",
-        help="provider",
-        type=str,
-    )
+    ### spool
+    spool_parser = subparsers.add_parser("spool", help="Start the Flask server")
+    spool_parser.add_argument("-n", "--npc", default="sibiji")
 
     # Tools command
     tools_parser = subparsers.add_parser("tools", help="print the available tools")
@@ -261,36 +215,18 @@ def main():
     search_parser = subparsers.add_parser("search", help="search the web")
     search_parser.add_argument("query", help="search query")
     search_parser.add_argument(
-        "--provider", "-p", help="search provider", default=NPCSH_SEARCH_PROVIDER
+        "--search_provider",
+        "-sp",
+        help="search provider",
+        default=NPCSH_SEARCH_PROVIDER,
     )
 
     # Image generation
     vixynt_parser = subparsers.add_parser("vixynt", help="generate an image")
     vixynt_parser.add_argument("spell", help="the prompt to generate the image")
 
-    vixynt_parser.add_argument(
-        "--model", "-m", help="model", type=str, default=NPCSH_IMAGE_GEN_MODEL
-    )
-    vixynt_parser.add_argument(
-        "--provider",
-        "-pr",
-        help="provider",
-        type=str,
-        default=NPCSH_IMAGE_GEN_PROVIDER,
-    )
-
     # Screenshot analysis
     ots_parser = subparsers.add_parser("ots", help="analyze screenshot")
-    ots_parser.add_argument(
-        "--model", "-m", help="vision model", type=str, default=NPCSH_VISION_MODEL
-    )
-    ots_parser.add_argument(
-        "--provider",
-        "-pr",
-        help="vision provider",
-        type=str,
-        default=NPCSH_VISION_PROVIDER,
-    )
 
     # Voice chat
     whisper_parser = subparsers.add_parser("whisper", help="start voice chat")
@@ -403,6 +339,10 @@ def main():
         )
         print(result)
     elif args.command == "vixynt":
+        if args.model == NPCSH_CHAT_MODEL:
+            model = NPCSH_IMAGE_GEN_MODEL
+        if args.provider == NPCSH_CHAT_PROVIDER:
+            provider = NPCSH_IMAGE_GEN_PROVIDER
         image_path = generate_image(
             args.spell,
             model=args.model,
@@ -411,7 +351,13 @@ def main():
         print(f"Image generated at: {image_path}")
 
     elif args.command == "ots":
-        result = process_screenshot(
+        if args.model == NPCSH_CHAT_MODEL:
+            model = NPCSH_VISION_MODEL
+        if args.provider == NPCSH_CHAT_PROVIDER:
+            provider = NPCSH_VISION_PROVIDER
+
+        result = ots(
+            "",
             model=args.model,
             provider=args.provider,
         )
@@ -448,7 +394,7 @@ def main():
             print(f"- {result}")
 
     elif args.command == "search":
-        results = web_search(args.query, provider=args.provider)
+        results = search_web(args.query, provider=args.provider)
         for result in results:
             print(f"- {result}")
 
@@ -481,7 +427,22 @@ def main():
                 description=args.description,
                 autogen=args.autogen,
             )
+    elif args.command == "spool":
+        db_conn = sqlite3.connect(NPCSH_DB_PATH)
+        if args.npc is None or args.npc == "sibiji":
+            npc = load_npc_from_file("~/.npcsh/npc_team/sibiji.npc", db_conn)
+        else:
+            npc = load_npc_from_file("./npc_team/" + args.npc + ".npc", db_conn)
+        response = enter_spool_mode(
+            stream=True,
+            npc=npc,
+        )
     else:
+        response = check_llm_command(
+            args.command,
+            model=args.model,
+            provider=args.provider,
+        )
         parser.print_help()
 
 

@@ -337,23 +337,26 @@ def get_anthropic_response(
 
     try:
         if api_key is None:
-            api_key = os.getenv("ANTHROPIC_API_KEY", None)
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+        client = anthropic.Anthropic(api_key=api_key)
 
-        client = anthropic.Anthropic()
+        if messages[0]["role"] == "system":
+            system_message = messages[0]
+            messages = messages[1:]
+        elif npc is not None:
+            system_message = get_system_message(npc)
 
-        # Prepare the message content
-        message_content = []
-
+        # Preprocess messages to ensure content is a list of dicts
+        for message in messages:
+            if isinstance(message["content"], str):
+                message["content"] = [{"type": "text", "text": message["content"]}]
         # Add images if provided
         if images:
             for img in images:
-                # load image and base 64 encode
                 with open(img["file_path"], "rb") as image_file:
-                    img["data"] = base64.b64encode(
-                        compress_image(image_file.read())
-                    ).decode("utf-8")
+                    img["data"] = base64.b64encode(image_file.read()).decode("utf-8")
                     img["media_type"] = "image/jpeg"
-                    message_content.append(
+                    messages[-1]["content"].append(
                         {
                             "type": "image",
                             "source": {
@@ -364,28 +367,32 @@ def get_anthropic_response(
                         }
                     )
 
-        # Add the text prompt
-        message_content.append({"type": "text", "text": prompt})
+        # Prepare API call parameters
 
-        # Create the message
-        message = client.messages.create(
-            model=model,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": message_content}],
-        )
-        # print(message)
+        api_params = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": kwargs.get("max_tokens", 8192),
+            "stream": False,
+            "system": system_message,
+        }
+
+        # Add tools if provided
+        if tools:
+            api_params["tools"] = tools
+
+        # Add tool choice if specified
+        if tool_choice:
+            api_params["tool_choice"] = tool_choice
+
+        # Make the API call
+        response = client.messages.create(**api_params)
 
         llm_response = message.content[0].text
         items_to_return = {"response": llm_response}
-
-        # print(format)
-        # Update messages if they were provided
-        if messages is None:
-            messages = []
-            messages.append(
-                {"role": "system", "content": "You are a helpful assistant."}
-            )
-            messages.append({"role": "user", "content": message_content})
+        messages.append(
+            {"role": "assistant", "content": {"type": "text", "text": llm_response}}
+        )
         items_to_return["messages"] = messages
 
         # Handle JSON format if requested

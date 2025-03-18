@@ -37,11 +37,19 @@ from .npc_sysenv import (
     get_available_models,
     get_system_message,
     NPCSH_STREAM_OUTPUT,
+    NPCSH_API_URL,
+    NPCSH_CHAT_MODEL,
+    NPCSH_CHAT_PROVIDER,
+    NPCSH_VISION_MODEL,
+    NPCSH_VISION_PROVIDER,
+    NPCSH_IMAGE_GEN_MODEL,
+    NPCSH_IMAGE_GEN_PROVIDER,
 )
 from .command_history import (
     CommandHistory,
     save_attachment_to_message,
     save_conversation_message,
+    start_new_conversation,
 )
 from .embeddings import search_similar_texts, chroma_client
 
@@ -1073,6 +1081,104 @@ def enter_wander_mode(args, messages, npc_compiler, npc, model, provider):
     return
 
 
+def ots(
+    command_parts,
+    npc=None,
+    model: str = NPCSH_VISION_MODEL,
+    provider: str = NPCSH_VISION_PROVIDER,
+    api_url: str = NPCSH_API_URL,
+    api_key: str = None,
+):
+    # check if there is a filename
+    if len(command_parts) > 1:
+        filename = command_parts[1]
+        file_path = os.path.join(os.getcwd(), filename)
+        # Get user prompt about the image
+        user_prompt = input(
+            "Enter a prompt for the LLM about this image (or press Enter to skip): "
+        )
+
+        output = analyze_image(
+            user_prompt, file_path, filename, npc=npc, model=model, provider=provider
+        )
+
+    else:
+        output = capture_screenshot(npc=npc)
+        user_prompt = input(
+            "Enter a prompt for the LLM about this image (or press Enter to skip): "
+        )
+        # print(output["model_kwargs"])
+        output = analyze_image(
+            user_prompt,
+            output["file_path"],
+            output["filename"],
+            npc=npc,
+            model=model,
+            provider=provider,
+            api_url=api_url,
+            api_key=api_key,
+        )
+        # messages = output["messages"]
+
+        output = output["response"]
+
+    if output:
+        if isinstance(output, dict) and "filename" in output:
+            message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
+        else:  # This handles both LLM responses and error messages (both strings)
+            message = output
+        return {"messages": messages, "output": message}  # Return the message
+    else:  # Handle the case where capture_screenshot returns None
+        print("Screenshot capture failed.")
+        return {
+            "messages": messages,
+            "output": None,
+        }  # Return None to indicate failure
+
+
+def get_help():
+    output = """# Available Commands
+
+/com [npc_file1.npc npc_file2.npc ...] # Alias for /compile.
+
+/compile [npc_file1.npc npc_file2.npc ...] # Compiles specified NPC profile(s). If no arguments are provided, compiles all NPCs in the npc_profi
+
+/exit or /quit # Exits the current NPC mode or the npcsh shell.
+
+/help # Displays this help message.
+
+/init # Initializes a new NPC project.
+
+/notes # Enter notes mode.
+
+/ots [filename] # Analyzes an image from a specified filename or captures a screenshot for analysis.
+
+/rag <search_term> # Performs a RAG (Retrieval-Augmented Generation) search based on the search term provided.
+
+/sample <question> # Asks the current NPC a question.
+
+/set <model|provider|db_path> <value> # Sets the specified parameter. Enclose the value in quotes.
+
+/sp [inherit_last=<n>] # Alias for /spool.
+
+/spool [inherit_last=<n>] # Enters spool mode. Optionally inherits the last <n> messages.
+
+/vixynt [filename=<filename>] <prompt> # Captures a screenshot and generates an image with the specified prompt.
+
+/<subcommand> # Enters the specified NPC's mode.
+
+/cmd <command/> # Execute a command using the current NPC's LLM.
+
+/command <command/> # Alias for /cmd.
+
+Tools within your npc_team directory can also be used as macro commands.
+
+
+# Note
+Bash commands and other programs can be executed directly. """
+    return output
+
+
 def execute_tool_command(
     tool: Tool,
     args: List[str],
@@ -1100,6 +1206,15 @@ def execute_tool_command(
     return {"messages": messages, "output": tool_output}
 
 
+def print_tools(tools):
+    output = "Available tools:"
+    for tool in tools:
+        output += f"  {tool.tool_name}"
+        output += f"   Description: {tool.description}"
+        output += f"   Inputs: {tool.inputs}"
+    return output
+
+
 def execute_slash_command(
     command: str,
     db_path: str,
@@ -1110,6 +1225,7 @@ def execute_slash_command(
     messages=None,
     model: str = None,
     provider: str = None,
+    api_url: str = None,
     conversation_id: str = None,
     stream: bool = False,
 ):
@@ -1193,13 +1309,7 @@ def execute_slash_command(
             output = f"Error compiling NPC profile: {str(e)}\n{traceback.format_exc()}"
             print(output)
     elif command_name == "tools":
-        output = "Available tools:"
-        for tool in tools:
-            output += f"  {tool.tool_name}"
-            output += f"   Description: {tool.description}"
-            output += f"   Inputs: {tool.inputs}"
-        return {"messages": messages, "output": output}
-
+        return {"messages": messages, "output": print_tools(tools)}
     elif command_name == "plonk":
         request = " ".join(args)
         plonk_call = plonk(
@@ -1303,95 +1413,14 @@ def execute_slash_command(
         )
 
     elif command.startswith("ots"):
-        # check if there is a filename
-        if len(command_parts) > 1:
-            filename = command_parts[1]
-            file_path = os.path.join(os.getcwd(), filename)
-            # Get user prompt about the image
-            user_prompt = input(
-                "Enter a prompt for the LLM about this image (or press Enter to skip): "
-            )
-
-            output = analyze_image(
-                user_prompt,
-                file_path,
-                filename,
-                npc=npc,
-            )
-
-        else:
-            output = capture_screenshot(npc=npc)
-            user_prompt = input(
-                "Enter a prompt for the LLM about this image (or press Enter to skip): "
-            )
-            # print(output["model_kwargs"])
-            output = analyze_image(
-                user_prompt,
-                output["file_path"],
-                output["filename"],
-                npc=npc,
-                **output["model_kwargs"],
-            )
-            # messages = output["messages"]
-
-            output = output["response"]
-
-        if output:
-            if isinstance(output, dict) and "filename" in output:
-                message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
-            else:  # This handles both LLM responses and error messages (both strings)
-                message = output
-            return {"messages": messages, "output": message}  # Return the message
-        else:  # Handle the case where capture_screenshot returns None
-            print("Screenshot capture failed.")
-            return {
-                "messages": messages,
-                "output": None,
-            }  # Return None to indicate failure
+        return ots(
+            command_parts, model=model, provider=provider, npc=npc, api_url=api_url
+        )
     elif command_name == "help":  # New help command
-        output = """# Available Commands
-
-/com [npc_file1.npc npc_file2.npc ...] # Alias for /compile.
-
-/compile [npc_file1.npc npc_file2.npc ...] # Compiles specified NPC profile(s). If no arguments are provided, compiles all NPCs in the npc_profi
-
-/exit or /quit # Exits the current NPC mode or the npcsh shell.
-
-/help # Displays this help message.
-
-/init # Initializes a new NPC project.
-
-/notes # Enter notes mode.
-
-/ots [filename] # Analyzes an image from a specified filename or captures a screenshot for analysis.
-
-/rag <search_term> # Performs a RAG (Retrieval-Augmented Generation) search based on the search term provided.
-
-/sample <question> # Asks the current NPC a question.
-
-/set <model|provider|db_path> <value> # Sets the specified parameter. Enclose the value in quotes.
-
-/sp [inherit_last=<n>] # Alias for /spool.
-
-/spool [inherit_last=<n>] # Enters spool mode. Optionally inherits the last <n> messages.
-
-/vixynt [filename=<filename>] <prompt> # Captures a screenshot and generates an image with the specified prompt.
-
-/<subcommand> # Enters the specified NPC's mode.
-
-/cmd <command/> # Execute a command using the current NPC's LLM.
-
-/command <command/> # Alias for /cmd.
-
-Tools within your npc_team directory can also be used as macro commands.
-
-
-# Note
-Bash commands and other programs can be executed directly. """
 
         return {
             "messages": messages,
-            "output": output,
+            "output": get_help(),
         }
 
     elif command_name == "whisper":
@@ -2814,7 +2843,36 @@ def enter_spool_mode(
                 conversation_result = ""
                 output = get_stream(spool_context, **kwargs_to_pass)
                 for chunk in output:
-                    print(chunk)
+                    if provider == "anthropic":
+                        if chunk.type == "content_block_delta":
+                            chunk_content = chunk.delta.text
+                            if chunk_content:
+                                conversation_result += chunk_content
+                                print(chunk_content, end="")
+
+                    elif (
+                        provider == "openai"
+                        or provider == "deepseek"
+                        or provider == "openai-like"
+                    ):
+                        chunk_content = "".join(
+                            choice.delta.content
+                            for choice in chunk.choices
+                            if choice.delta.content is not None
+                        )
+                        if chunk_content:
+                            conversation_result += chunk_content
+                            print(chunk_content, end="")
+
+                    elif provider == "ollama":
+                        chunk_content = chunk["message"]["content"]
+                        if chunk_content:
+                            conversation_result += chunk_content
+                            print(chunk_content, end="")
+                print("\n")
+                conversation_result = spool_context + [
+                    {"role": "assistant", "content": conversation_result}
+                ]
             else:
                 conversation_result = get_conversation(spool_context, **kwargs_to_pass)
 
@@ -2865,7 +2923,8 @@ def enter_spool_mode(
             if assistant_reply.count("```") % 2 != 0:
                 assistant_reply = assistant_reply + "```"
 
-            render_markdown(assistant_reply)
+            if not stream:
+                render_markdown(assistant_reply)
 
         except (KeyboardInterrupt, EOFError):
             print("\nExiting spool mode.")

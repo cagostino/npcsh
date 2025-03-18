@@ -1493,6 +1493,8 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
         name += ".npc"
 
     try:
+        if "~" in npc_file:
+            npc_file = os.path.expanduser(npc_file)
         if not os.path.isabs(npc_file):
             npc_file = os.path.abspath(npc_file)
 

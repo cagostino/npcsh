@@ -48,11 +48,16 @@ def get_anthropic_stream(
         api_key = os.environ.get("ANTHROPIC_API_KEY")
     client = anthropic.Anthropic(api_key=api_key)
 
+    if messages[0]["role"] == "system":
+        system_message = messages[0]["content"]
+        messages = messages[1:]
+    elif npc is not None:
+        system_message = get_system_message(npc)
+
     # Preprocess messages to ensure content is a list of dicts
     for message in messages:
         if isinstance(message["content"], str):
             message["content"] = [{"type": "text", "text": message["content"]}]
-    print(messages)
     # Add images if provided
     if images:
         for img in images:
@@ -76,6 +81,7 @@ def get_anthropic_stream(
         "messages": messages,
         "max_tokens": kwargs.get("max_tokens", 8192),
         "stream": True,
+        "system": system_message,
     }
 
     # Add tools if provided
