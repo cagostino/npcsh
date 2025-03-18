@@ -463,6 +463,26 @@ The output indicates that the biggest file on your system is located at `/home/c
 
 ```
 
+```bash
+$ npc 'whats the weather in tokyo'
+Loaded .env file from /home/caug/npcww/npcsh
+action chosen: invoke_tool
+explanation given: The user's request for the current weather in Tokyo requires up-to-date information, which can be best obtained through an internet search.
+Tool found: internet_search
+Executing tool with input values: {'query': 'whats the weather in tokyo'}
+QUERY in tool whats the weather in tokyo
+[{'title': 'Tokyo, Tokyo, Japan Weather Forecast | AccuWeather', 'href': 'https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396', 'body': 'Tokyo, Tokyo, Japan Weather Forecast, with current conditions, wind, air quality, and what to expect for the next 3 days.'}, {'title': 'Tokyo, Japan 14 day weather forecast - timeanddate.com', 'href': 'https://www.timeanddate.com/weather/japan/tokyo/ext', 'body': 'Tokyo Extended Forecast with high and low temperatures. °F. Last 2 weeks of weather'}, {'title': 'Tokyo, Tokyo, Japan Current Weather | AccuWeather', 'href': 'https://www.accuweather.com/en/jp/tokyo/226396/current-weather/226396', 'body': 'Current weather in Tokyo, Tokyo, Japan. Check current conditions in Tokyo, Tokyo, Japan with radar, hourly, and more.'}, {'title': 'Weather in Tokyo, Japan - timeanddate.com', 'href': 'https://www.timeanddate.com/weather/japan/tokyo', 'body': 'Current weather in Tokyo and forecast for today, tomorrow, and next 14 days'}, {'title': 'Tokyo Weather Forecast Today', 'href': 'https://japanweather.org/tokyo', 'body': "For today's mild weather in Tokyo, with temperatures between 13ºC to 16ºC (55.4ºF to 60.8ºF), consider wearing: - Comfortable jeans or slacks - Sun hat (if spending time outdoors) - Lightweight sweater or cardigan - Long-sleeve shirt or blouse. Temperature. Day. 14°C. Night. 10°C. Morning. 10°C. Afternoon."}] <class 'list'>
+RESULTS in tool ["Tokyo, Tokyo, Japan Weather Forecast, with current conditions, wind, air quality, and what to expect for the next 3 days.\n Citation: https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396\n\n\n\nTokyo Extended Forecast with high and low temperatures. °F. Last 2 weeks of weather\n Citation: https://www.timeanddate.com/weather/japan/tokyo/ext\n\n\n\nCurrent weather in Tokyo, Tokyo, Japan. Check current conditions in Tokyo, Tokyo, Japan with radar, hourly, and more.\n Citation: https://www.accuweather.com/en/jp/tokyo/226396/current-weather/226396\n\n\n\nCurrent weather in Tokyo and forecast for today, tomorrow, and next 14 days\n Citation: https://www.timeanddate.com/weather/japan/tokyo\n\n\n\nFor today's mild weather in Tokyo, with temperatures between 13ºC to 16ºC (55.4ºF to 60.8ºF), consider wearing: - Comfortable jeans or slacks - Sun hat (if spending time outdoors) - Lightweight sweater or cardigan - Long-sleeve shirt or blouse. Temperature. Day. 14°C. Night. 10°C. Morning. 10°C. Afternoon.\n Citation: https://japanweather.org/tokyo\n\n\n", 'https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396\n\nhttps://www.timeanddate.com/weather/japan/tokyo/ext\n\nhttps://www.accuweather.com/en/jp/tokyo/226396/current-weather/226396\n\nhttps://www.timeanddate.com/weather/japan/tokyo\n\nhttps://japanweather.org/tokyo\n']
+The current weather in Tokyo, Japan is mild, with temperatures ranging from 13°C to 16°C (approximately 55.4°F to 60.8°F). For today's conditions, it is suggested to wear comfortable jeans or slacks, a lightweight sweater or cardigan, and a long-sleeve shirt or blouse, especially if spending time outdoors. The temperature today is expected to reach a high of 14°C (57.2°F) during the day and a low of 10°C (50°F) at night.
+
+For more detailed weather information, you can check out the following sources:
+- [AccuWeather Forecast](https://www.accuweather.com/en/jp/tokyo/226396/weather-forecast/226396)
+- [Time and Date Extended Forecast](https://www.timeanddate.com/weather/japan/tokyo/ext)
+- [Current Weather on AccuWeather](https://www.accuweather.com/en/jp/tokyo/226396/current-weather/226396)
+- [More on Time and Date](https://www.timeanddate.com/weather/japan/tokyo)
+- [Japan Weather](https://japanweather.org/tokyo)
+```
+
 
 ### Serving
 To serve an NPC project, first install redis-server and start it

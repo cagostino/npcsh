@@ -48,26 +48,48 @@ npc_compiler = NPCCompiler(npc_directory, NPCSH_DB_PATH)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="NPC utilities")
-    parser.add_argument(
-        "prompt", nargs="?", help="Generic prompt to send to the default LLM"
-    )
-    parser.add_argument(
-        "--model", "-m", help="model to use", type=str, default=NPCSH_CHAT_MODEL
-    )
-    parser.add_argument(
-        "--provider",
-        "-pr",
-        help="provider to use",
-        type=str,
-        default=NPCSH_CHAT_PROVIDER,
-    )
-    parser.add_argument(
-        "-n", "--npc", help="name of the NPC", type=str, default="sibiji"
-    )
 
-    # Handle the prompt BEFORE defining subparsers
-    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+    parser = argparse.ArgumentParser(description="NPC utilities")
+    known_commands = {
+        "assemble",
+        "build",
+        "compile",
+        "init",
+        "new",
+        "plonk",
+        "sample",
+        "select",
+        "serve",
+        "spool",
+        "tools",
+        "tool",
+        "local_search",
+        "rag",
+        "search",
+        "vixynt",
+        "ots",
+        "whisper",
+    }
+
+    # Only add prompt as default if first arg isn't a known command
+    if len(sys.argv) > 1 and sys.argv[1] not in known_commands:
+        parser.add_argument(
+            "prompt", nargs="?", help="Generic prompt to send to the default LLM"
+        )
+        parser.add_argument(
+            "--model", "-m", help="model to use", type=str, default=NPCSH_CHAT_MODEL
+        )
+        parser.add_argument(
+            "--provider",
+            "-pr",
+            help="provider to use",
+            type=str,
+            default=NPCSH_CHAT_PROVIDER,
+        )
+        parser.add_argument(
+            "-n", "--npc", help="name of the NPC", type=str, default="sibiji"
+        )
+
         args = parser.parse_args()
         db_conn = sqlite3.connect(NPCSH_DB_PATH)
         if args.npc is None or args.npc == "sibiji":
@@ -110,6 +132,18 @@ def main():
                     print(chunk_content, end="")
         print("\n")
         return
+
+    parser.add_argument(
+        "--model", "-m", help="model to use", type=str, default=NPCSH_CHAT_MODEL
+    )
+    parser.add_argument(
+        "--provider",
+        "-pr",
+        help="provider to use",
+        type=str,
+        default=NPCSH_CHAT_PROVIDER,
+    )
+
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # Generic prompt parser (for "npc 'prompt'")
