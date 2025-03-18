@@ -1,5 +1,5 @@
 tool_name: "internet_search"
-description: Searches the web for information based on a query in order to verify timiely details (e.g. current events) or to corroborate information in uncertain situations.
+description: Searches the web for information based on a query in order to verify timiely details (e.g. current events) or to corroborate information in uncertain situations. Should be mainly only used when users specifically request a search, otherwise an LLMs basic knowledge should be sufficient.
 inputs:
   - query
 steps:

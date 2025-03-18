@@ -182,27 +182,29 @@ def main() -> None:
     from colorama import init
 
     init()  # Initialize colorama for ANSI code support
-    print(
-        """
-Welcome to \033[1;94mnpc\033[0m\033[1;38;5;202msh\033[0m!
-  \033[1;94m                    \033[0m\033[1;38;5;202m               \\\\
-  \033[1;94m _ __   _ __    ___ \033[0m\033[1;38;5;202m ___  | |___    \\\\
-  \033[1;94m| '_ \ | '_ \  / __|\033[0m\033[1;38;5;202m/ __/ | |_ _|    \\\\
-  \033[1;94m| | | || |_) |( |__ \033[0m\033[1;38;5;202m\_  \ | | | |    //
-  \033[1;94m|_| |_|| .__/  \___|\033[0m\033[1;38;5;202m|___/ |_| |_|   //
-         \033[1;94m| |          \033[0m\033[1;38;5;202m               //
-         \033[1;94m| |
-         \033[1;94m|_|
+    if sys.stdin.isatty():
 
-Begin by asking a question, issuing a bash command, or typing '/help' for more information.
-        """
-    )
+        print(
+            """
+    Welcome to \033[1;94mnpc\033[0m\033[1;38;5;202msh\033[0m!
+    \033[1;94m                    \033[0m\033[1;38;5;202m               \\\\
+    \033[1;94m _ __   _ __    ___ \033[0m\033[1;38;5;202m ___  | |___    \\\\
+    \033[1;94m| '_ \ | '_ \  / __|\033[0m\033[1;38;5;202m/ __/ | |_ _|    \\\\
+    \033[1;94m| | | || |_) |( |__ \033[0m\033[1;38;5;202m\_  \ | | | |    //
+    \033[1;94m|_| |_|| .__/  \___|\033[0m\033[1;38;5;202m|___/ |_| |_|   //
+            \033[1;94m| |          \033[0m\033[1;38;5;202m              //
+            \033[1;94m| |
+            \033[1;94m|_|
+
+    Begin by asking a question, issuing a bash command, or typing '/help' for more information.
+            """
+        )
 
     current_npc = None
     messages = None
     current_conversation_id = start_new_conversation()
 
-        # --- Minimal Piped Input Handling ---
+    # --- Minimal Piped Input Handling ---
     if not sys.stdin.isatty():
         for line in sys.stdin:
             user_input = line.strip()
@@ -213,7 +215,6 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                 sys.exit(0)
             result = execute_command(
                 user_input,
-                command_history,
                 db_path,
                 npc_compiler,
                 current_npc,
@@ -235,7 +236,11 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             messages = result.get("messages")
             current_path = result.get("current_path")
             attachments = result.get("attachments")
-            npc_name = npc.name if isinstance(npc, NPC) else npc if isinstance(npc, str) else None
+            npc_name = (
+                npc.name
+                if isinstance(npc, NPC)
+                else npc if isinstance(npc, str) else None
+            )
 
             save_conversation_message(
                 command_history,
@@ -260,7 +265,9 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
                                 print(chunk_content, end="")
                     elif provider in ["openai", "deepseek", "openai-like"]:
                         chunk_content = "".join(
-                            choice.delta.content for choice in chunk.choices if choice.delta.content is not None
+                            choice.delta.content
+                            for choice in chunk.choices
+                            if choice.delta.content is not None
                         )
                         if chunk_content:
                             str_output += chunk_content
@@ -286,7 +293,6 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             )
         sys.exit(0)
     # --- End Minimal Piped Input Handling ---
-
 
     while True:
         try:
@@ -419,5 +425,7 @@ Begin by asking a question, issuing a bash command, or typing '/help' for more i
             else:
                 print("\nGoodbye!")
                 break
+
+
 if __name__ == "__main__":
     main()
