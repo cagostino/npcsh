@@ -200,6 +200,7 @@ def get_llm_response(
     messages: List[Dict[str, str]] = None,
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
+    context=None,
     **kwargs,
 ):
     """
@@ -326,6 +327,7 @@ def get_stream(
     images: List[Dict[str, str]] = None,
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
+    context=None,
     **kwargs,
 ) -> List[Dict[str, str]]:
     """
@@ -392,6 +394,7 @@ def get_conversation(
     images: List[Dict[str, str]] = None,
     npc: Any = None,
     api_url: str = NPCSH_API_URL,
+    context=None,
     **kwargs,
 ) -> List[Dict[str, str]]:
     """
@@ -457,6 +460,7 @@ def execute_llm_question(
     n_docs: int = 5,
     stream: bool = False,
     images: List[Dict[str, str]] = None,
+    context=None,
 ):
     location = os.getcwd()
     if messages is None or len(messages) == 0:
@@ -471,6 +475,9 @@ def execute_llm_question(
         context_message = f"""
         What follows is the context of the text files in the user's directory that are potentially relevant to their request:
         {context}
+
+        if the user has asked for code, be sure to include markdown formatting
+        blocks starting and stopping with ``` to ensure the code is formatted correctly.
         """
         # Add context as a system message
         # messages.append({"role": "system", "content": context_message})
@@ -544,6 +551,7 @@ def execute_llm_command(
     retrieved_docs=None,
     n_docs=5,
     stream=False,
+    context=None,
 ) -> str:
     """
     Function Description:
@@ -605,6 +613,7 @@ def execute_llm_command(
             messages=[],
             npc=npc,
             format="json",
+            context=context,
         )
 
         llm_response = response.get("response", {})
@@ -676,6 +685,7 @@ def execute_llm_command(
                     api_key=api_key,
                     npc=npc,
                     messages=messages,
+                    context=context,
                 )
             output = response.get("response", "")
 
@@ -711,6 +721,7 @@ def execute_llm_command(
                 api_key=api_key,
                 format="json",
                 messages=messages,
+                context=context,
             )
 
             fix_suggestion_response = fix_suggestion.get("response", {})
@@ -756,6 +767,7 @@ def check_llm_command(
     images: list = None,
     n_docs=5,
     stream=False,
+    context=None,
 ):
     """
     Function Description:
@@ -792,12 +804,14 @@ ReAct choices then will enter reasoning flow
 
     # print(model, provider, npc)
     # Create context from retrieved documents
-    context = ""
+    docs_context = ""
 
     if retrieved_docs:
         for filename, content in retrieved_docs[:n_docs]:
-            context += f"Document: {filename}\n{content}\n\n"
-        context = f"Refer to the following documents for context:\n{context}\n\n"
+            docs_context += f"Document: {filename}\n{content}\n\n"
+        docs_context = (
+            f"Refer to the following documents for context:\n{docs_context}\n\n"
+        )
 
     prompt = f"""
     A user submitted this query: {command}
@@ -815,11 +829,11 @@ ReAct choices then will enter reasoning flow
 
     Available tools:
     """
-
-    if npc.all_tools_dict is None:
-        prompt += "No tools available."
+    print(npc.tools_dict, type(npc.tools_dict))
+    if npc.tools_dict is None or npc.tools_dict == {}:
+        prompt += "No tools available. Do not invoke tools."
     else:
-        for tool_name, tool in npc.all_tools_dict.items():
+        for tool_name, tool in npc.tools_dict.items():
             prompt += f"""
             {tool_name} : {tool.description} \n
         """
@@ -830,14 +844,33 @@ ReAct choices then will enter reasoning flow
     if len(npc.resolved_npcs) == 0:
         prompt += "No NPCs available for alternative answers."
     else:
+        print(npc.resolved_npcs)
         for i, npc_in_network in enumerate(npc.resolved_npcs):
+            name = list(npc_in_network.keys())[0]
+            npc_obj = npc_in_network[name]
+
+            if hasattr(npc_obj, "name"):
+                name_to_include = npc_obj.name
+            elif "name " in npc_obj:
+                name_to_include = npc_obj["name"]
+
+            if hasattr(npc_obj, "primary_directive"):
+                primary_directive_to_include = npc_obj.primary_directive
+            elif "primary_directive" in npc_obj:
+                primary_directive_to_include = npc_obj["primary_directive"]
             prompt += f"""
             ({i})
 
-            NPC: {npc_in_network['name']}
-            Primary Directive : {npc_in_network['primary_directive']}
+            NPC: {name_to_include}
+            Primary Directive : {primary_directive_to_include}
 
             """
+    if npc.shared_context:
+        prompt += f"""
+        Relevant shared context for the npc:
+        {npc.shared_context}
+        """
+        print("shared_context: " + str(npc.shared_context))
     # print(prompt)
 
     prompt += f"""
@@ -845,6 +878,7 @@ ReAct choices then will enter reasoning flow
     - Whether it can be answered via a bash command on the user's computer. e.g. if a user is curious about file sizes within a directory or about processes running on their computer, these are likely best handled by a bash command.
     - Whether more context from the user is required to adequately answer the question. e.g. if a user asks for a joke about their favorite city but they don't include the city , it would be helpful to ask for that information. Similarly, if a user asks to open a browser and to check the weather in a city, it would be helpful to ask for the city and which website or source to use.
     - Whether a tool should be used.
+
 
     Excluding time-sensitive phenomena,
     most general questions can be answered without any
@@ -862,7 +896,9 @@ ReAct choices then will enter reasoning flow
     - "tool_name": : if action is "invoke_tool": the name of the tool to use.
                      else if action is "execute_sequence", a list of tool names to use.
     - "explanation": a brief explanation of why you chose this action.
-    - "npc_name": (if action is "pass_to_npc") the name of the NPC to pass the question to.
+    - "npc_name": (if action is "pass_to_npc") the name of the NPC to pass the question , else if action is "execute_sequence", a list of
+                    npcs to pass the question to in order.
+
 
 
     Return only the JSON object. Do not include any additional text.
@@ -872,17 +908,29 @@ ReAct choices then will enter reasoning flow
         "action": "execute_command" | "invoke_tool" | "answer_question" | "pass_to_npc" | "execute_sequence" | "request_input",
         "tool_name": "<tool_name(s)_if_applicable>",
         "explanation": "<your_explanation>",
-        "npc_name": "<npc_name_if_applicable>"
+        "npc_name": "<npc_name(s)_if_applicable>"
     }}
+
+    If you execute a sequence, ensure that you have a specified NPC for each tool use.
 
     Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING. There should be no prefix 'json'. Start straight with the opening curly brace.
     """
 
+    if docs_context:
+        prompt += f"""
+        Relevant context from user files.
+
+        {docs_context}
+
+        """
     if context:
         prompt += f"""
-        Relevant context from user's files:
+        Relevant context from users:
+
         {context}
+
         """
+
     # print(prompt)
 
     # For action determination, we don't need to pass the conversation messages to avoid confusion
@@ -896,6 +944,7 @@ ReAct choices then will enter reasoning flow
         npc=npc,
         format="json",
         messages=[],
+        context=None,
     )
     if "Error" in action_response:
         print(f"LLM Error: {action_response['error']}")
@@ -920,6 +969,8 @@ ReAct choices then will enter reasoning flow
     # Include the user's command in the conversation messages
     print(f"action chosen: {action}")
     print(f"explanation given: {explanation}")
+    if response_content_parsed.get("tool_name"):
+        print(f"tool name: {response_content_parsed.get('tool_name')}")
 
     if action == "execute_command":
         # Pass messages to execute_llm_command
@@ -944,7 +995,7 @@ ReAct choices then will enter reasoning flow
     elif action == "invoke_tool":
         tool_name = response_content_parsed.get("tool_name")
         # print(npc)
-
+        print(f"tool name: {tool_name}")
         result = handle_tool_call(
             command,
             tool_name,
@@ -992,9 +1043,14 @@ ReAct choices then will enter reasoning flow
     elif action == "pass_to_npc":
         npc_to_pass = response_content_parsed.get("npc_name")
         # print(npc)
-
+        # get tge actual npc object from the npc.resolved_npcs
+        npc_to_pass_obj = None
+        for npc_obj in npc.resolved_npcs:
+            if npc_to_pass in npc_obj:
+                npc_to_pass_obj = npc_obj[npc_to_pass]
+                break
         return npc.handle_agent_pass(
-            npc_to_pass,
+            npc_to_pass_obj,
             command,
             messages=messages,
             retrieved_docs=retrieved_docs,
@@ -1044,27 +1100,56 @@ ReAct choices then will enter reasoning flow
 
     elif action == "execute_sequence":
         tool_names = response_content_parsed.get("tool_name")
+        npc_names = response_content_parsed.get("npc_name")
+        print(npc_names)
+        npcs = []
+        print(tool_names, npc_names)
+        if isinstance(npc_names, list):
+            for npc_name in npc_names:
+                for npc_obj in npc.resolved_npcs:
+                    if npc_name in npc_obj:
+                        npcs.append(npc_obj[npc_name])
+                        break
+
         output = ""
         results_tool_calls = []
-        for tool_name in tool_names:
-            result = handle_tool_call(
-                command,
-                tool_name,
-                model=model,
-                provider=provider,
-                api_url=api_url,
-                api_key=api_key,
-                messages=messages,
-                npc=npc,
-                retrieved_docs=retrieved_docs,
-                stream=stream,
-            )
-            results_tool_calls.append(result)
-            messages = result.get("messages", messages)
-            output += result.get("output", "")
+
+        if len(tool_names) > 0:
+            for npc_obj, tool_name in zip(npcs, tool_names):
+                result = handle_tool_call(
+                    command,
+                    tool_name,
+                    model=model,
+                    provider=provider,
+                    api_url=api_url,
+                    api_key=api_key,
+                    messages=messages,
+                    npc=npc_obj,
+                    retrieved_docs=retrieved_docs,
+                    stream=stream,
+                )
+                results_tool_calls.append(result)
+                messages = result.get("messages", messages)
+                output += result.get("output", "")
+                print(output)
+        else:
+            for npc_obj in npcs:
+                result = npc.handle_agent_pass(
+                    npc_obj,
+                    command,
+                    messages=messages,
+                    retrieved_docs=retrieved_docs,
+                    n_docs=n_docs,
+                    shared_context=npc.shared_context,
+                )
+
+                messages = result.get("messages", messages)
+                results_tool_calls.append(result.get("response"))
+                print(messages[-1])
         # import pdb
 
         # pdb.set_trace()
+
         return {"messages": messages, "output": output}
     else:
         print("Error: Invalid action in LLM response")
@@ -1085,6 +1170,7 @@ def handle_tool_call(
     stream=False,
     n_attempts=3,
     attempt=0,
+    context=None,
 ) -> Union[str, Dict[str, Any]]:
     """
     Function Description:
@@ -1105,7 +1191,8 @@ def handle_tool_call(
 
     """
     # print(npc)
-    if not npc or not npc.all_tools_dict:
+    print("handling tool call")
+    if not npc or (not npc.all_tools_dict and not npc.tools_dict):
         print("not available")
         available_tools = npc.all_tools_dict if npc else None
         print(
@@ -1113,13 +1200,16 @@ def handle_tool_call(
         )
         return f"No tools are available for NPC '{npc.name or 'default'}'."
 
-    if tool_name not in npc.all_tools_dict:
+    if tool_name not in npc.all_tools_dict and tool_name not in npc.tools_dict:
         print("not available")
         print(f"Tool '{tool_name}' not found in NPC's tools_dict.")
         print("available tools", npc.all_tools_dict)
         return f"Tool '{tool_name}' not found."
 
-    tool = npc.all_tools_dict[tool_name]
+    if tool_name in npc.all_tools_dict:
+        tool = npc.all_tools_dict[tool_name]
+    elif tool_name in npc.tools_dict:
+        tool = npc.tools_dict[tool_name]
     print(f"Tool found: {tool.tool_name}")
     jinja_env = Environment(loader=FileSystemLoader("."), undefined=Undefined)
 
@@ -1134,7 +1224,9 @@ def handle_tool_call(
     Please extract the required inputs for the tool as a JSON object.
     They must be exactly as they are named in the tool.
     Return only the JSON object without any markdown formatting.
+
     """
+
     if npc and hasattr(npc, "shared_context"):
         if npc.shared_context.get("dataframes"):
             context_info = "\nAvailable dataframes:\n"
@@ -1142,9 +1234,12 @@ def handle_tool_call(
                 context_info += f"- {df_name}\n"
             prompt += f"""Here is contextual info that may affect your choice: {context_info}
             """
+    if context is not None:
+        prompt += f"Here is some additional context: {context}"
 
-    # print(f"Tool prompt: {prompt}")
+    # print(prompt)
 
+    # print(
     # print(prompt)
     response = get_llm_response(
         prompt,
@@ -1209,17 +1304,66 @@ def handle_tool_call(
 
     # try:
     print("Executing tool with input values:", input_values)
-    tool_output = tool.execute(
-        input_values,
-        npc.all_tools_dict,
-        jinja_env,
-        command,
-        model=model,
-        provider=provider,
-        npc=npc,
-        stream=stream,
-        messages=messages,
-    )
+
+    try:
+
+        tool_output = tool.execute(
+            input_values,
+            npc.all_tools_dict,
+            jinja_env,
+            command,
+            model=model,
+            provider=provider,
+            npc=npc,
+            stream=stream,
+            messages=messages,
+        )
+        if "Error" in tool_output:
+            raise Exception(tool_output)
+    except Exception as e:
+
+        # diagnose_problem = get_llm_response(
+        ##    f"""a problem has occurred.
+        #                                    Please provide a diagnosis of the problem and a suggested #fix.
+
+        #                                    The tool call failed with this error:
+        #                                    {e}
+        #                                    Please return a json object containing two fields
+        ##                                    -problem
+        #                                    -suggested solution.
+        #                                    do not include any additional markdown formatting or #leading json tags
+
+        #                                    """,
+        #    model=model,
+        #    provider=provider,
+        #    npc=npc,
+        ##    api_url=api_url,
+        #    api_ley=api_key,
+        #    format="json",
+        # )
+        # print(e)
+        # problem = diagnose_problem.get("response", {}).get("problem")
+        # suggested_solution = diagnose_problem.get("response", {}).get(
+        #    "suggested_solution"
+        # )
+
+        tool_output = handle_tool_call(
+            command,
+            tool_name,
+            model=model,
+            provider=provider,
+            messages=messages,
+            npc=npc,
+            api_url=api_url,
+            api_key=api_key,
+            retrieved_docs=retrieved_docs,
+            n_docs=n_docs,
+            stream=stream,
+            attempt=attempt + 1,
+            n_attempts=n_attempts,
+            context=f""" \n \n \n "tool failed: {e}  \n \n \n here was the previous attempt: {input_values}""",
+        )
+
     if stream:
         return tool_output
     # print(f"Tool output: {tool_output}")
@@ -1567,6 +1711,7 @@ def enter_reasoning_human_in_the_loop(
     chat_provider: str = NPCSH_CHAT_PROVIDER,
     npc: Any = None,
     answer_only: bool = False,
+    context=None,
 ) -> Generator[str, None, None]:
     """
     Stream responses while checking for think tokens and handling human input when needed.
@@ -1595,7 +1740,11 @@ def enter_reasoning_human_in_the_loop(
         )
 
     response_stream = get_stream(
-        messages, model=reasoning_model, provider=reasoning_provider, npc=npc
+        messages,
+        model=reasoning_model,
+        provider=reasoning_provider,
+        npc=npc,
+        context=context,
     )
 
     thoughts = []
@@ -1712,7 +1861,11 @@ def handle_request_input(
     """
 
     response = get_llm_response(
-        prompt, model=model, provider=provider, messages=[], format="json"
+        prompt,
+        model=model,
+        provider=provider,
+        messages=[],
+        format="json",
     )
 
     result = response.get("response", {})
