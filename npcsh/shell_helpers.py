@@ -324,6 +324,22 @@ def render_markdown(text: str) -> None:
             console.print(Markdown(line))
 
 
+def render_code_block(code: str, language: str = None) -> None:
+    """Render a code block with syntax highlighting using rich, left-justified with no line numbers"""
+    from rich.syntax import Syntax
+    from rich.console import Console
+
+    console = Console(highlight=True)
+    code = code.strip()
+    # If code starts with a language identifier, remove it
+    if code.split("\n", 1)[0].lower() in ["python", "bash", "javascript"]:
+        code = code.split("\n", 1)[1]
+    syntax = Syntax(
+        code, language or "python", theme="monokai", line_numbers=False, padding=0
+    )
+    console.print(syntax)
+
+
 def change_directory(command_parts: list, messages: list) -> dict:
     """
     Function Description:
@@ -1825,6 +1841,7 @@ def execute_command(
 
             npc = load_npc_from_file(npc_path, db_conn)
         else:
+            valid_npcs = [current_npc]
             npc = current_npc
 
         # print(single_command.startswith("/"))

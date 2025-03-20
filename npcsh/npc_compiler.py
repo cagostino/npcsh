@@ -16,6 +16,7 @@ import random
 from datetime import datetime
 import hashlib
 from collections import defaultdict, deque
+import traceback
 
 # Importing functions
 from .llm_funcs import (
@@ -645,12 +646,47 @@ class Tool:
                     if exec_env["output"] is not None:
                         context["results"] = exec_env["output"]
             except NameError as e:
-                print(f"NameError: {e} , on the following tool code: ", rendered_code)
+                tb_lines = traceback.format_exc().splitlines()
+                limited_tb = (
+                    "\n".join(tb_lines[:100])
+                    if len(tb_lines) > 100
+                    else "\n".join(tb_lines)
+                )
+                print(f"NameError: {e}")
+                print(f"Limited traceback:\n{limited_tb}")
+                print("Tool code:")
+                print(rendered_code)
+                return {
+                    "output": f"Error executing Python code : {e} with traceback: {limited_tb}"
+                }
             except SyntaxError as e:
-                print(f"SyntaxError: {e} , on the following tool code: ", rendered_code)
+                tb_lines = traceback.format_exc().splitlines()
+                limited_tb = (
+                    "\n".join(tb_lines[:100])
+                    if len(tb_lines) > 100
+                    else "\n".join(tb_lines)
+                )
+                print(f"SyntaxError: {e}")
+                print(f"Limited traceback:\n{limited_tb}")
+                print("Tool code:")
+                print(rendered_code)
+                return {
+                    "output": f"Error executing Python code : {e} with traceback: {limited_tb}"
+                }
             except Exception as e:
-                print(f"Error executing Python code: {e}")
-
+                tb_lines = traceback.format_exc().splitlines()
+                limited_tb = (
+                    "\n".join(tb_lines[:100])
+                    if len(tb_lines) > 100
+                    else "\n".join(tb_lines)
+                )
+                print(f"Error executing Python code:")
+                print(f"Limited traceback:\n{limited_tb}")
+                print("Tool code:")
+                print(rendered_code)
+                return {
+                    "output": f"Error executing Python code : {e} with traceback: {limited_tb}"
+                }
         return context
 
     def to_dict(self):
@@ -696,16 +732,16 @@ def load_tools_from_directory(directory) -> list:
 class NPC:
     def __init__(
         self,
-        db_conn: sqlite3.Connection,
         name: str,
         primary_directive: str = None,
         tools: list = None,  # from the npc profile
         model: str = None,
         provider: str = None,
         api_url: str = None,
+        db_conn=None,
         all_tools: list = None,  # all available tools in global and project, this is an anti pattern i need to solve eventually but for now it works
-        use_global_tools: bool = True,
-        use_npc_network: bool = True,
+        use_global_tools: bool = False,
+        use_npc_network: bool = False,
         global_npc_directory: str = None,
         project_npc_directory: str = None,
         global_tools_directory: str = None,
@@ -751,20 +787,34 @@ class NPC:
 
         self.model = model
         self.db_conn = db_conn
-        self.tables = self.db_conn.execute(
-            "SELECT name, sql FROM sqlite_master WHERE type='table';"
-        ).fetchall()
-
+        if self.db_conn is not None:
+            self.tables = self.db_conn.execute(
+                "SELECT name, sql FROM sqlite_master WHERE type='table';"
+            ).fetchall()
+        else:
+            self.tables = None
         self.provider = provider
         self.api_url = api_url
         self.all_tools = all_tools or []
         self.all_tools_dict = {tool.tool_name: tool for tool in self.all_tools}
         if self.tools:
-            self.tools = self.load_suggested_tools(
-                tools,
-                self.global_tools_directory,
-                self.project_tools_directory,
-            )
+            tools_to_load = []
+
+            for tool in self.tools:
+                if isinstance(tool, Tool):
+                    continue
+                if isinstance(tool, str):
+                    tools_to_load.append(tool)
+            if len(tools_to_load) > 0:
+                self.tools = self.load_suggested_tools(
+                    tools,
+                    self.global_tools_directory,
+                    self.project_tools_directory,
+                )
+            self.tools_dict = {tool.tool_name: tool for tool in self.tools}
+        else:
+            self.tools_dict = {}
+
         self.shared_context = {
             "dataframes": {},
             "current_data": None,
@@ -809,7 +859,11 @@ class NPC:
         retrieved_docs=None,
         messages=None,
         n_docs=5,
+        context=None,
+        shared_context=None,
     ):
+        if shared_context is not None:
+            self.shared_context = shared_context
         return check_llm_command(
             command,
             model=self.model,
@@ -818,6 +872,7 @@ class NPC:
             retrieved_docs=retrieved_docs,
             messages=messages,
             n_docs=n_docs,
+            context=context,
         )
 
     def handle_agent_pass(
@@ -827,6 +882,8 @@ class NPC:
         messages: List[Dict[str, str]] = None,
         retrieved_docs=None,
         n_docs: int = 5,
+        context=None,
+        shared_context=None,
     ) -> Union[str, Dict[str, Any]]:
         """
         Function Description:
@@ -846,13 +903,20 @@ class NPC:
         """
         # print(npc_to_pass, command)
 
-        target_npc = self.get_npc(npc_to_pass)
-        if target_npc is None:
-            return "NPC not found."
+        if isinstance(npc_to_pass, NPC):
+            npc_to_pass_init = npc_to_pass
+        else:
+            # assume just a string name?
+            target_npc = self.get_npc(npc_to_pass)
+            if target_npc is None:
+                return "NPC not found."
 
-        # initialize them as an actual NPC
-        npc_to_pass_init = NPC(self.db_conn, **target_npc)
+            # initialize them as an actual NPC
+            npc_to_pass_init = NPC(self.db_conn, **target_npc)
         # print(npc_to_pass_init, command)
+        print(npc_to_pass, npc_to_pass.tools)
+        if shared_context is not None:
+            self.shared_context = shared_context
         updated_command = (
             command
             + "/n"
@@ -873,6 +937,7 @@ class NPC:
             retrieved_docs=retrieved_docs,
             messages=messages,
             n_docs=n_docs,
+            shared_context=self.shared_context,
         )
 
     def get_npc(self, npc_name: str):
@@ -930,6 +995,9 @@ class NPC:
         return f"NPC: {self.name}\nDirective: {self.primary_directive}\nModel: {self.model}"
 
     def analyze_db_data(self, request: str):
+        if self.db_conn is None:
+            print("please specify a database connection when initiating the NPC")
+            raise Exception("No database connection found")
         return get_data_response(
             request,
             self.db_conn,
@@ -1110,10 +1178,174 @@ class SilentUndefined(Undefined):
         return ""
 
 
+class NPCTeam:
+    def __init__(self, npcs: list, foreman: NPC, db_conn=None, context: dict = None):
+        self.npcs = npcs
+        self.foreman = foreman
+        self.foreman.resolved_npcs = [{npc.name: npc} for npc in self.npcs]
+        self.db_conn = db_conn
+        self.context = context
+        self.shared_context = {
+            "intermediate_results": {},  # Store results each NPC produces
+            "data": {},  # Active data being analyzed
+        }
+
+    def to_dict(self):
+        return {
+            "foreman": self.foreman.to_dict(),
+            "npcs": [npc.to_dict() for npc in self.npcs],
+            "context": self.context,
+        }
+
+    def orchestrate(self, request: str):
+        # Initial check with foreman
+        result = self.foreman._check_llm_command(
+            request,
+            context=self.context,
+            shared_context=self.shared_context,
+        )
+        try:
+            while True:
+                try:
+                    result = self.foreman._check_llm_command(
+                        request,
+                        context=self.context,
+                        shared_context=self.shared_context,
+                    )
+
+                    # Track execution history and init npc messages if needed
+                    if "execution_history" not in self.shared_context:
+                        self.shared_context["execution_history"] = []
+                    if "npc_messages" not in self.shared_context:
+                        self.shared_context["npc_messages"] = {}
+
+                    # Save result and maintain NPC message history
+                    if isinstance(result, dict):
+                        self.shared_context["execution_history"].append(result)
+                        if result.get("messages") and result.get("npc_name"):
+                            if (
+                                result["npc_name"]
+                                not in self.shared_context["npc_messages"]
+                            ):
+                                self.shared_context["npc_messages"][
+                                    result["npc_name"]
+                                ] = []
+                            self.shared_context["npc_messages"][
+                                result["npc_name"]
+                            ].extend(result["messages"])
+
+                    # Check if complete
+                    follow_up = get_llm_response(
+                        f"""Context: User request '{request}' returned:
+                        {result}
+
+                        Instructions:
+                        Analyze if this result fully addresses the request. In your evaluation you must not be
+                        too harsh. While there may be numerous refinements that can be made to improve the output
+                        to "fully address" the request, it will be typically better for the user to
+                        have a higher rate of interactive feedback such that we will not lose track of the
+                        real aim and get stuck in a rut hyper-fixating.
+                            Thus it is better to consider results as complete if they satisfy the bare minimum
+                            of the request and provide a good starting point for further refinement.
+
+                        Return a JSON object with two fields:
+                            -'complete' with boolean value.
+                            -'explanation' for incompleteness
+                        Do not include markdown formatting or ```json tags.
+                        Return only the JSON object.""",
+                        model=self.foreman.model,
+                        provider=self.foreman.provider,
+                        npc=self.foreman,
+                        format="json",
+                    )
+
+                    if isinstance(follow_up, dict) and isinstance(
+                        follow_up.get("response"), dict
+                    ):
+                        print(
+                            "response finished? ",
+                            follow_up.get("response", {}).get("complete", False),
+                        )
+                        print(
+                            "explanation provided",
+                            follow_up.get("response", {}).get("explanation", ""),
+                        )
+
+                        if not follow_up["response"].get("complete", False):
+                            return self.orchestrate(
+                                request
+                                + " /n The request has not yet been fully completed."
+                                + follow_up["response"]["explanation"]
+                                + " /n"
+                                + "please ensure that you tackle only the remaining parts of the request"
+                            )
+                        else:
+                            # Get final summary and recommendations
+                            debrief = get_llm_response(
+                                f"""Context:
+                                Original request: {request}
+
+                                Execution history: {self.shared_context['execution_history']}
+
+                                Instructions:
+                                Provide summary of actions taken and any recommendations.
+                                Return a JSON object with fields:
+                                - 'summary': Overview of what was accomplished
+                                - 'recommendations': Suggested next steps
+                                Do not include markdown formatting or ```json tags.
+                                Return only the JSON object.""",
+                                model=self.foreman.model,
+                                provider=self.foreman.provider,
+                                npc=self.foreman,
+                                format="json",
+                            )
+
+                            return {
+                                "debrief": debrief.get("response"),
+                                "execution_history": self.shared_context[
+                                    "execution_history"
+                                ],
+                            }
+
+                    return result
+
+                except KeyboardInterrupt:
+                    print("\nExecution interrupted. Options:")
+                    print("1. Provide additional context")
+                    print("2. Skip this step")
+                    print("3. Resume execution")
+
+                    choice = input("Enter choice (1-3): ")
+
+                    if choice == "1":
+                        new_context = input("Enter additional context: ")
+                        self.context["additional_context"] = new_context
+                        continue
+                    elif choice == "2":
+                        return {"response": "Step skipped by user"}
+                    elif choice == "3":
+                        continue
+                    else:
+                        print("Invalid choice, resuming...")
+                        continue
+
+        except Exception as e:
+            # Get the full traceback
+            tb_lines = traceback.format_exc().splitlines()
+
+            # Keep first 2 lines and last 3 lines
+            if len(tb_lines) > 5:
+                limited_tb = "\n".join(tb_lines[:2] + ["..."] + tb_lines[-3:])
+            else:
+                limited_tb = "\n".join(tb_lines)
+
+            print(f"Error in orchestration: {str(e)}")
+            print(f"Limited traceback:\n{limited_tb}")
+            return {"error": f"{str(e)}\n{limited_tb}"}
+
+
 # perhaps the npc compiling is more than just for jinja reasons.
 # we can turn each agent into a referenceable program executable.
-
-
 # finish testing out a python based version rather than jinja only
 class NPCCompiler:
     def __init__(
@@ -1537,8 +1769,8 @@ def load_npc_from_file(npc_file: str, db_conn: sqlite3.Connection) -> NPC:
 
         # Initialize and return the NPC object
         return NPC(
-            db_conn,
             name,
+            db_conn=db_conn,
             primary_directive=primary_directive,
             tools=tools,
             use_global_tools=use_global_tools,

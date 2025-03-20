@@ -11,6 +11,8 @@ import shlex
 import json
 
 from datetime import datetime
+from inspect import isgenerator
+
 
 # Third-party imports
 import pandas as pd
@@ -64,6 +66,8 @@ from .shell_helpers import (
     get_multiline_input,
     setup_readline,
     execute_command,
+    render_markdown,
+    render_code_block,
     orange,  # For colored prompt
 )
 from .npc_compiler import (
@@ -253,46 +257,83 @@ def main() -> None:
                 npc=npc_name,
                 attachments=attachments,
             )
-            str_output = ""
-            if NPCSH_STREAM_OUTPUT:
+            if NPCSH_STREAM_OUTPUT and (
+                isgenerator(output)
+                or (hasattr(output, "__iter__") and hasattr(output, "__next__"))
+            ):
+                str_output = ""
+                in_code = False
+                code_buffer = ""
+                text_buffer = ""
+
                 for chunk in output:
-                    # (The same logic for streaming output remains unchanged)
+                    # Get chunk content based on provider
                     if provider == "anthropic":
-                        if chunk.type == "content_block_delta":
-                            chunk_content = chunk.delta.text
-                            if chunk_content:
-                                str_output += chunk_content
-                                print(chunk_content, end="")
+                        chunk_content = (
+                            chunk.delta.text
+                            if chunk.type == "content_block_delta"
+                            else None
+                        )
                     elif provider in ["openai", "deepseek", "openai-like"]:
                         chunk_content = "".join(
-                            choice.delta.content
-                            for choice in chunk.choices
-                            if choice.delta.content is not None
+                            c.delta.content for c in chunk.choices if c.delta.content
                         )
-                        if chunk_content:
-                            str_output += chunk_content
-                            print(chunk_content, end="")
                     elif provider == "ollama":
                         chunk_content = chunk["message"]["content"]
-                        if chunk_content:
-                            str_output += chunk_content
-                            print(chunk_content, end="")
-                print("\n")
-            if len(str_output) > 0:
-                output = str_output
+                    else:
+                        continue
 
-            save_conversation_message(
-                command_history,
-                conversation_id,
-                "assistant",
-                output,
-                wd=current_path,
-                model=model,
-                provider=provider,
-                npc=npc_name,
-            )
+                    if not chunk_content:
+                        continue
+
+                    str_output += chunk_content
+
+                    # Process chunk
+                    if "```" in chunk_content:
+                        parts = chunk_content.split("```")
+
+                        for i, part in enumerate(parts):
+                            if i == 0:  # First part (before any backticks)
+                                if in_code:
+                                    code_buffer += part
+                                else:
+                                    print(part, end="")
+                            elif i % 2 == 1:  # Inside a code block
+                                if not in_code:  # Starting a new code block
+                                    in_code = True
+                                    code_buffer = part
+                                else:  # Shouldn't happen but handle anyway
+                                    code_buffer += part
+                            else:  # Outside a code block
+                                if in_code:  # Just finished a code block
+                                    in_code = False
+                                    # Render the code block
+                                    render_code_block(code_buffer)
+                                    code_buffer = ""
+                                print(part, end="")
+                    else:
+                        if in_code:
+                            code_buffer += chunk_content
+                        else:
+                            print(chunk_content, end="")
+
+                # Handle any remaining code buffer
+                if in_code and code_buffer:
+                    render_code_block(code_buffer)
+
+                if str_output:
+                    output = str_output
+        save_conversation_message(
+            command_history,
+            conversation_id,
+            "assistant",
+            output,
+            wd=current_path,
+            model=model,
+            provider=provider,
+            npc=npc_name,
+        )
         sys.exit(0)
-    # --- End Minimal Piped Input Handling ---
 
     while True:
         try:
@@ -363,40 +404,92 @@ def main() -> None:
                 npc=npc_name,
                 attachments=attachments,
             )
-            str_output = ""
+            if NPCSH_STREAM_OUTPUT and (
+                isgenerator(output)
+                or (hasattr(output, "__iter__") and hasattr(output, "__next__"))
+            ):
+                str_output = ""
+                buffer = ""
+                in_code = False
+                code_buffer = ""
 
-            if NPCSH_STREAM_OUTPUT:
                 for chunk in output:
+                    # Get chunk content based on provider
                     if provider == "anthropic":
-                        if chunk.type == "content_block_delta":
-                            chunk_content = chunk.delta.text
-                            if chunk_content:
-                                str_output += chunk_content
-                                print(chunk_content, end="")
-
-                    elif (
-                        provider == "openai"
-                        or provider == "deepseek"
-                        or provider == "openai-like"
-                    ):
-                        chunk_content = "".join(
-                            choice.delta.content
-                            for choice in chunk.choices
-                            if choice.delta.content is not None
+                        chunk_content = (
+                            chunk.delta.text
+                            if chunk.type == "content_block_delta"
+                            else None
                         )
-                        if chunk_content:
-                            str_output += chunk_content
-                            print(chunk_content, end="")
-
+                    elif provider in ["openai", "deepseek", "openai-like"]:
+                        chunk_content = "".join(
+                            c.delta.content for c in chunk.choices if c.delta.content
+                        )
                     elif provider == "ollama":
                         chunk_content = chunk["message"]["content"]
-                        if chunk_content:
-                            str_output += chunk_content
-                            print(chunk_content, end="")
-                print("\n")
+                    else:
+                        continue
 
-            if len(str_output) > 0:
-                output = str_output
+                    if not chunk_content:
+                        continue
+
+                    str_output += chunk_content
+
+                    # Process the content character by character
+                    for char in chunk_content:
+                        buffer += char
+
+                        # Check for triple backticks
+                        if buffer.endswith("```"):
+                            if not in_code:
+                                # Start of code block
+                                in_code = True
+                                # Print everything before the backticks
+                                print(buffer[:-3], end="")
+                                buffer = ""
+                                code_buffer = ""
+                            else:
+                                # End of code block
+                                in_code = False
+                                # Remove the backticks from the end of the buffer
+                                buffer = buffer[:-3]
+                                # Add buffer to code content and render
+                                code_buffer += buffer
+
+                                # Check for and strip language tag
+                                if "\n" in code_buffer and code_buffer.index("\n") < 15:
+                                    first_line, rest = code_buffer.split("\n", 1)
+                                    if first_line.strip() and not "```" in first_line:
+                                        code_buffer = rest
+
+                                # Render the code block
+                                render_code_block(code_buffer)
+
+                                # Reset buffers
+                                buffer = ""
+                                code_buffer = ""
+                        elif in_code:
+                            # Just add to code buffer
+                            code_buffer += char
+                            if len(buffer) >= 3:  # Keep buffer small while in code
+                                buffer = buffer[-3:]
+                        else:
+                            # Regular text - print if buffer gets too large
+                            if len(buffer) > 100:
+                                print(buffer[:-3], end="")
+                                buffer = buffer[
+                                    -3:
+                                ]  # Keep last 3 chars to check for backticks
+
+                # Handle any remaining content
+                if in_code:
+                    render_code_block(code_buffer)
+                else:
+                    print(buffer, end="")
+
+                if str_output:
+                    output = str_output
+            print("\n")
             save_conversation_message(
                 command_history,
                 conversation_id,
