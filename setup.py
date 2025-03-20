@@ -57,7 +57,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.3.25",
+    version="0.3.26",
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
         "redis",
@@ -87,14 +87,14 @@ setup(
         "PyYAML",
         "langchain",
         "langchain_community",
-        "openai-whisper",
-        "pyaudio",
+        # "openai-whisper",
+        # "pyaudio",
+        # "gtts",
+        # "playsound==1.2.2",
         "pygments",
         "pyttsx3",
         "kuzu",
         "chromadb",
-        "gtts",
-        "playsound==1.2.2",
         "termcolor",
         "colorama",
         "python-dotenv",
