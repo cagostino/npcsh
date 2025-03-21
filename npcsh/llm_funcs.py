@@ -829,14 +829,29 @@ ReAct choices then will enter reasoning flow
 
     Available tools:
     """
-    print(npc.tools_dict, type(npc.tools_dict))
-    if npc.tools_dict is None or npc.tools_dict == {}:
+
+    if (npc.tools_dict is None or npc.tools_dict == {}) & (
+        npc.all_tools_dict is None or npc.all_tools_dict == {}
+    ):
         prompt += "No tools available. Do not invoke tools."
     else:
-        for tool_name, tool in npc.tools_dict.items():
+        tools_set = {}
+
+        if npc.tools_dict is not None:
+            for tool_name, tool in npc.tools_dict.items():
+                if tool_name not in tools_set:
+                    tools_set[tool_name] = tool.description
+        if npc.all_tools_dict is not None:
+            for tool_name, tool in npc.all_tools_dict.items():
+                if tool_name not in tools_set:
+                    tools_set[tool_name] = tool.description
+
+        for tool_name, tool_description in tools_set.items():
             prompt += f"""
-            {tool_name} : {tool.description} \n
-        """
+
+                        {tool_name} : {tool_description} \n
+                        """
+
     prompt += f"""
     Available NPCs for alternative answers:
 
@@ -1101,9 +1116,9 @@ ReAct choices then will enter reasoning flow
     elif action == "execute_sequence":
         tool_names = response_content_parsed.get("tool_name")
         npc_names = response_content_parsed.get("npc_name")
-        print(npc_names)
+        # print(npc_names)
         npcs = []
-        print(tool_names, npc_names)
+        # print(tool_names, npc_names)
         if isinstance(npc_names, list):
             for npc_name in npc_names:
                 for npc_obj in npc.resolved_npcs:
@@ -1192,9 +1207,8 @@ def handle_tool_call(
     """
     # print(npc)
     print("handling tool call")
-    if not npc or (not npc.all_tools_dict and not npc.tools_dict):
-        print("not available")
-        available_tools = npc.all_tools_dict if npc else None
+    if not npc:
+
         print(
             f"No tools available for NPC '{npc.name}' or tools_dict is empty. Available tools: {available_tools}"
         )
