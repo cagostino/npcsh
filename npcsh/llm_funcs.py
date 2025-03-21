@@ -885,7 +885,7 @@ ReAct choices then will enter reasoning flow
         Relevant shared context for the npc:
         {npc.shared_context}
         """
-        print("shared_context: " + str(npc.shared_context))
+        # print("shared_context: " + str(npc.shared_context))
     # print(prompt)
 
     prompt += f"""
