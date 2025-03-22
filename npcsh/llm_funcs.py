@@ -4,17 +4,10 @@ import requests
 import os
 import json
 import PIL
-from PIL import Image
 
 import sqlite3
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union, Generator
-import typing_extensions as typing
-from pydantic import BaseModel, Field
-
-import base64
-import re
-import io
 
 
 from jinja2 import Environment, FileSystemLoader, Template, Undefined
@@ -26,11 +19,7 @@ import numpy as np
 import chromadb
 from chromadb import Client
 
-# llm providers
-import anthropic
-import ollama  # Add to setup.py if missing
-from openai import OpenAI
-from diffusers import StableDiffusionPipeline
+
 from google.generativeai import types
 import google.generativeai as genai
 
@@ -150,25 +139,31 @@ def generate_image(
     #    image = generate_image_openai_like(prompt, model, npc.api_url, openai_api_key)
     elif provider == "diffusers":
         image = generate_image_hf_diffusion(prompt, model)
+    else:
+        image = None
     # save image
     # check if image is a PIL image
     if isinstance(image, PIL.Image.Image):
         image.save(filename)
         return filename
 
-    elif image is not None:
-        # image is at a private url
-        response = requests.get(image.data[0].url)
-        with open(filename, "wb") as file:
-            file.write(response.content)
-        from PIL import Image
+    else:
+        try:
+            # image is at a private url
+            response = requests.get(image.data[0].url)
+            with open(filename, "wb") as file:
+                file.write(response.content)
+            from PIL import Image
 
-        img = Image.open(filename)
-        img.show()
-        # console = Console()
-        # console.print(Image.from_path(filename))
+            img = Image.open(filename)
+            img.show()
+            # console = Console()
+            # console.print(Image.from_path(filename))
+            return filename
 
-        return filename
+        except AttributeError as e:
+            print(f"Error saving image: {e}")
+
 
 
 def get_embeddings(
@@ -511,7 +506,6 @@ def execute_llm_question(
         # messages.append({"role": "assistant", "content": output})
 
     else:
-
         response = get_conversation(
             messages,
             model=model,
@@ -1030,7 +1024,6 @@ ReAct choices then will enter reasoning flow
         return {"messages": messages, "output": output}
 
     elif action == "answer_question":
-
         if ENTER_REASONING_FLOW:
             print("entering reasoning flow")
             result = enter_reasoning_human_in_the_loop(
@@ -1208,7 +1201,6 @@ def handle_tool_call(
     # print(npc)
     print("handling tool call")
     if not npc:
-
         print(
             f"No tools available for NPC '{npc.name}' or tools_dict is empty. Available tools: {available_tools}"
         )
@@ -1320,7 +1312,6 @@ def handle_tool_call(
     print("Executing tool with input values:", input_values)
 
     try:
-
         tool_output = tool.execute(
             input_values,
             npc.all_tools_dict,
@@ -1335,7 +1326,6 @@ def handle_tool_call(
         if "Error" in tool_output:
             raise Exception(tool_output)
     except Exception as e:
-
         # diagnose_problem = get_llm_response(
         ##    f"""a problem has occurred.
         #                                    Please provide a diagnosis of the problem and a suggested #fix.

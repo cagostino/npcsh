@@ -10,7 +10,6 @@
 import os
 
 from openai import OpenAI
-from diffusers import StableDiffusionPipeline
 
 
 def generate_image_openai(
@@ -66,6 +65,8 @@ def generate_image_hf_diffusion(
         PIL.Image: The generated image.
     """
     # Load the Stable Diffusion pipeline
+    from diffusers import StableDiffusionPipeline
+
     pipe = StableDiffusionPipeline.from_pretrained(model)
     pipe = pipe.to(device)
 

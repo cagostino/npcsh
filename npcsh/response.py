@@ -2,9 +2,7 @@ from typing import Any, Dict, Generator, List, Union
 from pydantic import BaseModel
 import os
 import anthropic
-import ollama  # Add to setup.py if missing
 from openai import OpenAI
-from diffusers import StableDiffusionPipeline
 from google.generativeai import types
 from google import genai
 
@@ -143,6 +141,8 @@ def get_ollama_response(
     Returns:
         Dict[str, Any]: The response, optionally including updated messages.
     """
+    import ollama
+
     # try:
     # Prepare the message payload
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."

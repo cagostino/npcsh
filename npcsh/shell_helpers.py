@@ -1433,7 +1433,6 @@ def execute_slash_command(
             command_parts, model=model, provider=provider, npc=npc, api_url=api_url
         )
     elif command_name == "help":  # New help command
-
         return {
             "messages": messages,
             "output": get_help(),
@@ -1763,7 +1762,7 @@ def execute_command(
     messages: list = None,
     conversation_id: str = None,
     stream: bool = False,
-    embedding_model: Union[SentenceTransformer, Any] = None,
+    embedding_model=None,
 ):
     """
     Function Description:
@@ -1774,7 +1773,7 @@ def execute_command(
         db_path : str : Database path
         npc_compiler : NPCCompiler : NPC compiler
     Keyword Args:
-        embedding_model : Union[SentenceTransformer, Any] : Embedding model
+        embedding_model :  Embedding model
         current_npc : NPC : Current NPC
         messages : list : Messages
     Returns:
@@ -2086,7 +2085,7 @@ def execute_command_stream(
     command: str,
     db_path: str,
     npc_compiler: NPCCompiler,
-    embedding_model: Union[SentenceTransformer, Any] = None,
+    embedding_model=None,
     current_npc: NPC = None,
     model: str = None,
     provider: str = None,

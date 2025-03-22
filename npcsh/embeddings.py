@@ -12,7 +12,6 @@ from npcsh.npc_sysenv import (
     NPCSH_EMBEDDING_PROVIDER,
     chroma_client,
 )
-import ollama
 from openai import OpenAI
 import anthropic
 
@@ -21,6 +20,8 @@ def get_ollama_embeddings(
     texts: List[str], model: str = "nomic-embed-text"
 ) -> List[List[float]]:
     """Generate embeddings using Ollama."""
+    import ollama
+
     embeddings = []
     for text in texts:
         response = ollama.embeddings(model=model, prompt=text)
