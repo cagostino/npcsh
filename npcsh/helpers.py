@@ -5,7 +5,11 @@ import sqlite3
 import subprocess
 import platform
 import yaml
-import nltk
+
+try:
+    import nltk
+except:
+    print("Error importing nltk")
 import numpy as np
 
 import filecmp

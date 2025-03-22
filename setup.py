@@ -85,6 +85,7 @@ local_requirements = [
     "kuzu",
     "chromadb",
     "diffusers",
+    "nltk",
 ]
 
 # Voice/Audio requirements
