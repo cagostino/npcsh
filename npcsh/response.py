@@ -230,7 +230,9 @@ def get_openai_response(
 
     # try:
     if api_key is None:
-        api_key = os.environ["OPENAI_API_KEY"]
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+        if len(api_key) == 0:
+            raise ValueError("API key not found.")
     client = OpenAI(api_key=api_key)
     # print(npc)
 
