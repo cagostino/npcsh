@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Any
 import os
 import io
-import chromadb
 import sqlite3
 from dotenv import load_dotenv
 from PIL import Image
@@ -222,7 +221,12 @@ available_chat_models, available_reasoning_models = get_available_models()
 
 EMBEDDINGS_DB_PATH = os.path.expanduser("~/npcsh_chroma.db")
 
-chroma_client = chromadb.PersistentClient(path=EMBEDDINGS_DB_PATH)
+try:
+    import chromadb
+
+    chroma_client = chromadb.PersistentClient(path=EMBEDDINGS_DB_PATH)
+except:
+    chroma_client = None
 
 
 # Load environment variables from .env file

@@ -10,9 +10,7 @@ from npcsh.npc_sysenv import get_system_message
 from typing import Any, Dict, Generator, List
 import os
 import anthropic
-import ollama  # Add to setup.py if missing
 from openai import OpenAI
-from diffusers import StableDiffusionPipeline
 from google import genai
 
 from google.generativeai import types
@@ -53,6 +51,8 @@ def get_anthropic_stream(
         messages = messages[1:]
     elif npc is not None:
         system_message = get_system_message(npc)
+    else:
+        system_message = "You are a helpful assistant."
 
     # Preprocess messages to ensure content is a list of dicts
     for message in messages:
@@ -274,6 +274,8 @@ def get_ollama_stream(
     **kwargs,
 ) -> Generator:
     """Streams responses from Ollama, supporting images and tools."""
+    import ollama
+
     messages_copy = messages.copy()
 
     # Handle images if provided

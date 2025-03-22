@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 import os
 import site
-
+import sys
 import platform
 from pathlib import Path
 
@@ -53,57 +53,79 @@ To configure your API keys and preferences.
     return ""  # Return empty string for non-Windows platforms
 
 
+# Define core (lite) requirements
+core_requirements = [
+    "redis",
+    "flask_sse",
+    "anthropic",
+    "beautifulsoup4",
+    "google-generativeai",
+    "google-genai",
+    "duckduckgo-search",
+    "openai",
+    "jinja2",
+    "requests",
+    "markdown",
+    "PyYAML",
+    "langchain",
+    "langchain_community",
+    "pygments",
+    "termcolor",
+    "colorama",
+    "python-dotenv",
+    "pytest",
+    "googlesearch-python",
+    "flask",
+    "flask_cors",
+    "librosa",
+    "pandas",
+    "matplotlib",
+    "IPython",
+    "pyautogui",
+    "nltk",
+    "thefuzz",
+    "pypdf",
+    "PyMuPDF",
+    "screeninfo",
+]
+
+# Define full requirements
+full_requirements = core_requirements + [
+    "sentence_transformers",
+    "opencv-python",
+    "ollama",
+    "kuzu",
+    "chromadb",
+    "diffusers",
+]
+
+# Define audio requirements
+audio_requirements = [
+    "openai-whisper",
+    "pyaudio",
+    "gtts",
+    "playsound==1.2.2",
+    "pyttsx3",
+]
+
 extra_files = package_files("npcsh/npc_team/")
+
+# Choose requirements based on environment variables
+is_lite = os.environ.get("NPCSH_LITE_INSTALL", "").lower() == "true"
+is_audio = os.environ.get("NPCSH_AUDIO_INSTALL", "").lower() == "true"
+
+if is_lite:
+    requirements = core_requirements
+elif is_audio:
+    requirements = full_requirements + audio_requirements
+else:
+    requirements = full_requirements
 
 setup(
     name="npcsh",
-    version="0.3.26",
+    version="0.3.27",
     packages=find_packages(exclude=["tests*"]),
-    install_requires=[
-        "redis",
-        "flask_sse",
-        "anthropic",
-        "screeninfo",
-        "sentence_transformers",
-        "nltk",
-        "thefuzz",
-        "beautifulsoup4",
-        "google-generativeai",
-        "google-genai",
-        "duckduckgo-search",
-        "pypdf",
-        "PyMuPDF",
-        "opencv-python",
-        "librosa",
-        "openai",
-        "jinja2",
-        "pandas",
-        "matplotlib",
-        "IPython",
-        "ollama",
-        "requests",
-        "markdown",
-        "PyYAML",
-        "langchain",
-        "langchain_community",
-        "pyautogui",
-        # "openai-whisper",
-        # "pyaudio",
-        # "gtts",
-        # "playsound==1.2.2",
-        "pygments",
-        "pyttsx3",
-        "kuzu",
-        "chromadb",
-        "termcolor",
-        "colorama",
-        "python-dotenv",
-        "pytest",
-        "googlesearch-python",
-        "flask",
-        "flask_cors",
-        "diffusers",
-    ],
+    install_requires=requirements,
     entry_points={
         "console_scripts": [
             "npcsh=npcsh.shell:main",
@@ -124,6 +146,7 @@ setup(
     data_files=[("npcsh/npc_team", extra_files)],
     python_requires=">=3.10",
 )
+
 # Print setup message only on Windows
 if platform.system() == "Windows":
     print(get_setup_message())

@@ -7,9 +7,8 @@
 from typing import Any, Dict, Generator, List
 import os
 import anthropic
-import ollama  # Add to setup.py if missing
+
 from openai import OpenAI
-from diffusers import StableDiffusionPipeline
 from google.generativeai import types
 import google.generativeai as genai
 from .npc_sysenv import get_system_message
@@ -34,6 +33,7 @@ def get_ollama_conversation(
     Returns:
         List[Dict[str, str]]: The list of messages in the conversation.
     """
+    import ollama
 
     messages_copy = messages.copy()
     if messages_copy[0]["role"] != "system":
