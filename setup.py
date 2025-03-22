@@ -1,7 +1,14 @@
-from setuptools import setup, find_packages
+# Force lite installation if environment variable is set
 import os
+
+if os.environ.get("NPCSH_LITE_INSTALL", "").lower() == "true":
+    import sys
+
+    sys.argv.append("--config-settings")
+    sys.argv.append("install.lite=true")
+
+from setuptools import setup, find_packages
 import site
-import sys
 import platform
 from pathlib import Path
 
@@ -89,8 +96,8 @@ core_requirements = [
     "screeninfo",
 ]
 
-# Define full requirements
-full_requirements = core_requirements + [
+# Define additional requirements for full installation
+extra_requirements = [
     "sentence_transformers",
     "opencv-python",
     "ollama",
@@ -110,22 +117,21 @@ audio_requirements = [
 
 extra_files = package_files("npcsh/npc_team/")
 
-# Choose requirements based on environment variables
-is_lite = os.environ.get("NPCSH_LITE_INSTALL", "").lower() == "true"
-is_audio = os.environ.get("NPCSH_AUDIO_INSTALL", "").lower() == "true"
 
-if is_lite:
-    requirements = core_requirements
-elif is_audio:
-    requirements = full_requirements + audio_requirements
-else:
-    requirements = full_requirements
+def get_requirements():
+    # Check if lite installation was requested via sys.argv
+    if any("install.lite=true" in arg for arg in sys.argv):
+        return core_requirements
+    elif os.environ.get("NPCSH_AUDIO_INSTALL", "").lower() == "true":
+        return core_requirements + extra_requirements + audio_requirements
+    return core_requirements + extra_requirements
+
 
 setup(
     name="npcsh",
-    version="0.3.27",
+    version="0.3.27.1",
     packages=find_packages(exclude=["tests*"]),
-    install_requires=requirements,
+    install_requires=get_requirements(),
     entry_points={
         "console_scripts": [
             "npcsh=npcsh.shell:main",
