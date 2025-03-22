@@ -1,8 +1,9 @@
 # Force lite installation if environment variable is set
 import os
 
+import sys
+
 if os.environ.get("NPCSH_LITE_INSTALL", "").lower() == "true":
-    import sys
 
     sys.argv.append("--config-settings")
     sys.argv.append("install.lite=true")
