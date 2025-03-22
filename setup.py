@@ -63,6 +63,7 @@ base_requirements = [
     "pygments",
     "termcolor",
     "colorama",
+    "Pillow",
     "python-dotenv",
     "pandas",
     "beautifulsoup4",
@@ -99,7 +100,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.3.27.2",
+    version="0.3.27.3",
     packages=find_packages(exclude=["tests*"]),
     install_requires=base_requirements,  # Only install base requirements by default
     extras_require={
