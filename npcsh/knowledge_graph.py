@@ -581,7 +581,10 @@ def visualize_graph(conn):
     plt.show()
 
 
-import chromadb
+try:
+    import chromadb
+except ModuleNotFoundError:
+    print("chromadb not installed")
 import numpy as np
 import os
 import datetime

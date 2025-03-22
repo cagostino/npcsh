@@ -15,11 +15,6 @@ from jinja2 import Environment, FileSystemLoader, Template, Undefined
 import pandas as pd
 import numpy as np
 
-# chroma
-import chromadb
-from chromadb import Client
-
-
 from google.generativeai import types
 import google.generativeai as genai
 
@@ -43,7 +38,6 @@ from .npc_sysenv import (
     NPCSH_API_URL,
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
-    chroma_client,
     available_reasoning_models,
     available_chat_models,
 )
@@ -163,7 +157,6 @@ def generate_image(
 
         except AttributeError as e:
             print(f"Error saving image: {e}")
-
 
 
 def get_embeddings(
