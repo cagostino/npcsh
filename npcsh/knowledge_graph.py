@@ -3,7 +3,11 @@ import os
 import datetime
 
 import numpy as np
-import kuzu
+
+try:
+    import kuzu
+except ModuleNotFoundError:
+    print("kuzu not installed")
 from typing import Optional, Dict, List, Union, Tuple
 
 
