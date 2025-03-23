@@ -1,9 +1,8 @@
 from setuptools import setup, find_packages
-import os
 import site
-import sys
 import platform
 from pathlib import Path
+import os
 
 
 def package_files(directory):
@@ -50,57 +49,53 @@ npcsh-setup
 To configure your API keys and preferences.
 ==============================================
 """
-    return ""  # Return empty string for non-Windows platforms
+    return ""
 
 
-# Define core (lite) requirements
-core_requirements = [
-    "redis",
-    "flask_sse",
-    "anthropic",
-    "beautifulsoup4",
-    "google-generativeai",
-    "google-genai",
-    "duckduckgo-search",
-    "openai",
+# Base requirements (no LLM packages)
+base_requirements = [
     "jinja2",
+    "scipy",
+    "numpy",
     "requests",
+    "matplotlib",
     "markdown",
     "PyYAML",
-    "langchain",
-    "langchain_community",
+    "PyMuPDF",
+    "pyautogui",
     "pygments",
+    "sqlalchemy",
     "termcolor",
+    "rich",
     "colorama",
+    "Pillow",
     "python-dotenv",
-    "pytest",
-    "googlesearch-python",
+    "pandas",
+    "beautifulsoup4",
+    "duckduckgo-search",
     "flask",
     "flask_cors",
-    "librosa",
-    "pandas",
-    "matplotlib",
-    "IPython",
-    "pyautogui",
-    "nltk",
-    "thefuzz",
-    "pypdf",
-    "PyMuPDF",
-    "screeninfo",
+    "redis",
+    "psycopg2-binary",
+    "flask_sse",
 ]
 
-# Define full requirements
-full_requirements = core_requirements + [
+# API integration requirements
+api_requirements = ["anthropic", "openai", "google-generativeai", "google-genai"]
+
+# Local ML/AI requirements
+local_requirements = [
     "sentence_transformers",
     "opencv-python",
     "ollama",
     "kuzu",
     "chromadb",
     "diffusers",
+    "nltk",
 ]
 
-# Define audio requirements
-audio_requirements = [
+# Voice/Audio requirements
+voice_requirements = [
     "openai-whisper",
     "pyaudio",
     "gtts",
@@ -110,22 +105,17 @@ audio_requirements = [
 
 extra_files = package_files("npcsh/npc_team/")
 
-# Choose requirements based on environment variables
-is_lite = os.environ.get("NPCSH_LITE_INSTALL", "").lower() == "true"
-is_audio = os.environ.get("NPCSH_AUDIO_INSTALL", "").lower() == "true"
-
-if is_lite:
-    requirements = core_requirements
-elif is_audio:
-    requirements = full_requirements + audio_requirements
-else:
-    requirements = full_requirements
-
 setup(
     name="npcsh",
-    version="0.3.27",
+    version="0.3.28",
     packages=find_packages(exclude=["tests*"]),
-    install_requires=requirements,
+    install_requires=base_requirements,  # Only install base requirements by default
+    extras_require={
+        "lite": api_requirements,  # Just API integrations
+        "local": local_requirements,  # Local AI/ML features
+        "whisper": voice_requirements,  # Voice/Audio features
+        "all": api_requirements + local_requirements + voice_requirements,  # Everything
+    },
     entry_points={
         "console_scripts": [
             "npcsh=npcsh.shell:main",
@@ -147,6 +137,5 @@ setup(
     python_requires=">=3.10",
 )
 
-# Print setup message only on Windows
 if platform.system() == "Windows":
     print(get_setup_message())

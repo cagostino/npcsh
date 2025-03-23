@@ -399,11 +399,16 @@ ollama pull llama3.2
 ollama pull llava:7b
 ollama pull nomic-embed-text
 pip install npcsh
-```
-If you'd like to install the abilities to use STT and TTS, additionall install the following
-```
-pip install openai-whisper pyaudio gtts playsound
-```
+# if you want to install with the API libraries
+pip install npcsh[lite]
+# if you want the full local package set up (ollama, diffusers, transformers, cuda etc.)
+pip install npcsh[local]
+# if you want to use tts/stt
+pip install npcsh[whisper]
+
+# if you want everything:
+pip install npcsh[all]
+
 
 
 
@@ -418,6 +423,16 @@ ollama pull llama3.2
 ollama pull llava:7b
 ollama pull nomic-embed-text
 pip install npcsh
+# if you want to install with the API libraries
+pip install npcsh[lite]
+# if you want the full local package set up (ollama, diffusers, transformers, cuda etc.)
+pip install npcsh[local]
+# if you want to use tts/stt
+pip install npcsh[whisper]
+
+# if you want everything:
+pip install npcsh[all]
+
 ```
 ### Windows Install
 
@@ -430,6 +445,16 @@ ollama pull llama3.2
 ollama pull llava:7b
 ollama pull nomic-embed-text
 pip install npcsh
+# if you want to install with the API libraries
+pip install npcsh[lite]
+# if you want the full local package set up (ollama, diffusers, transformers, cuda etc.)
+pip install npcsh[local]
+# if you want to use tts/stt
+pip install npcsh[whisper]
+
+# if you want everything:
+pip install npcsh[all]
+
 ```
 As of now, npcsh appears to work well with some of the core functionalities like /ots and /whisper.
 

@@ -788,11 +788,29 @@ class NPC:
         self.model = model
         self.db_conn = db_conn
         if self.db_conn is not None:
-            self.tables = self.db_conn.execute(
-                "SELECT name, sql FROM sqlite_master WHERE type='table';"
-            ).fetchall()
+            # Determine database type
+            if "psycopg2" in self.db_conn.__class__.__module__:
+                # PostgreSQL connection
+                cursor = self.db_conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT table_name, obj_description((quote_ident(table_name))::regclass, 'pg_class')
+                    FROM information_schema.tables
+                    WHERE table_schema='public';
+                """
+                )
+                self.tables = cursor.fetchall()
+                self.db_type = "postgres"
+            elif "sqlite3" in self.db_conn.__class__.__module__:
+                # SQLite connection
+                self.tables = self.db_conn.execute(
+                    "SELECT name, sql FROM sqlite_master WHERE type='table';"
+                ).fetchall()
+                self.db_type = "sqlite"
         else:
             self.tables = None
+            self.db_type = None
+
         self.provider = provider
         self.api_url = api_url
         self.all_tools = all_tools or []
@@ -838,6 +856,45 @@ class NPC:
             self.resolved_npcs = self.resolve_all_npcs()
         else:
             self.parsed_npcs = []
+
+    def execute_query(self, query, params=None):
+        """Execute a query based on database type"""
+        if self.db_type == "postgres":
+            cursor = self.db_conn.cursor()
+            cursor.execute(query, params or ())
+            return cursor.fetchall()
+        else:  # sqlite
+            cursor = self.db_conn.execute(query, params or ())
+            return cursor.fetchall()
+
+    def _determine_db_type(self):
+        """Determine if the connection is PostgreSQL or SQLite"""
+        # Check the connection object's class name
+        conn_type = self.db_conn.__class__.__module__.lower()
+
+        if "psycopg" in conn_type:
+            return "postgres"
+        elif "sqlite" in conn_type:
+            return "sqlite"
+        else:
+            raise ValueError(f"Unsupported database type: {conn_type}")
+
+    def _get_tables(self):
+        """Get table information based on database type"""
+        if self.db_type == "postgres":
+            cursor = self.db_conn.cursor()
+            cursor.execute(
+                """
+                SELECT table_name, obj_description((quote_ident(table_name))::regclass, 'pg_class') as description
+                FROM information_schema.tables
+                WHERE table_schema='public';
+            """
+            )
+            return cursor.fetchall()
+        else:  # sqlite
+            return self.db_conn.execute(
+                "SELECT name, sql FROM sqlite_master WHERE type='table';"
+            ).fetchall()
 
     def get_memory(self):
         return

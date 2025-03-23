@@ -5,7 +5,11 @@ import os
 
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
-from googlesearch import search
+
+try:
+    from googlesearch import search
+except:
+    pass
 from typing import List, Dict, Any, Optional, Union
 import numpy as np
 import json

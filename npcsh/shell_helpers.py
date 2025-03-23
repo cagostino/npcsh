@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import matplotlib.pyplot as plt
+
 from typing import Dict, Any, List, Optional, Union
 import numpy as np
 import readline
@@ -24,12 +24,20 @@ import select
 import signal
 import time
 
-import whisper
 
+try:
+    import whisper
+except:
+    print(
+        "Could not load the whisper package. If you want to use tts/stt features, please run `pip install npcsh[audio]` and follow the instructions in the npcsh github readme to  ensure your OS can handle the audio dependencies."
+    )
 try:
     from sentence_transformers import SentenceTransformer
 except:
-    print("Could not load the sentence-transformers package.")
+
+    print(
+        "Could not load the sentence-transformers package. If you want to use it or other local AI features, please run `pip install npcsh[local]` ."
+    )
 
 from .load_data import load_pdf, load_csv, load_json, load_excel, load_txt, load_image
 from .npc_sysenv import (
