@@ -76,6 +76,7 @@ base_requirements = [
     "flask",
     "flask_cors",
     "redis",
+    "psycopg2-binary",
     "flask_sse",
 ]
 
@@ -106,7 +107,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.3.27.7",
+    version="0.3.28",
     packages=find_packages(exclude=["tests*"]),
     install_requires=base_requirements,  # Only install base requirements by default
     extras_require={
