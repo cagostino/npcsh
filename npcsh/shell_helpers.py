@@ -22,6 +22,7 @@ import tty
 import pty
 import select
 import signal
+import platform
 import time
 
 
@@ -66,6 +67,7 @@ from .llm_funcs import (
     execute_llm_question,
     get_stream,
     get_conversation,
+    get_llm_response,
     check_llm_command,
     generate_image,
     get_embeddings,
@@ -1090,6 +1092,346 @@ def resize_image_tars(image_path):
     image.save(image_path, format="png")
 
 
+def execute_plan_command(
+    command, npc=None, model=None, provider=None, messages=None, api_url=None
+):
+    """
+    Handle scheduled tasks across Linux (cron), Mac (launchd), and Windows (Task Scheduler)
+    """
+    parts = command.split(maxsplit=1)
+    if len(parts) < 2:
+        return {
+            "messages": messages,
+            "output": "Usage: /plan <command and schedule description>",
+        }
+
+    request = parts[1]
+    platform_system = platform.system()
+
+    # Create standard directories
+    jobs_dir = os.path.expanduser("~/.npcsh/jobs")
+    logs_dir = os.path.expanduser("~/.npcsh/logs")
+    os.makedirs(jobs_dir, exist_ok=True)
+    os.makedirs(logs_dir, exist_ok=True)
+
+    linux_prompt = """Convert this scheduling request into a crontab-based script:
+    Request: {request}
+
+    Example for "record CPU usage every 10 minutes":
+    {{
+        "script": "#!/bin/bash\\nset -euo pipefail\\nIFS=$'\\n\\t'\\n\\nLOGFILE=\\"$HOME/.npcsh/logs/cpu_usage.log\\"\\n\\nlog_info() {{\\n    echo \\"[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*\\" >> \\"$LOGFILE\\"\\n}}\\n\\nlog_error() {{\\n    echo \\"[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*\\" >> \\"$LOGFILE\\"\\n}}\\n\\nrecord_cpu() {{\\n    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')\\n    local cpu_usage=$(top -bn1 | grep 'Cpu(s)' | awk '{{print $2}}')\\n    log_info \\"CPU Usage: $cpu_usage%\\"\\n}}\\n\\nrecord_cpu",
+        "schedule": "*/10 * * * *",
+        "description": "Record CPU usage every 10 minutes",
+        "name": "<simple_unique_name>"
+    }}
+
+    Your response must be valid json with the following keys:
+    - script: The shell script content with proper functions and error handling. special characters must be escaped to ensure python json.loads will work correctly.
+    - schedule: Crontab expression (5 fields: minute hour day month weekday)
+    - description: A human readable description
+    - name: A unique name for the job
+
+    Do not include any additional markdown formatting in your response or leading ```json tags."""
+
+    mac_prompt = """Convert this scheduling request into a launchd-compatible script:
+    Request: {request}
+
+    Example for "record CPU usage every 10 minutes":
+    {{
+        "script": "#!/bin/bash\\nset -euo pipefail\\nIFS=$'\\n\\t'\\n\\nLOGFILE=\\"$HOME/.npcsh/logs/cpu_usage.log\\"\\n\\nlog_info() {{\\n    echo \\"[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*\\" >> \\"$LOGFILE\\"\\n}}\\n\\nlog_error() {{\\n    echo \\"[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*\\" >> \\"$LOGFILE\\"\\n}}\\n\\nrecord_cpu() {{\\n    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')\\n    local cpu_usage=$(top -l 1 | grep 'CPU usage' | awk '{{print $3}}' | tr -d '%')\\n    log_info \\"CPU Usage: $cpu_usage%\\"\\n}}\\n\\nrecord_cpu",
+        "schedule": "600",
+        "description": "Record CPU usage every 10 minutes",
+        "name": "<simple_unique_name>"
+
+
+    }}
+
+    Your response must be valid json with the following keys:
+    - script: The shell script content with proper functions and error handling. special characters must be escaped to ensure python json.loads will work correctly.
+    - schedule: Interval in seconds (e.g. 600 for 10 minutes)
+    - description: A human readable description,
+    - name: A unique name for the job
+
+    Do not include any additional markdown formatting in your response or leading ```json tags."""
+
+    windows_prompt = """Convert this scheduling request into a PowerShell script with Task Scheduler parameters:
+    Request: {request}
+
+    Example for "record CPU usage every 10 minutes":
+    {{
+        "script": "$ErrorActionPreference = 'Stop'\\n\\n$LogFile = \\"$HOME\\.npcsh\\logs\\cpu_usage.log\\"\\n\\nfunction Write-Log {{\\n    param($Message, $Type = 'INFO')\\n    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\\n    \\"[$timestamp] [$Type] $Message\\" | Out-File -FilePath $LogFile -Append\\n}}\\n\\nfunction Get-CpuUsage {{\\n    try {{\\n        $cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples.CookedValue\\n        Write-Log \\"CPU Usage: $($cpu)%\\"\\n    }} catch {{\\n        Write-Log $_.Exception.Message 'ERROR'\\n        throw\\n    }}\\n}}\\n\\nGet-CpuUsage",
+        "schedule": "/sc minute /mo 10",
+        "description": "Record CPU usage every 10 minutes",
+        "name": "<simple_unique_name>"
+
+    }}
+
+    Your response must be valid json with the following keys:
+    - script: The PowerShell script content with proper functions and error handling. special characters must be escaped to ensure python json.loads will work correctly.
+    - schedule: Task Scheduler parameters (e.g. /sc minute /mo 10)
+    - description: A human readable description
+    - name: A unique name for the job
+
+    Do not include any additional markdown formatting in your response or leading ```json tags."""
+
+    prompts = {"Linux": linux_prompt, "Darwin": mac_prompt, "Windows": windows_prompt}
+
+    prompt = prompts[platform_system].format(request=request)
+    response = get_llm_response(
+        prompt, npc=npc, model=model, provider=provider, format="json"
+    )
+    schedule_info = response.get("response")
+    print("Received schedule info:", schedule_info)
+
+    job_name = f"job_{schedule_info['name']}"
+
+    if platform_system == "Windows":
+        script_path = os.path.join(jobs_dir, f"{job_name}.ps1")
+    else:
+        script_path = os.path.join(jobs_dir, f"{job_name}.sh")
+
+    log_path = os.path.join(logs_dir, f"{job_name}.log")
+
+    # Write the script
+    with open(script_path, "w") as f:
+        f.write(schedule_info["script"])
+    os.chmod(script_path, 0o755)
+
+    if platform_system == "Linux":
+        try:
+            current_crontab = subprocess.check_output(["crontab", "-l"], text=True)
+        except subprocess.CalledProcessError:
+            current_crontab = ""
+
+        crontab_line = f"{schedule_info['schedule']} {script_path} >> {log_path} 2>&1"
+        new_crontab = current_crontab.strip() + "\n" + crontab_line + "\n"
+
+        with tempfile.NamedTemporaryFile(mode="w") as tmp:
+            tmp.write(new_crontab)
+            tmp.flush()
+            subprocess.run(["crontab", tmp.name], check=True)
+
+        output = f"""Job created successfully:
+- Description: {schedule_info['description']}
+- Schedule: {schedule_info['schedule']}
+- Script: {script_path}
+- Log: {log_path}
+- Crontab entry: {crontab_line}"""
+
+    elif platform_system == "Darwin":
+        plist_dir = os.path.expanduser("~/Library/LaunchAgents")
+        os.makedirs(plist_dir, exist_ok=True)
+        plist_path = os.path.join(plist_dir, f"com.npcsh.{job_name}.plist")
+
+        plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.npcsh.{job_name}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{script_path}</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>{schedule_info['schedule']}</integer>
+    <key>StandardOutPath</key>
+    <string>{log_path}</string>
+    <key>StandardErrorPath</key>
+    <string>{log_path}</string>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>"""
+
+        with open(plist_path, "w") as f:
+            f.write(plist_content)
+
+        subprocess.run(["launchctl", "unload", plist_path], check=False)
+        subprocess.run(["launchctl", "load", plist_path], check=True)
+
+        output = f"""Job created successfully:
+- Description: {schedule_info['description']}
+- Schedule: Every {schedule_info['schedule']} seconds
+- Script: {script_path}
+- Log: {log_path}
+- Launchd plist: {plist_path}"""
+
+    elif platform_system == "Windows":
+        task_name = f"NPCSH_{job_name}"
+
+        # Parse schedule_info['schedule'] into individual parameters
+        schedule_params = schedule_info["schedule"].split()
+
+        cmd = (
+            [
+                "schtasks",
+                "/create",
+                "/tn",
+                task_name,
+                "/tr",
+                f"powershell -NoProfile -ExecutionPolicy Bypass -File {script_path}",
+            ]
+            + schedule_params
+            + ["/f"]
+        )  # /f forces creation if task exists
+
+        subprocess.run(cmd, check=True)
+
+        output = f"""Job created successfully:
+- Description: {schedule_info['description']}
+- Schedule: {schedule_info['schedule']}
+- Script: {script_path}
+- Log: {log_path}
+- Task name: {task_name}"""
+
+    return {"messages": messages, "output": output}
+
+
+def execute_trigger_command(
+    command, npc=None, model=None, provider=None, messages=None, api_url=None
+):
+    parts = command.split(maxsplit=1)
+    if len(parts) < 2:
+        return {
+            "messages": messages,
+            "output": "Usage: /trigger <trigger condition and action description>",
+        }
+    # get user platform, mac, windows, linux
+
+    import platform
+
+    platform = platform.system()
+
+    linux_script_instructions = """
+
+    The script MUST:
+    - Use inotifywait -m -q -e create --format '%w%f' to get full paths
+    - Double quote ALL file operations: "$SOURCE/$FILE"
+    - Use $HOME for absolute paths
+    - Echo both success and failure messages to log
+    """
+    mac_script_instructions = """
+    The script MUST:
+    - Use fswatch -0 -r -e '.*' --event Created --format '%p' to get full paths
+    - Double quote ALL file operations: "$SOURCE/$FILE"
+    - Use $HOME for absolute paths
+    - Echo both success and failure messages to log
+    """
+    windows_script_instructions = """
+    The script MUST:
+    - Use Watch-FileSystem -Path $SOURCE -Filter * -Recurse -Force
+    - Double quote ALL file operations: "$SOURCE\$FILE"
+    - Use $HOME for absolute paths
+    - Echo both success and failure messages to log
+    """
+    if platform == "Linux":
+        instructions = linux_script_instructions
+    elif platform == "Darwin":
+        instructions = mac_script_instructions
+    elif platform == "Windows":
+        instructions = windows_script_instructions
+    request = parts[1]
+    watch_dir = os.path.expanduser("~/Downloads")
+    target_dir = os.path.expanduser("~/Documents/PDFs")
+    os.makedirs(target_dir, exist_ok=True)
+
+    prompt = f"""
+
+Convert this trigger request into a single event-monitoring daemon script.
+    Request: {request}
+
+    {instructions}
+
+    Your response must be valid json with the following keys
+    - script: The shell script content with proper functions and error handling. special characters must be escaped to ensure python json.loads will work correctly.
+    - name: A unique name for the trigger
+    - description: A human readable description
+
+
+
+    Do not include any additional markdown formatting in your response or leading ```json tags.
+    """
+    response = get_llm_response(
+        prompt, npc=npc, model=model, provider=provider, format="json"
+    )
+    trigger_info = response.get("response")
+    print(trigger_info)
+
+    triggers_dir = os.path.expanduser("~/.npcsh/triggers")
+    logs_dir = os.path.expanduser("~/.npcsh/logs")
+    os.makedirs(triggers_dir, exist_ok=True)
+    os.makedirs(logs_dir, exist_ok=True)
+
+    trigger_name = f"trigger_{trigger_info['name']}"
+    log_path = os.path.join(logs_dir, f"{trigger_name}.log")
+
+    if platform == "Linux":
+
+        script_path = os.path.join(triggers_dir, f"{trigger_name}.sh")
+
+        with open(script_path, "w") as f:
+            f.write(trigger_info["script"])
+        print("Script written to:", script_path)
+        os.chmod(script_path, 0o755)
+
+        service_dir = os.path.expanduser("~/.config/systemd/user")
+        os.makedirs(service_dir, exist_ok=True)
+        service_path = os.path.join(service_dir, f"npcsh-{trigger_name}.service")
+
+        service_content = f"""[Unit]
+Description={trigger_info['description']}
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={script_path}
+Restart=always
+StandardOutput=append:{log_path}
+StandardError=append:{log_path}
+
+[Install]
+WantedBy=default.target
+"""
+        print("Service written to:", service_path)
+        print("Service content:", service_content)
+
+        with open(service_path, "w") as f:
+            f.write(service_content)
+
+        subprocess.run(["systemctl", "--user", "daemon-reload"])
+        subprocess.run(
+            ["systemctl", "--user", "enable", f"npcsh-{trigger_name}.service"]
+        )
+        subprocess.run(
+            ["systemctl", "--user", "start", f"npcsh-{trigger_name}.service"]
+        )
+
+        status = subprocess.run(
+            ["systemctl", "--user", "status", f"npcsh-{trigger_name}.service"],
+            capture_output=True,
+            text=True,
+        )
+        print("Service status:", status.stdout)
+
+        output_text = f"""
+    Trigger service created:
+    Description: {trigger_info['description']}
+    Script: {script_path}
+    Service: {service_path}
+    Log: {log_path}
+
+    Status:
+    {status.stdout}
+    """
+    elif platform == "Darwin":
+        pass
+    elif platform == "Windows":
+        pass
+
+    return {"messages": messages, "output": output_text}
+
+
 def enter_wander_mode(args, messages, npc_compiler, npc, model, provider):
     """
     Wander mode is an exploratory mode where an LLM is given a task and they begin to wander through space.
@@ -1334,6 +1676,25 @@ def execute_slash_command(
             print(output)
     elif command_name == "tools":
         return {"messages": messages, "output": print_tools(tools)}
+    elif command_name == "plan":
+        return execute_plan_command(
+            command,
+            npc=npc,
+            model=model,
+            provider=provider,
+            api_url=api_url,
+            messages=messages,
+        )
+    elif command_name == "trigger":
+        return execute_trigger_command(
+            command,
+            npc=npc,
+            model=model,
+            provider=provider,
+            api_url=api_url,
+            messages=messages,
+        )
+
     elif command_name == "plonk":
         request = " ".join(args)
         plonk_call = plonk(
