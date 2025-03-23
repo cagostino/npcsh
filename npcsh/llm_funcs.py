@@ -17,7 +17,7 @@ import numpy as np
 
 from google.generativeai import types
 import google.generativeai as genai
-
+from sqlalchemy import create_engine
 
 from .npc_sysenv import (
     get_system_message,
@@ -1554,7 +1554,7 @@ def check_output_sufficient(
 
 def process_data_output(
     llm_response: Dict[str, Any],
-    db_conn: sqlite3.Connection,
+    db_conn,
     request: str,
     tables: str = None,
     history: str = None,
@@ -1572,9 +1572,15 @@ def process_data_output(
         if not query:
             return {"response": "No query provided", "code": 400}
 
+        # Create SQLAlchemy engine based on connection type
+        if "psycopg2" in db_conn.__class__.__module__:
+            engine = create_engine("postgresql://caug:gobears@localhost/npc_test")
+        else:
+            engine = create_engine("sqlite:///test_sqlite.db")
+
         if choice == 1:  # Direct answer query
             try:
-                df = pd.read_sql_query(query, db_conn)
+                df = pd.read_sql_query(query, engine)
                 result = check_output_sufficient(
                     request, df, query, model=model, provider=provider, npc=npc
                 )
@@ -1591,7 +1597,7 @@ def process_data_output(
 
         elif choice == 2:  # Exploratory query
             try:
-                df = pd.read_sql_query(query, db_conn)
+                df = pd.read_sql_query(query, engine)
                 extra_context = f"""
                 Exploratory query results:
                 Query: {query}
@@ -1621,7 +1627,7 @@ def process_data_output(
 
 def get_data_response(
     request: str,
-    db_conn: sqlite3.Connection,
+    db_conn,
     tables: str = None,
     n_try_freq: int = 5,
     extra_context: str = None,
@@ -1634,9 +1640,73 @@ def get_data_response(
     """
     Generate a response to a data request, with retries for failed attempts.
     """
+
+    # Extract schema information based on connection type
+    schema_info = ""
+    if "psycopg2" in db_conn.__class__.__module__:
+        cursor = db_conn.cursor()
+        # Get all tables and their columns
+        cursor.execute(
+            """
+            SELECT
+                t.table_name,
+                array_agg(c.column_name || ' ' || c.data_type) as columns,
+                array_agg(
+                    CASE
+                        WHEN tc.constraint_type = 'FOREIGN KEY'
+                        THEN kcu.column_name || ' REFERENCES ' || ccu.table_name || '.' || ccu.column_name
+                        ELSE NULL
+                    END
+                ) as foreign_keys
+            FROM information_schema.tables t
+            JOIN information_schema.columns c ON t.table_name = c.table_name
+            LEFT JOIN information_schema.table_constraints tc
+                ON t.table_name = tc.table_name
+                AND tc.constraint_type = 'FOREIGN KEY'
+            LEFT JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            LEFT JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+            WHERE t.table_schema = 'public'
+            GROUP BY t.table_name;
+        """
+        )
+        for table, columns, fks in cursor.fetchall():
+            schema_info += f"\nTable {table}:\n"
+            schema_info += "Columns:\n"
+            for col in columns:
+                schema_info += f"  - {col}\n"
+            if any(fk for fk in fks if fk is not None):
+                schema_info += "Foreign Keys:\n"
+                for fk in fks:
+                    if fk:
+                        schema_info += f"  - {fk}\n"
+
+    elif "sqlite3" in db_conn.__class__.__module__:
+        cursor = db_conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+        for (table_name,) in tables:
+            schema_info += f"\nTable {table_name}:\n"
+            cursor.execute(f"PRAGMA table_info({table_name});")
+            columns = cursor.fetchall()
+            schema_info += "Columns:\n"
+            for col in columns:
+                schema_info += f"  - {col[1]} {col[2]}\n"
+
+            cursor.execute(f"PRAGMA foreign_key_list({table_name});")
+            foreign_keys = cursor.fetchall()
+            if foreign_keys:
+                schema_info += "Foreign Keys:\n"
+                for fk in foreign_keys:
+                    schema_info += f"  - {fk[3]} REFERENCES {fk[2]}({fk[4]})\n"
+
     prompt = f"""
     User request: {request}
-    Available tables: {tables or 'Not specified'}
+
+    Database Schema:
+    {schema_info}
+
     {extra_context or ''}
     {f'Query history: {history}' if history else ''}
 
@@ -1655,49 +1725,47 @@ def get_data_response(
 
     failures = []
     for attempt in range(max_retries):
-        try:
-            llm_response = get_llm_response(
-                prompt, npc=npc, format="json", model=model, provider=provider
+        # try:
+        llm_response = get_llm_response(
+            prompt, npc=npc, format="json", model=model, provider=provider
+        )
+
+        # Clean response if it's a string
+        response_data = llm_response.get("response", {})
+        if isinstance(response_data, str):
+            response_data = (
+                response_data.replace("```json", "").replace("```", "").strip()
             )
+            try:
+                response_data = json.loads(response_data)
+            except json.JSONDecodeError:
+                failures.append("Invalid JSON response")
+                continue
 
-            # Clean response if it's a string
-            response_data = llm_response.get("response", {})
-            if isinstance(response_data, str):
-                response_data = (
-                    response_data.replace("```json", "").replace("```", "").strip()
-                )
-                try:
-                    response_data = json.loads(response_data)
-                except json.JSONDecodeError:
-                    failures.append("Invalid JSON response")
-                    continue
+        result = process_data_output(
+            response_data,
+            db_conn,
+            request,
+            tables=tables,
+            history=failures,
+            npc=npc,
+            model=model,
+            provider=provider,
+        )
 
-            result = process_data_output(
-                response_data,
-                db_conn,
-                request,
-                tables=tables,
-                history=failures,
-                npc=npc,
-                model=model,
-                provider=provider,
-            )
+        if result["code"] == 200:
+            return result
 
-            if result["code"] == 200:
-                return result
+        failures.append(result["response"])
 
-            failures.append(result["response"])
+        if attempt == max_retries - 1:
+            return {
+                "response": f"Failed after {max_retries} attempts. Errors: {'; '.join(failures)}",
+                "code": 400,
+            }
 
-            if attempt == max_retries - 1:
-                return {
-                    "response": f"Failed after {max_retries} attempts. Errors: {'; '.join(failures)}",
-                    "code": 400,
-                }
-
-        except Exception as e:
-            failures.append(str(e))
-
-    return {"response": "Max retries exceeded", "code": 400}
+    # except Exception as e:
+    #    failures.append(str(e))
 
 
 def enter_reasoning_human_in_the_loop(
