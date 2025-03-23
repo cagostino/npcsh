@@ -385,12 +385,17 @@ if __name__ == "__main__":
 ### Linux install
 ```bash
 
+# for audio primarily
 sudo apt-get install espeak
 sudo apt-get install portaudio19-dev python3-pyaudio
 sudo apt-get install alsa-base alsa-utils
 sudo apt-get install libcairo2-dev
 sudo apt-get install libgirepository1.0-dev
 sudo apt-get install ffmpeg
+
+# for triggers
+sudo apt install inotify-tools
+
 
 #And if you don't have ollama installed, use this:
 curl -fsSL https://ollama.com/install.sh | sh
@@ -414,11 +419,17 @@ pip install npcsh[all]
 
 ### Mac install
 ```bash
+#mainly for audio
 brew install portaudio
 brew install ffmpeg
+brew install pygobject3
+
+# for triggers
+brew install ...
+
+
 brew install ollama
 brew services start ollama
-brew install pygobject3
 ollama pull llama3.2
 ollama pull llava:7b
 ollama pull nomic-embed-text
@@ -992,12 +1003,29 @@ npc ots -f test_data/catfight.PNG
 ### Plan : Schedule tasks to be run at regular intervals (under construction)
 Use the /plan macro to schedule tasks to be run at regular intervals.
 ```npcsh
-npcsh> /plan run a rag search on the files in the current directory every 5 minutes
+npcsh> /plan run a rag search for 'moonbeam' on the files in the current directory every 5 minutes
 ```
+
+```npcsh
+npcsh> /plan record the cpu usage every 5 minutes
+```
+
+```npcsh
+npcsh> /plan record the apps that are using the most ram every 5 minutes
+```
+
+
+
 
 ```bash
 npc plan -f 30m -t 'task'
 ```
+
+Plan will use platform-specific scheduling tools. In particular, it uses crontab on Linux and launchd on macOS and Schedule Tasks on Windows.
+
+Implementations have been provided for Mac and Windows but only has been tested as of 3/23/2025 on Linux.
+
+
 
 ### Plonk : Computer Control
 Use the /plonk macro to allow the LLM to control your computer.
@@ -1283,6 +1311,18 @@ npcsh> /spool model=llama3.3
 ```bash
 npc spool -n npc.npc
 ```
+
+### Trigger
+Use the /trigger macro to execute specific actionss based on certain conditions.
+
+```npcsh
+npcsh> /trigger watch for new PDF downloads in the ~/Downloads directory and move them
+to the ~/Documents/PDFs directory . Ensure that the directory exists or create it if it does not.
+```
+
+On Linux, trigger makes use of inotify-tools to watch for file system events. On macOS, it uses fswatch, and on Windows, it uses Watch-Command.
+
+
 
 
 
