@@ -1320,6 +1320,8 @@ npcsh> /trigger watch for new PDF downloads in the ~/Downloads directory and mov
 to the ~/Documents/PDFs directory . Ensure that the directory exists or create it if it does not.
 ```
 
+On Linux, trigger makes use of inotify-tools to watch for file system events. On macOS, it uses fswatch, and on Windows, it uses Watch-Command.
+
 
 
 

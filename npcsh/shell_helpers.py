@@ -1095,9 +1095,6 @@ def resize_image_tars(image_path):
 def execute_plan_command(
     command, npc=None, model=None, provider=None, messages=None, api_url=None
 ):
-    """
-    Handle scheduled tasks across Linux (cron), Mac (launchd), and Windows (Task Scheduler)
-    """
     parts = command.split(maxsplit=1)
     if len(parts) < 2:
         return {
@@ -1114,16 +1111,40 @@ def execute_plan_command(
     os.makedirs(jobs_dir, exist_ok=True)
     os.makedirs(logs_dir, exist_ok=True)
 
-    linux_prompt = """Convert this scheduling request into a crontab-based script:
+    # First part - just the request formatting
+    linux_request = f"""Convert this scheduling request into a crontab-based script:
     Request: {request}
 
-    Example for "record CPU usage every 10 minutes":
-    {{
-        "script": "#!/bin/bash\\nset -euo pipefail\\nIFS=$'\\n\\t'\\n\\nLOGFILE=\\"$HOME/.npcsh/logs/cpu_usage.log\\"\\n\\nlog_info() {{\\n    echo \\"[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*\\" >> \\"$LOGFILE\\"\\n}}\\n\\nlog_error() {{\\n    echo \\"[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*\\" >> \\"$LOGFILE\\"\\n}}\\n\\nrecord_cpu() {{\\n    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')\\n    local cpu_usage=$(top -bn1 | grep 'Cpu(s)' | awk '{{print $2}}')\\n    log_info \\"CPU Usage: $cpu_usage%\\"\\n}}\\n\\nrecord_cpu",
+    """
+
+    # Second part - the static prompt with examples and requirements
+    linux_prompt_static = """Example for "record CPU usage every 10 minutes":
+    {
+        "script": "#!/bin/bash
+set -euo pipefail
+IFS=$'\\n\\t'
+
+LOGFILE=\"$HOME/.npcsh/logs/cpu_usage.log\"
+
+log_info() {
+    echo \"[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*\" >> \"$LOGFILE\"
+}
+
+log_error() {
+    echo \"[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*\" >> \"$LOGFILE\"
+}
+
+record_cpu() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local cpu_usage=$(top -bn1 | grep 'Cpu(s)' | awk '{print $2}')
+    log_info \"CPU Usage: $cpu_usage%\"
+}
+
+record_cpu",
         "schedule": "*/10 * * * *",
         "description": "Record CPU usage every 10 minutes",
-        "name": "<simple_unique_name>"
-    }}
+        "name": "record_cpu_usage"
+    }
 
     Your response must be valid json with the following keys:
     - script: The shell script content with proper functions and error handling. special characters must be escaped to ensure python json.loads will work correctly.
@@ -1133,38 +1154,79 @@ def execute_plan_command(
 
     Do not include any additional markdown formatting in your response or leading ```json tags."""
 
-    mac_prompt = """Convert this scheduling request into a launchd-compatible script:
+    mac_request = f"""Convert this scheduling request into a launchd-compatible script:
     Request: {request}
 
-    Example for "record CPU usage every 10 minutes":
-    {{
-        "script": "#!/bin/bash\\nset -euo pipefail\\nIFS=$'\\n\\t'\\n\\nLOGFILE=\\"$HOME/.npcsh/logs/cpu_usage.log\\"\\n\\nlog_info() {{\\n    echo \\"[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*\\" >> \\"$LOGFILE\\"\\n}}\\n\\nlog_error() {{\\n    echo \\"[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*\\" >> \\"$LOGFILE\\"\\n}}\\n\\nrecord_cpu() {{\\n    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')\\n    local cpu_usage=$(top -l 1 | grep 'CPU usage' | awk '{{print $3}}' | tr -d '%')\\n    log_info \\"CPU Usage: $cpu_usage%\\"\\n}}\\n\\nrecord_cpu",
+    """
+
+    mac_prompt_static = """Example for "record CPU usage every 10 minutes":
+    {
+        "script": "#!/bin/bash
+set -euo pipefail
+IFS=$'\\n\\t'
+
+LOGFILE=\"$HOME/.npcsh/logs/cpu_usage.log\"
+
+log_info() {
+    echo \"[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*\" >> \"$LOGFILE\"
+}
+
+log_error() {
+    echo \"[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*\" >> \"$LOGFILE\"
+}
+
+record_cpu() {
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local cpu_usage=$(top -l 1 | grep 'CPU usage' | awk '{print $3}' | tr -d '%')
+    log_info \"CPU Usage: $cpu_usage%\"
+}
+
+record_cpu",
         "schedule": "600",
         "description": "Record CPU usage every 10 minutes",
-        "name": "<simple_unique_name>"
-
-
-    }}
+        "name": "record_cpu_usage"
+    }
 
     Your response must be valid json with the following keys:
     - script: The shell script content with proper functions and error handling. special characters must be escaped to ensure python json.loads will work correctly.
     - schedule: Interval in seconds (e.g. 600 for 10 minutes)
-    - description: A human readable description,
+    - description: A human readable description
     - name: A unique name for the job
 
     Do not include any additional markdown formatting in your response or leading ```json tags."""
 
-    windows_prompt = """Convert this scheduling request into a PowerShell script with Task Scheduler parameters:
+    windows_request = f"""Convert this scheduling request into a PowerShell script with Task Scheduler parameters:
     Request: {request}
 
-    Example for "record CPU usage every 10 minutes":
-    {{
-        "script": "$ErrorActionPreference = 'Stop'\\n\\n$LogFile = \\"$HOME\\.npcsh\\logs\\cpu_usage.log\\"\\n\\nfunction Write-Log {{\\n    param($Message, $Type = 'INFO')\\n    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\\n    \\"[$timestamp] [$Type] $Message\\" | Out-File -FilePath $LogFile -Append\\n}}\\n\\nfunction Get-CpuUsage {{\\n    try {{\\n        $cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples.CookedValue\\n        Write-Log \\"CPU Usage: $($cpu)%\\"\\n    }} catch {{\\n        Write-Log $_.Exception.Message 'ERROR'\\n        throw\\n    }}\\n}}\\n\\nGet-CpuUsage",
+    """
+
+    windows_prompt_static = """Example for "record CPU usage every 10 minutes":
+    {
+        "script": "$ErrorActionPreference = 'Stop'
+
+$LogFile = \"$HOME\\.npcsh\\logs\\cpu_usage.log\"
+
+function Write-Log {
+    param($Message, $Type = 'INFO')
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    \"[$timestamp] [$Type] $Message\" | Out-File -FilePath $LogFile -Append
+}
+
+function Get-CpuUsage {
+    try {
+        $cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples.CookedValue
+        Write-Log \"CPU Usage: $($cpu)%\"
+    } catch {
+        Write-Log $_.Exception.Message 'ERROR'
+        throw
+    }
+}
+
+Get-CpuUsage",
         "schedule": "/sc minute /mo 10",
         "description": "Record CPU usage every 10 minutes",
-        "name": "<simple_unique_name>"
-
-    }}
+        "name": "record_cpu_usage"
+    }
 
     Your response must be valid json with the following keys:
     - script: The PowerShell script content with proper functions and error handling. special characters must be escaped to ensure python json.loads will work correctly.
@@ -1174,9 +1236,13 @@ def execute_plan_command(
 
     Do not include any additional markdown formatting in your response or leading ```json tags."""
 
-    prompts = {"Linux": linux_prompt, "Darwin": mac_prompt, "Windows": windows_prompt}
+    prompts = {
+        "Linux": linux_request + linux_prompt_static,
+        "Darwin": mac_request + mac_prompt_static,
+        "Windows": windows_request + windows_prompt_static,
+    }
 
-    prompt = prompts[platform_system].format(request=request)
+    prompt = prompts[platform_system]
     response = get_llm_response(
         prompt, npc=npc, model=model, provider=provider, format="json"
     )
@@ -1297,66 +1363,97 @@ def execute_trigger_command(
             "messages": messages,
             "output": "Usage: /trigger <trigger condition and action description>",
         }
-    # get user platform, mac, windows, linux
 
-    import platform
+    request = parts[1]
+    platform_system = platform.system()
 
-    platform = platform.system()
+    linux_request = f"""Convert this trigger request into a single event-monitoring daemon script:
+    Request: {request}
 
-    linux_script_instructions = """
+    """
+
+    linux_prompt_static = """Example for "Move PDFs from Downloads to Documents/PDFs":
+    {
+        "script": "#!/bin/bash\\nset -euo pipefail\\nIFS=$'\\n\\t'\\n\\nLOGFILE=\\\"$HOME/.npcsh/logs/pdf_mover.log\\\"\\nSOURCE=\\\"$HOME/Downloads\\\"\\nTARGET=\\\"$HOME/Documents/PDFs\\\"\\n\\nlog_info() {\\n    echo \\\"[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*\\\" >> \\\"$LOGFILE\\\"\\n}\\n\\nlog_error() {\\n    echo \\\"[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*\\\" >> \\\"$LOGFILE\\\"\\n}\\n\\ninotifywait -m -q -e create --format '%w%f' \\\"$SOURCE\\\" | while read filepath; do\\n    if [[ \\\"$filepath\\\" =~ \\\\.pdf$ ]]; then\\n        mv \\\"$filepath\\\" \\\"$TARGET/\\\" && log_info \\\"Moved $filepath to $TARGET\\\" || log_error \\\"Failed to move $filepath\\\"\\n    fi\\ndone",
+        "name": "pdf_mover",
+        "description": "Move PDF files from Downloads to Documents/PDFs folder"
+    }
 
     The script MUST:
     - Use inotifywait -m -q -e create --format '%w%f' to get full paths
     - Double quote ALL file operations: "$SOURCE/$FILE"
     - Use $HOME for absolute paths
     - Echo both success and failure messages to log
+
+    Your response must be valid json with the following keys:
+    - script: The shell script content with proper functions and error handling
+    - name: A unique name for the trigger
+    - description: A human readable description
+
+    Do not include any additional markdown formatting in your response."""
+
+    mac_request = f"""Convert this trigger request into a single event-monitoring daemon script:
+    Request: {request}
+
     """
-    mac_script_instructions = """
+
+    mac_prompt_static = """Example for "Move PDFs from Downloads to Documents/PDFs":
+    {
+        "script": "#!/bin/bash\\nset -euo pipefail\\nIFS=$'\\n\\t'\\n\\nLOGFILE=\\\"$HOME/.npcsh/logs/pdf_mover.log\\\"\\nSOURCE=\\\"$HOME/Downloads\\\"\\nTARGET=\\\"$HOME/Documents/PDFs\\\"\\n\\nlog_info() {\\n    echo \\\"[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*\\\" >> \\\"$LOGFILE\\\"\\n}\\n\\nlog_error() {\\n    echo \\\"[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*\\\" >> \\\"$LOGFILE\\\"\\n}\\n\\nfswatch -0 -r -e '.*' --event Created --format '%p' \\\"$SOURCE\\\" | while read -d '' filepath; do\\n    if [[ \\\"$filepath\\\" =~ \\\\.pdf$ ]]; then\\n        mv \\\"$filepath\\\" \\\"$TARGET/\\\" && log_info \\\"Moved $filepath to $TARGET\\\" || log_error \\\"Failed to move $filepath\\\"\\n    fi\\ndone",
+        "name": "pdf_mover",
+        "description": "Move PDF files from Downloads to Documents/PDFs folder"
+    }
+
     The script MUST:
     - Use fswatch -0 -r -e '.*' --event Created --format '%p' to get full paths
     - Double quote ALL file operations: "$SOURCE/$FILE"
     - Use $HOME for absolute paths
     - Echo both success and failure messages to log
-    """
-    windows_script_instructions = """
-    The script MUST:
-    - Use Watch-FileSystem -Path $SOURCE -Filter * -Recurse -Force
-    - Double quote ALL file operations: "$SOURCE\$FILE"
-    - Use $HOME for absolute paths
-    - Echo both success and failure messages to log
-    """
-    if platform == "Linux":
-        instructions = linux_script_instructions
-    elif platform == "Darwin":
-        instructions = mac_script_instructions
-    elif platform == "Windows":
-        instructions = windows_script_instructions
-    request = parts[1]
-    watch_dir = os.path.expanduser("~/Downloads")
-    target_dir = os.path.expanduser("~/Documents/PDFs")
-    os.makedirs(target_dir, exist_ok=True)
 
-    prompt = f"""
-
-Convert this trigger request into a single event-monitoring daemon script.
-    Request: {request}
-
-    {instructions}
-
-    Your response must be valid json with the following keys
-    - script: The shell script content with proper functions and error handling. special characters must be escaped to ensure python json.loads will work correctly.
+    Your response must be valid json with the following keys:
+    - script: The shell script content with proper functions and error handling
     - name: A unique name for the trigger
     - description: A human readable description
 
+    Do not include any additional markdown formatting in your response."""
 
+    windows_request = f"""Convert this trigger request into a single event-monitoring daemon script:
+    Request: {request}
 
-    Do not include any additional markdown formatting in your response or leading ```json tags.
     """
+
+    windows_prompt_static = """Example for "Move PDFs from Downloads to Documents/PDFs":
+    {
+        "script": "$ErrorActionPreference = 'Stop'\\n\\n$LogFile = \\\"$HOME\\.npcsh\\logs\\pdf_mover.log\\\"\\n$Source = \\\"$HOME\\Downloads\\\"\\n$Target = \\\"$HOME\\Documents\\PDFs\\\"\\n\\nfunction Write-Log {\\n    param($Message, $Type = 'INFO')\\n    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\\n    \\\"[$timestamp] [$Type] $Message\\\" | Out-File -FilePath $LogFile -Append\\n}\\n\\n$watcher = New-Object System.IO.FileSystemWatcher\\n$watcher.Path = $Source\\n$watcher.Filter = \\\"*.pdf\\\"\\n$watcher.IncludeSubdirectories = $true\\n$watcher.EnableRaisingEvents = $true\\n\\n$action = {\\n    $path = $Event.SourceEventArgs.FullPath\\n    try {\\n        Move-Item -Path $path -Destination $Target\\n        Write-Log \\\"Moved $path to $Target\\\"\\n    } catch {\\n        Write-Log $_.Exception.Message 'ERROR'\\n    }\\n}\\n\\nRegister-ObjectEvent $watcher 'Created' -Action $action\\n\\nwhile ($true) { Start-Sleep 1 }",
+        "name": "pdf_mover",
+        "description": "Move PDF files from Downloads to Documents/PDFs folder"
+    }
+
+    The script MUST:
+    - Use FileSystemWatcher for monitoring
+    - Double quote ALL file operations: "$Source\\$File"
+    - Use $HOME for absolute paths
+    - Echo both success and failure messages to log
+
+    Your response must be valid json with the following keys:
+    - script: The PowerShell script content with proper functions and error handling
+    - name: A unique name for the trigger
+    - description: A human readable description
+
+    Do not include any additional markdown formatting in your response."""
+
+    prompts = {
+        "Linux": linux_request + linux_prompt_static,
+        "Darwin": mac_request + mac_prompt_static,
+        "Windows": windows_request + windows_prompt_static,
+    }
+
+    prompt = prompts[platform_system]
     response = get_llm_response(
         prompt, npc=npc, model=model, provider=provider, format="json"
     )
     trigger_info = response.get("response")
-    print(trigger_info)
+    print("Trigger info:", trigger_info)
 
     triggers_dir = os.path.expanduser("~/.npcsh/triggers")
     logs_dir = os.path.expanduser("~/.npcsh/logs")
@@ -1366,13 +1463,11 @@ Convert this trigger request into a single event-monitoring daemon script.
     trigger_name = f"trigger_{trigger_info['name']}"
     log_path = os.path.join(logs_dir, f"{trigger_name}.log")
 
-    if platform == "Linux":
-
+    if platform_system == "Linux":
         script_path = os.path.join(triggers_dir, f"{trigger_name}.sh")
 
         with open(script_path, "w") as f:
             f.write(trigger_info["script"])
-        print("Script written to:", script_path)
         os.chmod(script_path, 0o755)
 
         service_dir = os.path.expanduser("~/.config/systemd/user")
@@ -1393,8 +1488,6 @@ StandardError=append:{log_path}
 [Install]
 WantedBy=default.target
 """
-        print("Service written to:", service_path)
-        print("Service content:", service_content)
 
         with open(service_path, "w") as f:
             f.write(service_content)
@@ -1412,24 +1505,95 @@ WantedBy=default.target
             capture_output=True,
             text=True,
         )
-        print("Service status:", status.stdout)
 
-        output_text = f"""
-    Trigger service created:
-    Description: {trigger_info['description']}
-    Script: {script_path}
-    Service: {service_path}
-    Log: {log_path}
+        output = f"""Trigger service created:
+- Description: {trigger_info['description']}
+- Script: {script_path}
+- Service: {service_path}
+- Log: {log_path}
 
-    Status:
-    {status.stdout}
-    """
-    elif platform == "Darwin":
-        pass
-    elif platform == "Windows":
-        pass
+Status:
+{status.stdout}"""
 
-    return {"messages": messages, "output": output_text}
+    elif platform_system == "Darwin":
+        script_path = os.path.join(triggers_dir, f"{trigger_name}.sh")
+
+        with open(script_path, "w") as f:
+            f.write(trigger_info["script"])
+        os.chmod(script_path, 0o755)
+
+        plist_dir = os.path.expanduser("~/Library/LaunchAgents")
+        os.makedirs(plist_dir, exist_ok=True)
+        plist_path = os.path.join(plist_dir, f"com.npcsh.{trigger_name}.plist")
+
+        plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.npcsh.{trigger_name}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{script_path}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{log_path}</string>
+    <key>StandardErrorPath</key>
+    <string>{log_path}</string>
+</dict>
+</plist>"""
+
+        with open(plist_path, "w") as f:
+            f.write(plist_content)
+
+        subprocess.run(["launchctl", "unload", plist_path], check=False)
+        subprocess.run(["launchctl", "load", plist_path], check=True)
+
+        output = f"""Trigger service created:
+- Description: {trigger_info['description']}
+- Script: {script_path}
+- Launchd plist: {plist_path}
+- Log: {log_path}"""
+
+    elif platform_system == "Windows":
+        script_path = os.path.join(triggers_dir, f"{trigger_name}.ps1")
+
+        with open(script_path, "w") as f:
+            f.write(trigger_info["script"])
+
+        task_name = f"NPCSH_{trigger_name}"
+
+        # Create a scheduled task that runs at startup
+        cmd = [
+            "schtasks",
+            "/create",
+            "/tn",
+            task_name,
+            "/tr",
+            f"powershell -NoProfile -ExecutionPolicy Bypass -File {script_path}",
+            "/sc",
+            "onstart",
+            "/ru",
+            "System",
+            "/f",  # Force creation
+        ]
+
+        subprocess.run(cmd, check=True)
+
+        # Start the task immediately
+        subprocess.run(["schtasks", "/run", "/tn", task_name])
+
+        output = f"""Trigger service created:
+- Description: {trigger_info['description']}
+- Script: {script_path}
+- Task name: {task_name}
+- Log: {log_path}"""
+
+    return {"messages": messages, "output": output}
 
 
 def enter_wander_mode(args, messages, npc_compiler, npc, model, provider):
