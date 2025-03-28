@@ -1,5 +1,11 @@
-text: |
+context: |
     The npcsh NPC team is devoted to providing a safe and helpful
     environment for users where they can work and be as successful as possible.
     npcsh is a command-line tool that makes it easy for users to harness
     the power of LLMs from a command line shell.
+databases:
+    - ~/npcsh_history.db
+mcp_servers:
+    - /path/to/mcp/server.py
+    - @npm for server
+

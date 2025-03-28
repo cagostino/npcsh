@@ -501,6 +501,18 @@ class SilentUndefined(Undefined):
         return ""
 
 
+class Context:
+    def __init__(self, context=None, mcp_servers=None, databases=None, files=None):
+        self.context = context
+        self.mcp_servers = mcp_servers
+        self.databases = databases
+        self.files = files
+
+    def load_context_file(self, path):
+        with open(path, "r") as f:
+            self.context = yaml.safe_load(f)
+
+
 class Tool:
     def __init__(self, tool_data: dict):
         if not tool_data or not isinstance(tool_data, dict):

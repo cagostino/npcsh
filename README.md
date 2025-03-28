@@ -644,19 +644,6 @@ In summary, this code automates the process of capturing a screenshot, saving it
 ```
 
 ```npcsh
-npcsh> What is the biggest file in my current folder?
-
-LLM suggests the following bash command: ls -S | head -n 1
-
-Running command: ls -S | head -n 1
-
-Command executed with output: image_20241111_000033.png
-
-I ran the command ls -S | head -n 1 in your current folder. This command sorts all files by size in descending order and then selects the first entry, which represents the largest file. The result of this operation shows that the biggest file in your current folder is image_20241111_000033.png.
-
-```
-
-```npcsh
 npcsh>What is the best way to implement a linked list in Python?
 
 The best way to implement a linked list in Python is to define a Node class for the individual elements and a LinkedList class to manage the nodes. Here's a basic implementation:
@@ -785,7 +772,7 @@ and then the associated image :
 An important facet that makes `npcsh` so powerful is the ability to pipe outputs from one tool call to another. This allows for the chaining of commands and the creation of complex workflows. For example, you can use the output of a search to generate an image, or you can use the output of an image analysis to generate a report. Here is an example of how this might look in practice:
 ```npcsh
 npcsh> what is the gdp of russia in 2024? | /vixynt 'generate an image that contains {0}'
-
+```
 ### Executing Bash Commands
 You can execute bash commands directly within npcsh. The LLM can also generate and execute bash commands based on your natural language requests.
 For example:
@@ -1083,7 +1070,10 @@ Search can be accomplished through the `/search` macro. You can specify the prov
 you must set a perplexity api key as an environment variable as described above. The default provider is duckduckgo.
 
 NOTE: while google is an available search engine, they recently implemented changes (early 2025) that make the python google search package no longer as reliable.
-For now, we will use duckduckgo and revisit this issue when other more critical aspects are handled.
+Duckduckgo's search toool also givies rate limit errors often, so until a more robust
+solution is implemented for it, Perplexity's will be the most reliable.
+
+
 
 
 ```npcsh
