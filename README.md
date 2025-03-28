@@ -28,22 +28,23 @@ Interested to stay in the loop and to hear the latest and greatest about `npcsh`
 ## TLDR Cheat Sheet
 Users can take advantage of `npcsh` through its custom shell or through a command-line interface (CLI) tool. Below is a cheat sheet that shows how to use `npcsh` commands in both the shell and the CLI. For the npcsh commands to work, one must activate `npcsh` by typing it in a shell.
 
+
+
+
 | Task | npc CLI | npcsh |
 |----------|----------|----------|
 | Ask a generic question | npc 'prompt' | 'prompt' |
 | Compile an NPC | npc compile /path/to/npc.npc | /compile /path/to/npc.npc |
 | Computer use | npc plonk -n 'npc_name' -sp 'task for plonk to carry out '| /plonk -n 'npc_name' -sp 'task for plonk to carry out ' |
 | Conjure an NPC team from context and templates | npc init -t 'template1, template2' -ctx 'context'   | /conjure  -t 'template1, 'template2' -ctx 'context'  |
-| Enter a chat with an NPC (NPC needs to be compiled first) | npc npc_name | /npc_name |
+| Enter a chat with an NPC (NPC needs to be compiled first) | npc chat -n npc_name | /spool npc=<npc_name> |
 | Generate image    | npc vixynt 'prompt'  | /vixynt prompt   |
 | Get a sample LLM response  | npc sample 'prompt'   | /sample prompt for llm  |
-| Invoke a tool  | npc tool {tool_name} -args --flags | /tool_name -args --flags |
-| Search locally | npc tool local_search -args --flags | /local_search -args --flags |
 | Search for a term in the npcsh_db only in conversations with a specific npc | npc rag -n 'npc_name' -f 'filename' -q 'query' | /rag -n 'npc_name' -f 'filename' -q 'query' |
-| Search the web | npc search -p provider 'query' | /search -p provider 'query' |
+| Search the web | npc search -q "cal golden bears football schedule" -sp perplexity | /search -p perplexity 'cal bears football schedule' |
 | Serve an NPC team | npc serve --port 5337 --cors='http://localhost:5137/' | /serve --port 5337 --cors='http://localhost:5137/' |
 | Screenshot analysis  | npc ots |  /ots  |
-| Voice Chat    | npc whisper 'npc_name'   | /whisper   |
+| Voice Chat    | npc whisper -n 'npc_name'   | /whisper   |
 
 
 ## Python Examples
@@ -644,19 +645,6 @@ In summary, this code automates the process of capturing a screenshot, saving it
 ```
 
 ```npcsh
-npcsh> What is the biggest file in my current folder?
-
-LLM suggests the following bash command: ls -S | head -n 1
-
-Running command: ls -S | head -n 1
-
-Command executed with output: image_20241111_000033.png
-
-I ran the command ls -S | head -n 1 in your current folder. This command sorts all files by size in descending order and then selects the first entry, which represents the largest file. The result of this operation shows that the biggest file in your current folder is image_20241111_000033.png.
-
-```
-
-```npcsh
 npcsh>What is the best way to implement a linked list in Python?
 
 The best way to implement a linked list in Python is to define a Node class for the individual elements and a LinkedList class to manage the nodes. Here's a basic implementation:
@@ -785,7 +773,7 @@ and then the associated image :
 An important facet that makes `npcsh` so powerful is the ability to pipe outputs from one tool call to another. This allows for the chaining of commands and the creation of complex workflows. For example, you can use the output of a search to generate an image, or you can use the output of an image analysis to generate a report. Here is an example of how this might look in practice:
 ```npcsh
 npcsh> what is the gdp of russia in 2024? | /vixynt 'generate an image that contains {0}'
-
+```
 ### Executing Bash Commands
 You can execute bash commands directly within npcsh. The LLM can also generate and execute bash commands based on your natural language requests.
 For example:
@@ -1083,7 +1071,10 @@ Search can be accomplished through the `/search` macro. You can specify the prov
 you must set a perplexity api key as an environment variable as described above. The default provider is duckduckgo.
 
 NOTE: while google is an available search engine, they recently implemented changes (early 2025) that make the python google search package no longer as reliable.
-For now, we will use duckduckgo and revisit this issue when other more critical aspects are handled.
+Duckduckgo's search toool also givies rate limit errors often, so until a more robust
+solution is implemented for it, Perplexity's will be the most reliable.
+
+
 
 
 ```npcsh

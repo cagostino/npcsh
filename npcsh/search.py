@@ -5,6 +5,7 @@ import os
 
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
+from duckduckgo_search.exceptions import DuckDuckGoSearchException
 
 try:
     from googlesearch import search
@@ -41,7 +42,6 @@ def search_perplexity(
         "max_tokens": max_tokens,
         "temperature": temperature,
         "top_p": top_p,
-        "search_domain_filter": ["perplexity.ai"],
         "return_images": False,
         "return_related_questions": False,
         "search_recency_filter": "month",
@@ -58,6 +58,7 @@ def search_perplexity(
     # Make the POST request to the API
     response = requests.post(url, json=payload, headers=headers)
     response = json.loads(response.text)
+    print(response)
     return [response["choices"][0]["message"]["content"], response["citations"]]
 
 
@@ -89,13 +90,19 @@ def search_web(
 
     if provider == "duckduckgo":
         ddgs = DDGS()
-        search_results = ddgs.text(query, max_results=num_results)
-        print(search_results, type(search_results))
-        urls = [r["href"] for r in search_results]
-        results = [
-            {"title": r["title"], "link": r["href"], "content": r["body"]}
-            for r in search_results
-        ]
+        try:
+            search_results = ddgs.text(query, max_results=num_results)
+            print(search_results, type(search_results))
+            urls = [r["href"] for r in search_results]
+            results = [
+                {"title": r["title"], "link": r["href"], "content": r["body"]}
+                for r in search_results
+            ]
+        except DuckDuckGoSearchException as e:
+            print("DuckDuckGo search failed: ", e)
+            urls = []
+            results = []
+
     else:  # google
         urls = list(search(query, num_results=num_results))
         # google shit doesnt seem to be working anymore, apparently a lbock they made on browsers without js?

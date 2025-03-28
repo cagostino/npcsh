@@ -283,8 +283,6 @@ def analyze_image(
                         api_key=api_key,
                     )
 
-                    print(response)
-                    # Add to command history *inside* the try block
                     return response
 
             except Exception as e:
