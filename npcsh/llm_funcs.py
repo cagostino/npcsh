@@ -802,15 +802,20 @@ ReAct choices then will enter reasoning flow
 
     prompt = f"""
     A user submitted this query: {command}
+
     Determine the nature of the user's request:
-    1. Is it a specific request for a task that could be accomplished via a bash command or a simple python script that could be executed in a single bash call?
-    2. Should a tool be invoked to fulfill the request?
-    3. Is it a general question that requires an informative answer or a highly specific question that
+
+    1. Should a tool be invoked to fulfill the request?
+
+    2. Is it a general question that requires an informative answer or a highly specific question that
         requires inforrmation on the web?
-    4. Would this question be best answered by an alternative NPC?
-    5. Is it a complex request that actually requires more than one
-    tool to be called, perhaps in a sequence?
-    6. is there a need for the user to provide additional input to fulfill the request?
+
+    3. Would this question be best answered by an alternative NPC?
+
+    4. Is it a complex request that actually requires more than one
+        tool to be called, perhaps in a sequence?
+
+    5. is there a need for the user to provide additional input to fulfill the request?
 
 
 
@@ -877,8 +882,12 @@ ReAct choices then will enter reasoning flow
 
     prompt += f"""
     In considering how to answer this, consider:
-    - Whether it can be answered via a bash command on the user's computer. e.g. if a user is curious about file sizes within a directory or about processes running on their computer, these are likely best handled by a bash command.
-    - Whether more context from the user is required to adequately answer the question. e.g. if a user asks for a joke about their favorite city but they don't include the city , it would be helpful to ask for that information. Similarly, if a user asks to open a browser and to check the weather in a city, it would be helpful to ask for the city and which website or source to use.
+
+    - Whether more context from the user is required to adequately answer the question.
+        e.g. if a user asks for a joke about their favorite city but they don't include the city ,
+        it would be helpful to ask for that information. Similarly, if a user asks to open a browser
+        and to check the weather in a city, it would be helpful to ask for the city and which website
+        or source to use.
     - Whether a tool should be used.
 
 
@@ -887,14 +896,17 @@ ReAct choices then will enter reasoning flow
     extra tools or agent passes.
     Only use tools or pass to other NPCs
     when it is obvious that the answer needs to be as up-to-date as possible. For example,
-    a question about where mount everest is does not necessarily need to be answered by a tool call or an agent pass.
+        a question about where mount everest is does not necessarily need to be answered by a tool call or an agent pass.
     Similarly, if a user asks to explain the plot of the aeneid, this can be answered without a tool call or agent pass.
-    If a user were to ask for the current weather in tokyo or the current price of bitcoin or who the mayor of a city is, then a tool call or agent pass may be appropriate. If a user asks about the process using the most ram or the biggest file in a directory, a bash command will be most appropriate.
+
+    If a user were to ask for the current weather in tokyo or the current price of bitcoin or who the mayor of a city is,
+        then a tool call or agent pass may be appropriate.
+
     Tools are valuable but their use should be limited and purposeful to
     ensure the best user experience.
 
     Respond with a JSON object containing:
-    - "action": one of ["execute_command", "invoke_tool", "answer_question", "pass_to_npc", "execute_sequence", "request_input"]
+    - "action": one of ["invoke_tool", "answer_question", "pass_to_npc", "execute_sequence", "request_input"]
     - "tool_name": : if action is "invoke_tool": the name of the tool to use.
                      else if action is "execute_sequence", a list of tool names to use.
     - "explanation": a brief explanation of why you chose this action.
@@ -907,7 +919,7 @@ ReAct choices then will enter reasoning flow
 
     The format of the JSON object is:
     {{
-        "action": "execute_command" | "invoke_tool" | "answer_question" | "pass_to_npc" | "execute_sequence" | "request_input",
+        "action": "invoke_tool" | "answer_question" | "pass_to_npc" | "execute_sequence" | "request_input",
         "tool_name": "<tool_name(s)_if_applicable>",
         "explanation": "<your_explanation>",
         "npc_name": "<npc_name(s)_if_applicable>"
@@ -915,7 +927,9 @@ ReAct choices then will enter reasoning flow
 
     If you execute a sequence, ensure that you have a specified NPC for each tool use.
 
-    Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING. There should be no prefix 'json'. Start straight with the opening curly brace.
+    Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING.
+    There should be no leading ```json.
+
     """
 
     if docs_context:
@@ -932,11 +946,6 @@ ReAct choices then will enter reasoning flow
         {context}
 
         """
-
-    # print(prompt)
-
-    # For action determination, we don't need to pass the conversation messages to avoid confusion
-    # print(npc, model, provider)
     action_response = get_llm_response(
         prompt,
         model=model,
@@ -965,12 +974,11 @@ ReAct choices then will enter reasoning flow
     else:
         response_content_parsed = response_content
 
-    # Proceed according to the action specified
     action = response_content_parsed.get("action")
     explanation = response_content["explanation"]
-    # Include the user's command in the conversation messages
     print(f"action chosen: {action}")
     print(f"explanation given: {explanation}")
+
     if response_content_parsed.get("tool_name"):
         print(f"tool name: {response_content_parsed.get('tool_name')}")
 
@@ -1316,8 +1324,9 @@ def handle_tool_call(
             stream=stream,
             messages=messages,
         )
-        if "Error" in tool_output:
-            raise Exception(tool_output)
+        if not stream:
+            if "Error" in tool_output:
+                raise Exception(tool_output)
     except Exception as e:
         # diagnose_problem = get_llm_response(
         ##    f"""a problem has occurred.
