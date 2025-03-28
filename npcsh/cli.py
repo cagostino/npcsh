@@ -33,6 +33,7 @@ from .llm_funcs import (
     get_stream,
     get_conversation,
 )
+from .plonk import plonk, action_space
 from .search import search_web
 from .shell_helpers import *
 import os
@@ -54,10 +55,12 @@ def main():
         "assemble",
         "build",
         "compile",
+        "chat",
         "init",
         "new",
         "plonk",
         "sample",
+        "search",
         "select",
         "serve",
         "spool",
@@ -164,6 +167,10 @@ def main():
     build_parser.add_argument(
         "directory", nargs="?", default=".", help="Directory to build project in"
     )
+
+    # chat
+    chat_parser = subparsers.add_parser("chat", help="chat with an NPC")
+    chat_parser.add_argument("-n", "--npc_name", help="name of npc")
 
     # Compile command
     compile_parser = subparsers.add_parser("compile", help="Compile an NPC")
@@ -300,7 +307,7 @@ def main():
 
     # Web search
     search_parser = subparsers.add_parser("search", help="search the web")
-    search_parser.add_argument("query", help="search query")
+    search_parser.add_argument("--query", "-q", help="search query")
     search_parser.add_argument(
         "--search_provider",
         "-sp",
@@ -317,7 +324,7 @@ def main():
 
     # Voice chat
     whisper_parser = subparsers.add_parser("whisper", help="start voice chat")
-    whisper_parser.add_argument("npc_name", help="name of the NPC to chat with")
+    whisper_parser.add_argument("-n", "--npc_name", help="name of the NPC to chat with")
 
     args = parser.parse_args()
 
@@ -367,6 +374,13 @@ def main():
             port=args.port if args.port else 5337,
             cors_origins=cors_origins,
         )
+    elif args.command == "chat":
+        npc_name = args.npc_name
+        npc_path = get_npc_path(npc_name, NPCSH_DB_PATH)
+        current_npc = load_npc_from_file(npc_path, sqlite3.connect(NPCSH_DB_PATH))
+        return enter_spool_mode(
+            model=args.model, provider=args.provider, npc=current_npc
+        )
 
     elif args.command == "init":
         if args.templates:
@@ -395,16 +409,18 @@ def main():
         )
 
     elif args.command == "compile":
-        compile_npc(args.path)
+        npc_compiler = NPCCompiler(npc_directory, NPCSH_DB_PATH)
+        compiled = npc_compiler.compile(args.path)
+        print("NPC compiled to:", compiled)
 
     elif args.command == "plonk":
         task = args.task or args.spell
         npc_name = args.name
-        run_plonk_task(
-            task=task,
-            npc_name=npc_name,
-            model=args.model or NPCSH_REASONING_MODEL,
-            provider=args.provider or NPCSH_REASONING_PROVIDER,
+        plonk(
+            task,
+            action_space,
+            model=args.model or NPCSH_CHAT_MODEL,
+            provider=args.provider or NPCSH_CHAT_PROVIDER,
         )
 
     elif args.command == "sample":
@@ -443,10 +459,14 @@ def main():
             model=args.model,
             provider=args.provider,
         )
-        print(result)
+        print(result["output"])
 
     elif args.command == "whisper":
-        start_whisper_chat(args.npc_name)
+        npc_name = args.npc_name
+        npc_path = get_npc_path(npc_name, NPCSH_DB_PATH)
+        current_npc = load_npc_from_file(npc_path, sqlite3.connect(NPCSH_DB_PATH))
+
+        enter_whisper_mode(npc=current_npc)
 
     elif args.command == "tool":
         result = invoke_tool(

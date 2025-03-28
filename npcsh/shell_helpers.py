@@ -1631,6 +1631,9 @@ def ots(
         output = analyze_image(
             user_prompt, file_path, filename, npc=npc, model=model, provider=provider
         )
+        messages = [
+            {"role": "user", "content": user_prompt},
+        ]
 
     else:
         output = capture_screenshot(npc=npc)
@@ -1651,12 +1654,15 @@ def ots(
         # messages = output["messages"]
 
         output = output["response"]
-
+        messages = [
+            {"role": "user", "content": user_prompt},
+        ]
     if output:
         if isinstance(output, dict) and "filename" in output:
             message = f"Screenshot captured: {output['filename']}\nFull path: {output['file_path']}\nLLM-ready data available."
         else:  # This handles both LLM responses and error messages (both strings)
             message = output
+        messages.append({"role": "assistant", "content": message})
         return {"messages": messages, "output": message}  # Return the message
     else:  # Handle the case where capture_screenshot returns None
         print("Screenshot capture failed.")
@@ -2042,6 +2048,18 @@ def execute_slash_command(
                 device = part.split("=")[1]
             if part.startswith("rag_similarity_threshold="):
                 rag_similarity_threshold = float(part.split("=")[1])
+            if part.startswith("model="):
+                model = part.split("=")[1]
+
+            if part.startswith("provider="):
+                provider = part.split("=")[1]
+            if part.startswith("api_url="):
+                api_url = part.split("=")[1]
+            if part.startswith("api_key="):
+                api_key = part.split("=")[1]
+
+                # load the npc properly
+
         match = re.search(r"files=\s*\[(.*?)\]", command)
         files = []
         if match:
@@ -2066,10 +2084,11 @@ def execute_slash_command(
 
                 print(f"Reattached to previous conversation:\n\n")
                 output = enter_spool_mode(
-                    command_history,
                     inherit_last,
                     files=files,
                     npc=npc,
+                    model=model,
+                    provider=provider,
                     rag_similarity_threshold=rag_similarity_threshold,
                     device=device,
                     messages=spool_context,
@@ -2082,7 +2101,6 @@ def execute_slash_command(
                 return {"messages": [], "output": "No previous conversation found."}
 
         output = enter_spool_mode(
-            command_history,
             inherit_last,
             files=files,
             npc=npc,
@@ -2367,11 +2385,13 @@ def execute_command(
             valid_npcs = get_db_npcs(db_path)
 
             npc_name = get_npc_from_command(command)
+
             if npc_name is None:
                 npc_name = "sibiji"  # Default NPC
             npc_path = get_npc_path(npc_name, db_path)
 
             npc = load_npc_from_file(npc_path, db_conn)
+            current_npc = npc
         else:
             valid_npcs = [current_npc]
             npc = current_npc
@@ -3163,6 +3183,7 @@ def enter_spool_mode(
         Dict : The messages and output.
 
     """
+
     command_history = CommandHistory()
     npc_info = f" (NPC: {npc.name})" if npc else ""
     print(f"Entering spool mode{npc_info}. Type '/sq' to exit spool mode.")

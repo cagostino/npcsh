@@ -28,22 +28,23 @@ Interested to stay in the loop and to hear the latest and greatest about `npcsh`
 ## TLDR Cheat Sheet
 Users can take advantage of `npcsh` through its custom shell or through a command-line interface (CLI) tool. Below is a cheat sheet that shows how to use `npcsh` commands in both the shell and the CLI. For the npcsh commands to work, one must activate `npcsh` by typing it in a shell.
 
+
+
+
 | Task | npc CLI | npcsh |
 |----------|----------|----------|
 | Ask a generic question | npc 'prompt' | 'prompt' |
 | Compile an NPC | npc compile /path/to/npc.npc | /compile /path/to/npc.npc |
 | Computer use | npc plonk -n 'npc_name' -sp 'task for plonk to carry out '| /plonk -n 'npc_name' -sp 'task for plonk to carry out ' |
 | Conjure an NPC team from context and templates | npc init -t 'template1, template2' -ctx 'context'   | /conjure  -t 'template1, 'template2' -ctx 'context'  |
-| Enter a chat with an NPC (NPC needs to be compiled first) | npc npc_name | /npc_name |
+| Enter a chat with an NPC (NPC needs to be compiled first) | npc chat -n npc_name | /spool npc=<npc_name> |
 | Generate image    | npc vixynt 'prompt'  | /vixynt prompt   |
 | Get a sample LLM response  | npc sample 'prompt'   | /sample prompt for llm  |
-| Invoke a tool  | npc tool {tool_name} -args --flags | /tool_name -args --flags |
-| Search locally | npc tool local_search -args --flags | /local_search -args --flags |
 | Search for a term in the npcsh_db only in conversations with a specific npc | npc rag -n 'npc_name' -f 'filename' -q 'query' | /rag -n 'npc_name' -f 'filename' -q 'query' |
-| Search the web | npc search -p provider 'query' | /search -p provider 'query' |
+| Search the web | npc search -q "cal golden bears football schedule" -sp perplexity | /search -p perplexity 'cal bears football schedule' |
 | Serve an NPC team | npc serve --port 5337 --cors='http://localhost:5137/' | /serve --port 5337 --cors='http://localhost:5137/' |
 | Screenshot analysis  | npc ots |  /ots  |
-| Voice Chat    | npc whisper 'npc_name'   | /whisper   |
+| Voice Chat    | npc whisper -n 'npc_name'   | /whisper   |
 
 
 ## Python Examples

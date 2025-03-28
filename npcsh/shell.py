@@ -407,88 +407,100 @@ def main() -> None:
             )
 
             str_output = ""
-            if NPCSH_STREAM_OUTPUT and hasattr(output, "__iter__"):
+            try:
+                if NPCSH_STREAM_OUTPUT and hasattr(output, "__iter__"):
 
-                buffer = ""
-                in_code = False
-                code_buffer = ""
+                    buffer = ""
+                    in_code = False
+                    code_buffer = ""
 
-                for chunk in output:
+                    for chunk in output:
 
-                    if provider == "anthropic":
-                        chunk_content = (
-                            chunk.delta.text
-                            if chunk.type == "content_block_delta"
-                            else None
-                        )
-                    elif provider in ["openai", "deepseek", "openai-like"]:
-                        chunk_content = "".join(
-                            c.delta.content for c in chunk.choices if c.delta.content
-                        )
-                    elif provider == "ollama":
-                        chunk_content = chunk["message"]["content"]
-                    else:
-                        continue
-
-                    if not chunk_content:
-                        continue
-
-                    str_output += chunk_content
-                    # print(str_output, "str_output")
-                    # Process the content character by character
-                    for char in chunk_content:
-                        buffer += char
-
-                        # Check for triple backticks
-                        if buffer.endswith("```"):
-                            if not in_code:
-                                # Start of code block
-                                in_code = True
-                                # Print everything before the backticks
-                                print(buffer[:-3], end="")
-                                buffer = ""
-                                code_buffer = ""
-                            else:
-                                # End of code block
-                                in_code = False
-                                # Remove the backticks from the end of the buffer
-                                buffer = buffer[:-3]
-                                # Add buffer to code content and render
-                                code_buffer += buffer
-
-                                # Check for and strip language tag
-                                if "\n" in code_buffer and code_buffer.index("\n") < 15:
-                                    first_line, rest = code_buffer.split("\n", 1)
-                                    if first_line.strip() and not "```" in first_line:
-                                        code_buffer = rest
-
-                                # Render the code block
-                                render_code_block(code_buffer)
-
-                                # Reset buffers
-                                buffer = ""
-                                code_buffer = ""
-                        elif in_code:
-                            # Just add to code buffer
-                            code_buffer += char
-                            if len(buffer) >= 3:  # Keep buffer small while in code
-                                buffer = buffer[-3:]
+                        if provider == "anthropic":
+                            chunk_content = (
+                                chunk.delta.text
+                                if chunk.type == "content_block_delta"
+                                else None
+                            )
+                        elif provider in ["openai", "deepseek", "openai-like"]:
+                            chunk_content = "".join(
+                                c.delta.content
+                                for c in chunk.choices
+                                if c.delta.content
+                            )
+                        elif provider == "ollama":
+                            chunk_content = chunk["message"]["content"]
                         else:
-                            # Regular text - print if buffer gets too large
-                            if len(buffer) > 100:
-                                print(buffer[:-3], end="")
-                                buffer = buffer[
-                                    -3:
-                                ]  # Keep last 3 chars to check for backticks
+                            continue
 
-                # Handle any remaining content
-                if in_code:
-                    render_code_block(code_buffer)
-                else:
-                    print(buffer, end="")
+                        if not chunk_content:
+                            continue
 
-                if str_output:
-                    output = str_output
+                        str_output += chunk_content
+                        # print(str_output, "str_output")
+                        # Process the content character by character
+                        for char in chunk_content:
+                            buffer += char
+
+                            # Check for triple backticks
+                            if buffer.endswith("```"):
+                                if not in_code:
+                                    # Start of code block
+                                    in_code = True
+                                    # Print everything before the backticks
+                                    print(buffer[:-3], end="")
+                                    buffer = ""
+                                    code_buffer = ""
+                                else:
+                                    # End of code block
+                                    in_code = False
+                                    # Remove the backticks from the end of the buffer
+                                    buffer = buffer[:-3]
+                                    # Add buffer to code content and render
+                                    code_buffer += buffer
+
+                                    # Check for and strip language tag
+                                    if (
+                                        "\n" in code_buffer
+                                        and code_buffer.index("\n") < 15
+                                    ):
+                                        first_line, rest = code_buffer.split("\n", 1)
+                                        if (
+                                            first_line.strip()
+                                            and not "```" in first_line
+                                        ):
+                                            code_buffer = rest
+
+                                    # Render the code block
+                                    render_code_block(code_buffer)
+
+                                    # Reset buffers
+                                    buffer = ""
+                                    code_buffer = ""
+                            elif in_code:
+                                # Just add to code buffer
+                                code_buffer += char
+                                if len(buffer) >= 3:  # Keep buffer small while in code
+                                    buffer = buffer[-3:]
+                            else:
+                                # Regular text - print if buffer gets too large
+                                if len(buffer) > 100:
+                                    print(buffer[:-3], end="")
+                                    buffer = buffer[
+                                        -3:
+                                    ]  # Keep last 3 chars to check for backticks
+
+                    # Handle any remaining content
+                    if in_code:
+                        render_code_block(code_buffer)
+                    else:
+                        print(buffer, end="")
+
+                    if str_output:
+                        output = str_output
+            except:
+                output = None
+
             print("\n")
 
             if isinstance(output, str):
