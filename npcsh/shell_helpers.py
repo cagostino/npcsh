@@ -2546,60 +2546,62 @@ def execute_command(
                 except AttributeError:
                     print(output)
 
-            piped_outputs.append(f'"{output}"')
-
-            try:
-                # Prepare text to embed (both command and response)
-                texts_to_embed = [command, str(output) if output else ""]
-
-                # Generate embeddings
-                embeddings = get_embeddings(
-                    texts_to_embed,
-                )
-
-                # Prepare metadata
-                metadata = [
-                    {
-                        "type": "command",
-                        "timestamp": datetime.datetime.now().isoformat(),
-                        "path": os.getcwd(),
-                        "npc": npc.name if npc else None,
-                        "conversation_id": conversation_id,
-                    },
-                    {
-                        "type": "response",
-                        "timestamp": datetime.datetime.now().isoformat(),
-                        "path": os.getcwd(),
-                        "npc": npc.name if npc else None,
-                        "conversation_id": conversation_id,
-                    },
-                ]
-                embedding_model = os.environ.get("NPCSH_EMBEDDING_MODEL")
-                embedding_provider = os.environ.get("NPCSH_EMBEDDING_PROVIDER")
-                collection_name = f"{embedding_provider}_{embedding_model}_embeddings"
+                piped_outputs.append(f'"{output}"')
 
                 try:
-                    collection = chroma_client.get_collection(collection_name)
+                    # Prepare text to embed (both command and response)
+                    texts_to_embed = [command, str(output) if output else ""]
+
+                    # Generate embeddings
+                    embeddings = get_embeddings(
+                        texts_to_embed,
+                    )
+
+                    # Prepare metadata
+                    metadata = [
+                        {
+                            "type": "command",
+                            "timestamp": datetime.datetime.now().isoformat(),
+                            "path": os.getcwd(),
+                            "npc": npc.name if npc else None,
+                            "conversation_id": conversation_id,
+                        },
+                        {
+                            "type": "response",
+                            "timestamp": datetime.datetime.now().isoformat(),
+                            "path": os.getcwd(),
+                            "npc": npc.name if npc else None,
+                            "conversation_id": conversation_id,
+                        },
+                    ]
+                    embedding_model = os.environ.get("NPCSH_EMBEDDING_MODEL")
+                    embedding_provider = os.environ.get("NPCSH_EMBEDDING_PROVIDER")
+                    collection_name = (
+                        f"{embedding_provider}_{embedding_model}_embeddings"
+                    )
+
+                    try:
+                        collection = chroma_client.get_collection(collection_name)
+                    except Exception as e:
+                        print(f"Warning: Failed to get collection: {str(e)}")
+                        print("Creating new collection...")
+                        collection = chroma_client.create_collection(collection_name)
+                    date_str = datetime.datetime.now().isoformat()
+                    # print(date_str)
+
+                    # Add to collection
+                    current_ids = [f"cmd_{date_str}", f"resp_{date_str}"]
+                    collection.add(
+                        embeddings=embeddings,
+                        documents=texts_to_embed,  # Adjust as needed
+                        metadatas=metadata,  # Adjust as needed
+                        ids=current_ids,
+                    )
+
+                    # print("Stored embeddings.")
+                    # print("collection", collection)
                 except Exception as e:
-                    print(f"Warning: Failed to get collection: {str(e)}")
-                    print("Creating new collection...")
-                    collection = chroma_client.create_collection(collection_name)
-                date_str = datetime.datetime.now().isoformat()
-                # print(date_str)
-
-                # Add to collection
-                current_ids = [f"cmd_{date_str}", f"resp_{date_str}"]
-                collection.add(
-                    embeddings=embeddings,
-                    documents=texts_to_embed,  # Adjust as needed
-                    metadatas=metadata,  # Adjust as needed
-                    ids=current_ids,
-                )
-
-                # print("Stored embeddings.")
-                # print("collection", collection)
-            except Exception as e:
-                print(f"Warning: Failed to store embeddings: {str(e)}")
+                    print(f"Warning: Failed to store embeddings: {str(e)}")
 
     # return following
     # print(current_npc)

@@ -378,6 +378,7 @@ def main() -> None:
 
                 current_npc = result["current_npc"]
             output = result.get("output")
+
             conversation_id = result.get("conversation_id")
             model = result.get("model")
             provider = result.get("provider")
@@ -404,17 +405,16 @@ def main() -> None:
                 npc=npc_name,
                 attachments=attachments,
             )
-            if NPCSH_STREAM_OUTPUT and (
-                isgenerator(output)
-                or (hasattr(output, "__iter__") and hasattr(output, "__next__"))
-            ):
-                str_output = ""
+
+            str_output = ""
+            if NPCSH_STREAM_OUTPUT and hasattr(output, "__iter__"):
+
                 buffer = ""
                 in_code = False
                 code_buffer = ""
 
                 for chunk in output:
-                    # Get chunk content based on provider
+
                     if provider == "anthropic":
                         chunk_content = (
                             chunk.delta.text
@@ -434,7 +434,7 @@ def main() -> None:
                         continue
 
                     str_output += chunk_content
-
+                    # print(str_output, "str_output")
                     # Process the content character by character
                     for char in chunk_content:
                         buffer += char
@@ -490,16 +490,18 @@ def main() -> None:
                 if str_output:
                     output = str_output
             print("\n")
-            save_conversation_message(
-                command_history,
-                conversation_id,
-                "assistant",
-                output,
-                wd=current_path,
-                model=model,
-                provider=provider,
-                npc=npc_name,
-            )
+
+            if isinstance(output, str):
+                save_conversation_message(
+                    command_history,
+                    conversation_id,
+                    "assistant",
+                    output,
+                    wd=current_path,
+                    model=model,
+                    provider=provider,
+                    npc=npc_name,
+                )
 
             # if there are attachments in most recent user sent message, save them
             # save_attachment_to_message(command_history, message_id, # file_path, attachment_name, attachment_type)

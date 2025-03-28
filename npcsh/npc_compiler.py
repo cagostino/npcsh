@@ -551,6 +551,7 @@ class Tool:
 
         # Process Steps
         for i, step in enumerate(self.steps):
+
             context = self.execute_step(
                 step,
                 context,
@@ -564,6 +565,7 @@ class Tool:
             # if i is the last step and the user has reuqested a streaming output
             # then we should return the stream
             if i == len(self.steps) - 1 and stream:  # this was causing the big issue X:
+                print("tool successful, passing output to stream")
                 return context
         # Return the final output
         if context.get("output") is not None:
@@ -592,8 +594,14 @@ class Tool:
         except Exception as e:
             print(f"Error rendering template: {e}")
             rendered_code = code
-
-        if engine == "natural":
+        # render engine if necessary
+        try:
+            template = jinja_env.from_string(engine)
+            rendered_engine = template.render(**context)
+        except:
+            print("error rendering engine")
+            rendered_engine = engine
+        if rendered_engine == "natural":
             if len(rendered_code.strip()) > 0:
                 # print(f"Executing natural language step: {rendered_code}")
                 if stream:
@@ -610,7 +618,7 @@ class Tool:
                     context["llm_response"] = response_text
                     context["results"] = response_text
 
-        elif engine == "python":
+        elif rendered_engine == "python":
             exec_globals = {
                 "__builtins__": __builtins__,
                 "npc": npc,
@@ -640,11 +648,22 @@ class Tool:
             try:
                 exec(rendered_code, exec_globals, new_locals)
                 exec_env.update(new_locals)
+
                 context.update(exec_env)
-                # If output is set, also set it as results
+
+                exec_env.update(new_locals)
+                context.update(exec_env)
+
+                # Add this line to explicitly copy the output
+                if "output" in new_locals:
+                    context["output"] = new_locals["output"]
+
+                # Then your existing code
                 if "output" in exec_env:
                     if exec_env["output"] is not None:
                         context["results"] = exec_env["output"]
+                        print("result from code execution: ", exec_env["output"])
+
             except NameError as e:
                 tb_lines = traceback.format_exc().splitlines()
                 limited_tb = (
