@@ -4,13 +4,21 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.11"
+  apt_packages:
+    - portaudio19-dev
+    - python3-pyaudio
+    - ffmpeg
+    - libcairo2-dev
+    - libgirepository1.0-dev
+    - espeak
+    - alsa-base
+    - alsa-utils
 
 sphinx:
   configuration: docs/conf.py
 
-# Critical: Install your actual Python package
 python:
   install:
     - method: pip
-      path: .  # Install your package in editable mode
-    - requirements: docs/requirements.txt  # Additional doc dependencies
+      path: .
+    - requirements: docs/requirements.txt
