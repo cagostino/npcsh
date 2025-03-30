@@ -1,15 +1,11 @@
 Welcome to npcsh's documentation!
 =================================
 
+.. automodule:: npcsh
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-
-   api   # This will be a new file we create
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
