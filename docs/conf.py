@@ -28,8 +28,10 @@ autodoc_default_options = {
     "members": True,
     "undoc-members": True,
     "show-inheritance": True,
-    "imported-members": True,
+    "special-members": "__init__",
+    "imported-members": False,  # THIS is the key - don't document imported stuff
 }
+
 
 # General settings
 templates_path = ["_templates"]
