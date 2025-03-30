@@ -57,4 +57,13 @@ sys.path.insert(0, os.path.abspath(".."))
 
 extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon", "sphinx.ext.autosummary"]
 
+# Make autosummary find and document everything
 autosummary_generate = True
+add_module_names = False  # Makes names cleaner
+autodoc_default_options = {
+    "members": True,
+    "member-order": "bysource",
+    "special-members": "__init__",
+    "undoc-members": True,
+    "exclude-members": "__weakref__",
+}
