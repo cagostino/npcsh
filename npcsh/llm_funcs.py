@@ -87,9 +87,7 @@ def generate_image(
     filename: str = None,
     npc: Any = None,
 ):
-    """
-    Function Description:
-        This function generates an image using the specified provider and model.
+    """This function generates an image using the specified provider and model.
     Args:
         prompt (str): The prompt for generating the image.
     Keyword Args:
@@ -191,9 +189,7 @@ def get_llm_response(
     context=None,
     **kwargs,
 ):
-    """
-    Function Description:
-        This function generates a response using the specified provider and model.
+    """This function generates a response using the specified provider and model.
     Args:
         prompt (str): The prompt for generating the response.
     Keyword Args:
@@ -318,9 +314,7 @@ def get_stream(
     context=None,
     **kwargs,
 ) -> List[Dict[str, str]]:
-    """
-    Function Description:
-        This function generates a streaming response using the specified provider and model
+    """This function generates a streaming response using the specified provider and model
     Args:
         messages (List[Dict[str, str]]): The list of messages in the conversation.
     Keyword Args:
@@ -385,9 +379,7 @@ def get_conversation(
     context=None,
     **kwargs,
 ) -> List[Dict[str, str]]:
-    """
-    Function Description:
-        This function generates a conversation using the specified provider and model.
+    """This function generates a conversation using the specified provider and model.
     Args:
         messages (List[Dict[str, str]]): The list of messages in the conversation.
     Keyword Args:
@@ -540,9 +532,7 @@ def execute_llm_command(
     stream=False,
     context=None,
 ) -> str:
-    """
-    Function Description:
-        This function executes an LLM command.
+    """This function executes an LLM command.
     Args:
         command (str): The command to execute.
 
@@ -756,9 +746,7 @@ def check_llm_command(
     stream=False,
     context=None,
 ):
-    """
-    Function Description:
-        This function checks an LLM command.
+    """This function checks an LLM command.
     Args:
         command (str): The command to check.
     Keyword Args:
@@ -1181,9 +1169,7 @@ def handle_tool_call(
     attempt=0,
     context=None,
 ) -> Union[str, Dict[str, Any]]:
-    """
-    Function Description:
-        This function handles a tool call.
+    """This function handles a tool call.
     Args:
         command (str): The command.
         tool_name (str): The tool name.
@@ -1388,9 +1374,7 @@ def execute_data_operations(
     npc: Any = None,
     db_path: str = "~/npcsh_history.db",
 ):
-    """
-    Function Description:
-        This function executes data operations.
+    """This function executes data operations.
     Args:
         query (str): The query to execute.
 
