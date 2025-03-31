@@ -3,7 +3,7 @@
 ::: npcsh.llm_funcs
     options:
       show_source: true
-      members:
-        - get_llm_response
-        - get_stream
-      show_root_heading: false
+      show_if_no_docstring: true  # Shows undocumented members too
+      members: true  # Auto-includes all public members
+      inherited_members: false  # Excludes inherited methods
+      filters: []  # No filters
