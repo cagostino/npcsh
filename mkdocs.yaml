@@ -1,0 +1,38 @@
+site_name: npcsh
+site_url: https://npcsh.readthedocs.io/
+repo_url: https://github.com/cagostino/npcsh
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - attr_list
+  - pymdownx.highlight:
+      anchor_linenums: true
+
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          import:
+            - https://docs.python.org/3/objects.inv
+          selection:
+            members:
+              - public
+              - !__init__
+          rendering:
+            show_source: true
+            show_root_heading: false
+
+nav:
+  - Home: index.md
+  - API:
+    - Audio: api/audio.md
+    - Image: api/image.md
+    - LLM Functions: api/llm_funcs.md

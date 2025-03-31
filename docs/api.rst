@@ -8,7 +8,3 @@ API Documentation
 
 .. toctree::
    :maxdepth: 2
-
-   # Add any submodules here, for example:
-   # npcsh.submodule1
-   # npcsh.submodule2
