@@ -4,12 +4,10 @@
     options:
       show_source: true
       members:
-        - "!^_"          # Excludes all private members
-        - "!^[A-Z]"      # Excludes ALL_CAPS constants
-        - "!^[A-Z].*$"   # Additional pattern for module-level attributes
+        - "!^_"          # Exclude private members
+        - "!^[A-Z_]+$"   # Exclude ALL_CAPS constants but keep functions
       filters:
-        - "!^_"          # Double protection against private members
-        - "!^[A-Z]"      # Double protection against constants
+        - "!^__"         # Exclude dunders
       inherited_members: false
-      show_if_no_docstring: true
       show_root_heading: false
+      show_if_no_docstring: true
