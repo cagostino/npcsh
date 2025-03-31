@@ -17,11 +17,37 @@ extensions = [
     "sphinx.ext.viewcode",
 ]
 
-# Show full module paths
-add_module_names = True
+# Add these near the top
+import sphinx.ext.autodoc
 
-# Autosummary settings
-autosummary_generate = True
+# Prevent Sphinx from trying to resolve/import certain things
+nitpicky = False  # Don't warn about missing references
+autodoc_typehints = "none"  # Don't try to document type hints
+autodoc_mock_imports = ["openai", "anthropic", "google.generativeai", "ollama"]
+
+
+class ExternalDocumenter(sphinx.ext.autodoc.ClassDocumenter):
+    """Don't try to build documentation for external classes"""
+
+    priority = 10 + sphinx.ext.autodoc.ClassDocumenter.priority  # Higher priority
+
+    def import_object(self, raiseerror=False):
+        """Called by Sphinx. Return True if you want to process this object."""
+        if self.get_attr(self.object, "__module__", None) in [
+            "openai",
+            "anthropic",
+            "google.generativeai",
+            "ollama",
+            "typing",  # Also ignore typing stuff
+            "types",
+        ]:
+            return False
+        return super().import_object(raiseerror)
+
+
+def setup(app):
+    app.add_autodocumenter(ExternalDocumenter)
+
 
 # Autodoc settings
 autodoc_default_options = {
@@ -29,17 +55,25 @@ autodoc_default_options = {
     "undoc-members": True,
     "show-inheritance": True,
     "special-members": "__init__",
-    "imported-members": False,  # THIS is the key - don't document imported stuff
+    "imported-members": False,
+    "ignore-module-all": True,  # Ignore __all__ definitions
+    "member-order": "groupwise",  # Group by type instead of alphabetically
 }
 
+# Show full module paths
+add_module_names = True
+
+# Autosummary settings
+autosummary_generate = True
+autosummary_imported_members = False  # Don't include imported members in summaries
 
 # General settings
 templates_path = ["_templates"]
-exclude_patterns = ["_build"]
+exclude_patterns = ["_build", "**/.ipynb_checkpoints", "**/__pycache__"]
 html_theme = "alabaster"
 html_static_path = ["_static"]
 
-# This is important - it ensures all modules are importable
+# Module discovery
 import npcsh
 import pkgutil
 
