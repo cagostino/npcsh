@@ -34,9 +34,13 @@ autodoc_mock_imports = [
 autodoc_default_options = {
     "members": True,
     "undoc-members": True,
-    "show-inheritance": True,
     "special-members": "__init__",
+    "imported-members": False,  # Don't document imported members
+    "exclude-members": "__weakref__",
 }
+
+# This tells Sphinx to only document what's actually defined in each module
+autosummary_imported_members = False
 
 # Disable the ExternalDocumenter - the mocking handles this now
 # Keep your other settings...
