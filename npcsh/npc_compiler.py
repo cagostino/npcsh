@@ -579,10 +579,14 @@ class Tool:
             if i == len(self.steps) - 1 and stream:  # this was causing the big issue X:
                 print("tool successful, passing output to stream")
                 return context
-        # Return the final output
+        print("CONTEXT AFTER TOOL CALLS, ", context)
         if context.get("output") is not None:
+            print("output from tool: ", context.get("output"))
+            if not isinstance(context.get("output"), str):
+                return str(context.get("output"))
             return context.get("output")
         elif context.get("llm_response") is not None:
+            print("output from tool: ", context.get("llm_response"))
             return context.get("llm_response")
 
     def execute_step(
@@ -613,6 +617,8 @@ class Tool:
         except:
             print("error rendering engine")
             rendered_engine = engine
+        print(f"proceeding with engine: {rendered_engine}")
+        print("rendered code: ", rendered_code)
         if rendered_engine == "natural":
             if len(rendered_code.strip()) > 0:
                 # print(f"Executing natural language step: {rendered_code}")
@@ -657,25 +663,27 @@ class Tool:
             }
             new_locals = {}
             exec_env = context.copy()
-            try:
-                exec(rendered_code, exec_globals, new_locals)
-                exec_env.update(new_locals)
+            # try:
+            exec(rendered_code, exec_globals, new_locals)
+            exec_env.update(new_locals)
 
-                context.update(exec_env)
+            context.update(exec_env)
 
-                exec_env.update(new_locals)
-                context.update(exec_env)
+            exec_env.update(new_locals)
+            context.update(exec_env)
+            # Add this line to explicitly copy the output
+            if "output" in new_locals:
+                context["output"] = new_locals["output"]
 
-                # Add this line to explicitly copy the output
-                if "output" in new_locals:
-                    context["output"] = new_locals["output"]
+            # Then your existing code
+            if "output" in exec_env:
+                if exec_env["output"] is not None:
+                    context["results"] = exec_env["output"]
+                    print("result from code execution: ", exec_env["output"])
+            # else:
+            #    context["output"] = str(exec_env)
 
-                # Then your existing code
-                if "output" in exec_env:
-                    if exec_env["output"] is not None:
-                        context["results"] = exec_env["output"]
-                        print("result from code execution: ", exec_env["output"])
-
+            """
             except NameError as e:
                 tb_lines = traceback.format_exc().splitlines()
                 limited_tb = (
@@ -718,6 +726,7 @@ class Tool:
                 return {
                     "output": f"Error executing Python code : {e} with traceback: {limited_tb}"
                 }
+            """
         return context
 
     def to_dict(self):

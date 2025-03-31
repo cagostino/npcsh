@@ -1,4 +1,3 @@
-
 # npcsh usage
 In the `npcsh` shell, users can ask LLMs questions, have LLMLs execute commands or use tools, or utilize macros that provide additional functionality. When a user does not invoke a specific macro, the shell will automatically decide which tool to use based on the user's input. Here are some examples of things one might ask the npcsh shell.
 
@@ -796,4 +795,5 @@ Begin a conversations with a specified NPC by referencing their name
 ```npcsh
 npcsh> /<npc_name>:
 ```
+
 

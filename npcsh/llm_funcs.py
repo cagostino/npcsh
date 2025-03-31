@@ -739,6 +739,7 @@ def check_llm_command(
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
     npc: Any = None,
+    npc_team: Any = None,
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
     images: list = None,
@@ -802,71 +803,74 @@ ReAct choices then will enter reasoning flow
 
     4. Is it a complex request that actually requires more than one
         tool to be called, perhaps in a sequence?
+        Sequences should only be used for more than one consecutive tool call. do not invoke seequences for single tool calls.
 
     5. is there a need for the user to provide additional input to fulfill the request?
 
 
 
-    Available tools:
     """
 
-    if (npc.tools_dict is None or npc.tools_dict == {}) & (
-        npc.all_tools_dict is None or npc.all_tools_dict == {}
-    ):
-        prompt += "No tools available. Do not invoke tools."
-    else:
-        tools_set = {}
+    if npc is not None or npc_team is not None:
+        if (npc.tools_dict is None or npc.tools_dict == {}) & (
+            npc.all_tools_dict is None or npc.all_tools_dict == {}
+        ):
+            prompt += "No tools available. Do not invoke tools."
+        else:
+            prompt += "Available tools: \n"
+            tools_set = {}
 
-        if npc.tools_dict is not None:
-            for tool_name, tool in npc.tools_dict.items():
-                if tool_name not in tools_set:
-                    tools_set[tool_name] = tool.description
-        if npc.all_tools_dict is not None:
-            for tool_name, tool in npc.all_tools_dict.items():
-                if tool_name not in tools_set:
-                    tools_set[tool_name] = tool.description
+            if npc.tools_dict is not None:
+                for tool_name, tool in npc.tools_dict.items():
+                    if tool_name not in tools_set:
+                        tools_set[tool_name] = tool.description
+            if npc.all_tools_dict is not None:
+                for tool_name, tool in npc.all_tools_dict.items():
+                    if tool_name not in tools_set:
+                        tools_set[tool_name] = tool.description
 
-        for tool_name, tool_description in tools_set.items():
+            for tool_name, tool_description in tools_set.items():
+                prompt += f"""
+
+                            {tool_name} : {tool_description} \n
+                            """
+
+        if len(npc.resolved_npcs) == 0:
+            prompt += "No NPCs available for alternative answers."
+        else:
+
             prompt += f"""
-
-                        {tool_name} : {tool_description} \n
-                        """
-
-    prompt += f"""
-    Available NPCs for alternative answers:
-
-    """
-    if len(npc.resolved_npcs) == 0:
-        prompt += "No NPCs available for alternative answers."
-    else:
-        print(npc.resolved_npcs)
-        for i, npc_in_network in enumerate(npc.resolved_npcs):
-            name = list(npc_in_network.keys())[0]
-            npc_obj = npc_in_network[name]
-
-            if hasattr(npc_obj, "name"):
-                name_to_include = npc_obj.name
-            elif "name " in npc_obj:
-                name_to_include = npc_obj["name"]
-
-            if hasattr(npc_obj, "primary_directive"):
-                primary_directive_to_include = npc_obj.primary_directive
-            elif "primary_directive" in npc_obj:
-                primary_directive_to_include = npc_obj["primary_directive"]
-            prompt += f"""
-            ({i})
-
-            NPC: {name_to_include}
-            Primary Directive : {primary_directive_to_include}
+            Available NPCs for alternative answers:
 
             """
-    if npc.shared_context:
-        prompt += f"""
-        Relevant shared context for the npc:
-        {npc.shared_context}
-        """
-        # print("shared_context: " + str(npc.shared_context))
-    # print(prompt)
+            print(npc.resolved_npcs)
+            for i, npc_in_network in enumerate(npc.resolved_npcs):
+                name = list(npc_in_network.keys())[0]
+                npc_obj = npc_in_network[name]
+
+                if hasattr(npc_obj, "name"):
+                    name_to_include = npc_obj.name
+                elif "name " in npc_obj:
+                    name_to_include = npc_obj["name"]
+
+                if hasattr(npc_obj, "primary_directive"):
+                    primary_directive_to_include = npc_obj.primary_directive
+                elif "primary_directive" in npc_obj:
+                    primary_directive_to_include = npc_obj["primary_directive"]
+                prompt += f"""
+                ({i})
+
+                NPC: {name_to_include}
+                Primary Directive : {primary_directive_to_include}
+
+                """
+        if npc.shared_context:
+            prompt += f"""
+            Relevant shared context for the npc:
+            {npc.shared_context}
+            """
+            # print("shared_context: " + str(npc.shared_context))
+        # print(prompt)
 
     prompt += f"""
     In considering how to answer this, consider:
@@ -879,7 +883,7 @@ ReAct choices then will enter reasoning flow
     - Whether a tool should be used.
 
 
-    Excluding time-sensitive phenomena,
+    Excluding time-sensitive phenomena or ones that require external data inputs /information,
     most general questions can be answered without any
     extra tools or agent passes.
     Only use tools or pass to other NPCs
@@ -914,7 +918,8 @@ ReAct choices then will enter reasoning flow
     }}
 
     If you execute a sequence, ensure that you have a specified NPC for each tool use.
-
+        question answering is not a tool use.
+        "invoke_tool" should never be used in the list of tools when executing a sequence.
     Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING.
     There should be no leading ```json.
 
@@ -967,6 +972,7 @@ ReAct choices then will enter reasoning flow
     print(f"action chosen: {action}")
     print(f"explanation given: {explanation}")
 
+    print(response_content)
     if response_content_parsed.get("tool_name"):
         print(f"tool name: {response_content_parsed.get('tool_name')}")
 
@@ -1098,15 +1104,22 @@ ReAct choices then will enter reasoning flow
     elif action == "execute_sequence":
         tool_names = response_content_parsed.get("tool_name")
         npc_names = response_content_parsed.get("npc_name")
+
         # print(npc_names)
         npcs = []
-        # print(tool_names, npc_names)
+        print(tool_names, npc_names)
         if isinstance(npc_names, list):
+            if len(npc_names) == 0:
+                # if no npcs are specified, just have the npc take care of it itself instead of trying to force it to generate npc names for sequences all the time
+
+                npcs = [npc] * len(tool_names)
             for npc_name in npc_names:
                 for npc_obj in npc.resolved_npcs:
                     if npc_name in npc_obj:
                         npcs.append(npc_obj[npc_name])
                         break
+                if len(npcs) < len(tool_names):
+                    npcs.append(npc)
 
         output = ""
         results_tool_calls = []
@@ -1125,10 +1138,11 @@ ReAct choices then will enter reasoning flow
                     retrieved_docs=retrieved_docs,
                     stream=stream,
                 )
+                print(result)
                 results_tool_calls.append(result)
                 messages = result.get("messages", messages)
                 output += result.get("output", "")
-                print(output)
+                print(results_tool_calls)
         else:
             for npc_obj in npcs:
                 result = npc.handle_agent_pass(
@@ -1298,22 +1312,22 @@ def handle_tool_call(
     # try:
     print("Executing tool with input values:", input_values)
 
-    try:
-        tool_output = tool.execute(
-            input_values,
-            npc.all_tools_dict,
-            jinja_env,
-            command,
-            model=model,
-            provider=provider,
-            npc=npc,
-            stream=stream,
-            messages=messages,
-        )
-        if not stream:
-            if "Error" in tool_output:
-                raise Exception(tool_output)
-    except Exception as e:
+    # try:
+    tool_output = tool.execute(
+        input_values,
+        npc.all_tools_dict,
+        jinja_env,
+        command,
+        model=model,
+        provider=provider,
+        npc=npc,
+        stream=stream,
+        messages=messages,
+    )
+    if not stream:
+        if "Error" in tool_output:
+            raise Exception(tool_output)
+        # except Exception as e:
         # diagnose_problem = get_llm_response(
         ##    f"""a problem has occurred.
         #                                    Please provide a diagnosis of the problem and a suggested #fix.
@@ -1338,24 +1352,32 @@ def handle_tool_call(
         # suggested_solution = diagnose_problem.get("response", {}).get(
         #    "suggested_solution"
         # )
-
-        tool_output = handle_tool_call(
-            command,
-            tool_name,
-            model=model,
-            provider=provider,
-            messages=messages,
-            npc=npc,
-            api_url=api_url,
-            api_key=api_key,
-            retrieved_docs=retrieved_docs,
-            n_docs=n_docs,
-            stream=stream,
-            attempt=attempt + 1,
-            n_attempts=n_attempts,
-            context=f""" \n \n \n "tool failed: {e}  \n \n \n here was the previous attempt: {input_values}""",
-        )
-
+        '''
+        print(f"An error occurred while executing the tool: {e}")
+        print(f"trying again, attempt {attempt+1}")
+        if attempt < n_attempts:
+            tool_output = handle_tool_call(
+                command,
+                tool_name,
+                model=model,
+                provider=provider,
+                messages=messages,
+                npc=npc,
+                api_url=api_url,
+                api_key=api_key,
+                retrieved_docs=retrieved_docs,
+                n_docs=n_docs,
+                stream=stream,
+                attempt=attempt + 1,
+                n_attempts=n_attempts,
+                context=f""" \n \n \n "tool failed: {e}  \n \n \n here was the previous attempt: {input_values}""",
+            )
+        else:
+            user_input = input(
+                "the tool execution has failed after three tries, can you add more context to help or would you like to run again?"
+            )
+            return
+        '''
     if stream:
         return tool_output
     # print(f"Tool output: {tool_output}")
