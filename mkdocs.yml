@@ -30,7 +30,6 @@ plugins:
           rendering:
             show_source: true
             show_root_heading: false
-
 nav:
   - Home: index.md
   - Installation: installation.md

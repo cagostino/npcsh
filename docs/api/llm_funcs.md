@@ -3,11 +3,9 @@
 ::: npcsh.llm_funcs
     options:
       show_source: true
-      members:
-        - "!^_"          # Exclude private members
-        - "!^[A-Z_]+$"   # Exclude ALL_CAPS constants but keep functions
+      members: true
       filters:
-        - "!^__"         # Exclude dunders
+        - "!^_"          # Hide private members
+        - "!^[A-Z]{2,}"  # Hide constants (all-caps)
+        - "!test_"       # Hide test functions
       inherited_members: false
-      show_root_heading: false
-      show_if_no_docstring: true
