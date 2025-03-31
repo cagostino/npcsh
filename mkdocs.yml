@@ -15,17 +15,16 @@ markdown_extensions:
   - attr_list
   - pymdownx.highlight:
       anchor_linenums: true
-
 plugins:
   - mkdocstrings:
       handlers:
         python:
           options:
-            filters: ["!^_[^_]", "!^[A-Z_]+$"]  # Excludes private and all-uppercase constants
-              - "!npcsh.*"  # Exclude everything imported from npcsh
-            imported_members: false  # Prevent showing imported members
-            show_root_heading: false
-
+            filters:
+              - "!^_[^_]"        # Exclude private members
+              - "!^[A-Z_]+$"      # Exclude all-uppercase constants
+              - "!test_"          # Exclude test functions
+              - "!^npcsh\."       # Exclude all imported npcsh modules
           selection:
             members:
               - public
@@ -36,11 +35,6 @@ plugins:
             merge_init_into_class: true
             show_if_no_docstring: false
             show_submodules: false
-            filters:
-              - "!^_"          # Hide private members
-              - "!^[A-Z]{2,}"  # Hide constants (all-caps)
-              - "!test_"       # Hide test functions
-              - "!npcsh\."     # Exclude imported npcsh modules
 
 
 nav:
