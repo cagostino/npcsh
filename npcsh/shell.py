@@ -30,7 +30,7 @@ except:
     print("Could not load the sentence-transformers package.")
 # Local imports
 
-from .npc_sysenv import (
+from npcsh.npc_sysenv import (
     get_system_message,
     lookup_provider,
     NPCSH_STREAM_OUTPUT,
@@ -39,13 +39,13 @@ from .npc_sysenv import (
     NPCSH_API_URL,
 )
 
-from .command_history import (
+from npcsh.command_history import (
     CommandHistory,
     start_new_conversation,
     save_conversation_message,
     save_attachment_to_message,
 )
-from .llm_funcs import (
+from npcsh.llm_funcs import (
     execute_llm_command,
     execute_llm_question,
     generate_image,
@@ -53,14 +53,14 @@ from .llm_funcs import (
     get_conversation,
     get_system_message,
 )
-from .search import rag_search, search_web
-from .helpers import (
+from npcsh.search import rag_search, search_web
+from npcsh.helpers import (
     load_all_files,
     setup_npcsh_config,
     is_npcsh_initialized,
     initialize_base_npcs_if_needed,
 )
-from .shell_helpers import (
+from npcsh.shell_helpers import (
     complete,  # For command completion
     readline_safe_prompt,
     get_multiline_input,
@@ -70,7 +70,7 @@ from .shell_helpers import (
     render_code_block,
     orange,  # For colored prompt
 )
-from .npc_compiler import (
+from npcsh.npc_compiler import (
     NPCCompiler,
     load_tools_from_directory,
     NPC,
@@ -78,7 +78,7 @@ from .npc_compiler import (
 )
 
 import argparse
-from .serve import (
+from npcsh.serve import (
     start_flask_server,
 )
 import importlib.metadata  # Python 3.8+

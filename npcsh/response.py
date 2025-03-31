@@ -7,7 +7,7 @@ from google.generativeai import types
 from google import genai
 
 import google.generativeai as genai
-from .npc_sysenv import (
+from npcsh.npc_sysenv import (
     get_system_message,
     compress_image,
     available_chat_models,

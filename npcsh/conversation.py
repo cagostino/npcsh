@@ -11,7 +11,7 @@ import anthropic
 from openai import OpenAI
 from google.generativeai import types
 import google.generativeai as genai
-from .npc_sysenv import get_system_message
+from npcsh.npc_sysenv import get_system_message
 
 
 def get_ollama_conversation(

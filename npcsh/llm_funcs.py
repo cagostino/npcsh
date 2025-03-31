@@ -19,7 +19,7 @@ from google.generativeai import types
 import google.generativeai as genai
 from sqlalchemy import create_engine
 
-from .npc_sysenv import (
+from npcsh.npc_sysenv import (
     get_system_message,
     get_available_models,
     get_model_and_provider,
@@ -42,7 +42,7 @@ from .npc_sysenv import (
     available_chat_models,
 )
 
-from .stream import (
+from npcsh.stream import (
     get_ollama_stream,
     get_openai_stream,
     get_anthropic_stream,
@@ -50,7 +50,7 @@ from .stream import (
     get_deepseek_stream,
     get_gemini_stream,
 )
-from .conversation import (
+from npcsh.conversation import (
     get_ollama_conversation,
     get_openai_conversation,
     get_openai_like_conversation,
@@ -59,7 +59,7 @@ from .conversation import (
     get_gemini_conversation,
 )
 
-from .response import (
+from npcsh.response import (
     get_ollama_response,
     get_openai_response,
     get_anthropic_response,
@@ -67,12 +67,12 @@ from .response import (
     get_deepseek_response,
     get_gemini_response,
 )
-from .image_gen import (
+from npcsh.image_gen import (
     generate_image_openai,
     generate_image_hf_diffusion,
 )
 
-from .embeddings import (
+from npcsh.embeddings import (
     get_ollama_embeddings,
     get_openai_embeddings,
     get_anthropic_embeddings,

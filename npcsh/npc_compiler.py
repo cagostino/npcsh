@@ -19,7 +19,7 @@ from collections import defaultdict, deque
 import traceback
 
 # Importing functions
-from .llm_funcs import (
+from npcsh.llm_funcs import (
     get_llm_response,
     get_stream,
     process_data_output,
@@ -29,9 +29,9 @@ from .llm_funcs import (
     handle_tool_call,
     execute_llm_command,
 )
-from .helpers import get_npc_path
-from .search import search_web, rag_search
-from .image import capture_screenshot, analyze_image_base
+from npcsh.helpers import get_npc_path
+from npcsh.search import search_web, rag_search
+from npcsh.image import capture_screenshot, analyze_image_base
 
 
 def create_or_replace_table(db_path: str, table_name: str, data: pd.DataFrame):
