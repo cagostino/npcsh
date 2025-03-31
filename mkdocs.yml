@@ -22,6 +22,10 @@ plugins:
         python:
           options:
             filters: ["!^_[^_]", "!^[A-Z_]+$"]  # Excludes private and all-uppercase constants
+              - "!npcsh.*"  # Exclude everything imported from npcsh
+            imported_members: false  # Prevent showing imported members
+            show_root_heading: false
+
           selection:
             members:
               - public
