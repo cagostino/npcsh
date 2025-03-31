@@ -33,6 +33,9 @@ plugins:
 
 nav:
   - Home: index.md
+  - Installation: installation.md
+  - 'Using npcsh, the NPC Shell': guide.md
+  - TLDR Cheat Sheet: TLDR_Cheat_sheet.md
   - API:
     - Audio: api/audio.md
     - Image: api/image.md
