@@ -3,7 +3,7 @@ site_url: https://npcsh.readthedocs.io/
 repo_url: https://github.com/cagostino/npcsh
 
 theme:
-  name: material
+  name: readthedocs
   features:
     - navigation.tabs
     - content.code.copy
