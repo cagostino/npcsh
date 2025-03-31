@@ -23,22 +23,32 @@ import sphinx.ext.autodoc
 # Prevent Sphinx from trying to resolve/import certain things
 nitpicky = False  # Don't warn about missing references
 autodoc_typehints = "none"  # Don't try to document type hints
-autodoc_mock_imports = ["openai", "anthropic", "google.generativeai", "ollama"]
 
 
+# In conf.py
+
+# Only mock the specific problematic imports/classes
+autodoc_mock_imports = [
+    "openai.OpenAI",  # Mock just the OpenAI class
+    "anthropic.Anthropic",  # Mock just the Anthropic class
+    "google.generativeai",  # This one we still need to mock fully
+    "ollama.Client",  # Mock just the Client class
+]
+
+
+# Keep the ExternalDocumenter but make it more specific
 class ExternalDocumenter(sphinx.ext.autodoc.ClassDocumenter):
     """Don't try to build documentation for external classes"""
 
-    priority = 10 + sphinx.ext.autodoc.ClassDocumenter.priority  # Higher priority
+    priority = 10 + sphinx.ext.autodoc.ClassDocumenter.priority
 
     def import_object(self, raiseerror=False):
-        """Called by Sphinx. Return True if you want to process this object."""
         if self.get_attr(self.object, "__module__", None) in [
-            "openai",
-            "anthropic",
+            "openai.OpenAI",  # Be more specific about what we ignore
+            "anthropic.Anthropic",
             "google.generativeai",
-            "ollama",
-            "typing",  # Also ignore typing stuff
+            "ollama.Client",
+            "typing",
             "types",
         ]:
             return False
