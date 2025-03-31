@@ -1,5 +1,5 @@
 
-## npcsh usage
+# npcsh usage
 In the `npcsh` shell, users can ask LLMs questions, have LLMLs execute commands or use tools, or utilize macros that provide additional functionality. When a user does not invoke a specific macro, the shell will automatically decide which tool to use based on the user's input. Here are some examples of things one might ask the npcsh shell.
 
 Here are some examples of how you can use npcsh
@@ -204,12 +204,12 @@ and then the associated image :
 
 
 
-### Piping outputs
+## Piping outputs
 An important facet that makes `npcsh` so powerful is the ability to pipe outputs from one tool call to another. This allows for the chaining of commands and the creation of complex workflows. For example, you can use the output of a search to generate an image, or you can use the output of an image analysis to generate a report. Here is an example of how this might look in practice:
 ```npcsh
 npcsh> what is the gdp of russia in 2024? | /vixynt 'generate an image that contains {0}'
 ```
-### Executing Bash Commands
+## Executing Bash Commands
 You can execute bash commands directly within npcsh. The LLM can also generate and execute bash commands based on your natural language requests.
 For example:
 ```npcsh
@@ -223,7 +223,7 @@ npcsh> vim file.txt
 
 ```
 
-### NPC CLI
+## NPC CLI
 When npcsh is installed, it comes with the `npc` cli as well. The `npc` cli has various command to make initializing and serving NPC projects easier.
 
 Users can make queries like so:
@@ -274,7 +274,7 @@ For more detailed weather information, you can check out the following sources:
 ```
 
 
-### Serving
+## Serving
 To serve an NPC project, first install redis-server and start it
 
 on Ubuntu:
@@ -327,7 +327,7 @@ echo -e "\nTesting conversation messages endpoint..."
 curl -s http://localhost:5337/api/conversation/test123/messages | jq '.'
 ```
 
-###
+## Planned cli features
 
 
 * **Planned:** -npc scripts
@@ -339,7 +339,7 @@ curl -s http://localhost:5337/api/conversation/test123/messages | jq '.'
 
 
 
-## Macros
+# Macros
 
 While npcsh can decide the best option to use based on the user's input, the user can also execute certain actions with a macro. Macros are commands within the NPC shell that start with a forward slash (/) and are followed (in some cases) by the relevant arguments for those macros. Each macro is also available as a sub-program within the NPC CLI. In the following examples we demonstrate how to carry out the same operations from within npcsh and from a regular shell.
 
@@ -362,7 +362,7 @@ npcsh> /exit
 ```
 
 Otherwise, here are some more detailed examples of macros that can be used in npcsh:
-### Conjure (under construction)
+## Conjure (under construction)
 Use the `/conjure` macro to generate an NPC, a NPC tool, an assembly line, a job, or an SQL model
 
 ```bash
@@ -370,10 +370,10 @@ npc conjure -n name -t 'templates'
 ```
 
 
-### Data Interaction and analysis (under construction)
+## Data Interaction and analysis (under construction)
 
 
-### Debate (under construction)
+## Debate (under construction)
 Use the `/debate` macro to have two or more NPCs debate a topic, problem, or question.
 
 For example:
@@ -383,14 +383,14 @@ npcsh> /debate Should humans colonize Mars? npcs = ['sibiji', 'mark', 'ted']
 
 
 
-### Notes
+## Notes
 Jot down notes and store them within the npcsh database and in the current directory as a text file.
 ```npcsh
 npcsh> /notes
 ```
 
 
-### Over-the-shoulder: Screenshots and image analysis
+## Over-the-shoulder: Screenshots and image analysis
 
 Use the /ots macro to take a screenshot and write a prompt for an LLM to answer about the screenshot.
 ```npcsh
@@ -423,7 +423,7 @@ npc ots -f test_data/catfight.PNG
 ```
 
 
-### Plan : Schedule tasks to be run at regular intervals (under construction)
+## Plan : Schedule tasks to be run at regular intervals (under construction)
 Use the /plan macro to schedule tasks to be run at regular intervals.
 ```npcsh
 npcsh> /plan run a rag search for 'moonbeam' on the files in the current directory every 5 minutes
@@ -450,7 +450,7 @@ Implementations have been provided for Mac and Windows but only has been tested 
 
 
 
-### Plonk : Computer Control
+## Plonk : Computer Control
 Use the /plonk macro to allow the LLM to control your computer.
 ```npcsh
 npcsh> /plonk go to a web browser and  go to wikipedia and find out information about simon bolivar
@@ -460,7 +460,7 @@ npcsh> /plonk go to a web browser and  go to wikipedia and find out information 
 npc plonk 'use a web browser to find out information about simon boliver'
 ```
 
-### RAG
+## RAG
 
 Use the /rag macro to perform a local rag search.
 If you pass a `-f` flag with a filename or list of filenames (e.g. *.py) then it will embed the documents and perform the cosine similarity scoring.
@@ -481,14 +481,14 @@ In bash:
 npc rag -f *.py
 ```
 
-### Rehash
+## Rehash
 
 Use the /rehash macro to re-send the last message to the LLM.
 ```npcsh
 npcsh> /rehash
 ```
 
-### Sample
+## Sample
 Send a one-shot question to the LLM.
 ```npcsh
 npcsh> /sample What is the capital of France?
@@ -501,7 +501,7 @@ npc sample 'thing' -m model -p provider
 ```
 
 
-### Search
+## Search
 Search can be accomplished through the `/search` macro. You can specify the provider as being "perplexity" or "duckduckgo". For the former,
 you must set a perplexity api key as an environment variable as described above. The default provider is duckduckgo.
 
@@ -590,7 +590,7 @@ npc search 'snipers on the roof indiana university' -sp duckduckgo
 ```
 
 
-### Set: Changing defaults from within npcsh
+## Set: Changing defaults from within npcsh
 Users can change the default model and provider from within npcsh by using the following commands:
 ```npcsh
 npcsh> /set model ollama
@@ -598,20 +598,20 @@ npcsh> /set provider llama3.2
 ```
 
 
-### Sleep : a method for creating and updating a knowledge graph (under construction)
+## Sleep : a method for creating and updating a knowledge graph (under construction)
 
 Use the `/sleep` macro to create or update a knowledge graph. A knowledge graph is a structured representation of facts about you as a user that the NPCs can determine based on the conversations you have had with it.
 ```npcsh
 npcsh> /sleep
 ```
 
-### breathe: a method for condensing context on a regular cadence (# messages, len(context), etc) (under construction)
+## breathe: a method for condensing context on a regular cadence (# messages, len(context), etc) (under construction)
 -every 10 messages/7500 characters, condense the conversation into lessons learned. write the lessons learned down by the np
 for the day, then the npc will see the lessons they have learned that day in that folder as part of the context.
 
 
 
-### Spool
+## Spool
 Spool mode allows one to enter into a conversation with a specific LLM or a specific NPC.
 This is used for having distinct interactions from those in the base shell and these will be separately contained.
 
@@ -738,7 +738,7 @@ npcsh> /spool model=llama3.3
 npc spool -n npc.npc
 ```
 
-### Trigger
+## Trigger
 Use the /trigger macro to execute specific actionss based on certain conditions.
 
 ```npcsh
@@ -752,7 +752,7 @@ On Linux, trigger makes use of inotify-tools to watch for file system events. On
 
 
 
-### Vixynt: Image Generation
+## Vixynt: Image Generation
 Image generation can be done with the /vixynt macro.
 
 Use /vixynt like so where you can also specify the model to use with an @ reference. This @ reference will override the default model in ~/.npcshrc.
@@ -776,7 +776,7 @@ $ npc --model 'dall-e-2' --provider 'openai' vixynt 'whats a french man to do in
 
 
 
-### Whisper: Voice Control
+## Whisper: Voice Control
 Enter into a voice-controlled mode to interact with the LLM. This mode can executet commands and use tools just like the basic npcsh shell.
 ```npcsh
 npcsh> /whisper
@@ -785,7 +785,7 @@ npcsh> /whisper
 
 
 
-### Compilation and NPC Interaction
+## Compilation and NPC Interaction
 Compile a specified NPC profile. This will make it available for use in npcsh interactions.
 ```npcsh
 npcsh> /compile <npc_file>
@@ -797,408 +797,3 @@ Begin a conversations with a specified NPC by referencing their name
 npcsh> /<npc_name>:
 ```
 
-
-
-## NPC Data Layer
-
-What principally powers the capabilities of npcsh is the NPC Data Layer. In the `~/.npcsh/` directory after installation, you will find
-the npc teaam with its tools, models, contexts, assembly lines, and NPCs. By making tools, NPCs, contexts, and assembly lines simple data structures with
-a fixed set of parameters, we can let users define them in easy-to-read YAML files, allowing for a modular and extensible system that can be easily modified and expanded upon. Furthermore, this data layer relies heavily on jinja templating to allow for dynamic content generation and the ability to reference other NPCs, tools, and assembly lines in the system.
-
-### Creating NPCs
-NPCs are defined in YAML files within the npc_team directory. Each NPC must have a name and a primary directive. Optionally, one can specify an LLM model/provider for the NPC as well as provide an explicit list of tools and whether or not to use the globally available tools. See the data models contained in `npcsh/data_models.py` for more explicit type details on the NPC data structure.
-
-
-
-Here is a typical NPC file:
-```yaml
-name: sibiji
-primary_directive: You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately.
-tools:
-  - simple data retrieval
-model: llama3.2
-provider: ollama
-```
-
-
-## Creating Tools
-Tools are defined as YAMLs with `.tool` extension within the npc_team/tools directory. Each tool has a name, inputs, and consists of three distinct steps: preprocess, prompt, and postprocess. The idea here is that a tool consists of a stage where information is preprocessed and then passed to a prompt for some kind of analysis and then can be passed to another stage for postprocessing. In each of these three cases, the engine must be specified. The engine can be either "natural" for natural language processing or "python" for Python code. The code is the actual code that will be executed.
-
-Here is an example of a tool file:
-```yaml
-tool_name: "screen_capture_analysis_tool"
-description: Captures the whole screen and sends the image for analysis
-inputs:
-  - "prompt"
-steps:
-  - engine: "python"
-    code: |
-      # Capture the screen
-      import pyautogui
-      import datetime
-      import os
-      from PIL import Image
-      import time
-      from npcsh.image import analyze_image_base, capture_screenshot
-
-      out = capture_screenshot(npc = npc, full = True)
-
-      llm_response = analyze_image_base( '{{prompt}}' + "\n\nAttached is a screenshot of my screen currently. Please use this to evaluate the situation. If the user asked for you to explain what's on their screen or something similar, they are referring to the details contained within the attached image. You do not need to actually view their screen. You do not need to mention that you cannot view or interpret images directly. You only need to answer the user's request based on the attached screenshot!",
-                                        out['file_path'],
-                                        out['filename'],
-                                        npc=npc,
-                                        **out['model_kwargs'])
-      # To this:
-      if isinstance(llm_response, dict):
-          llm_response = llm_response.get('response', 'No response from image analysis')
-      else:
-          llm_response = 'No response from image analysis'
-
-```
-
-
-When you have created a tool, it will be surfaced as a potential option to be used when you ask a question in the base npcsh shell. The LLM will decide if it is the best tool to use based on the user's input. Alternatively, if you'd like, you can call the tools directly, without needing to let the AI decide if it's the right one to use.
-
-  ```npcsh
-  npcsh> /screen_cap_tool <prompt>
-  ```
-  or
-  ```npcsh
-  npcsh> /sql_executor select * from conversation_history limit 1
-
-  ```
-  or
-  ```npcsh
-  npcsh> /calculator 5+6
-  ```
-
-
-## NPC Pipelines
-
-
-
-Let's say you want to create a pipeline of steps where NPCs are used along the way. Let's initialize with a pipeline file we'll call `morning_routine.pipe`:
-```yaml
-steps:
-  - step_name: "review_email"
-    npc: "{{ ref('email_assistant') }}"
-    task: "Get me up to speed on my recent emails: {{source('emails')}}."
-
-
-  - step_name: "market_update"
-    npc: "{{ ref('market_analyst') }}"
-    task: "Give me an update on the latest events in the market: {{source('market_events')}}."
-
-  - step_name: "summarize"
-    npc: "{{ ref('sibiji') }}"
-    model: llama3.2
-    provider: ollama
-    task: "Review the outputs from the {{review_email}} and {{market_update}} and provide me with a summary."
-
-```
-Now youll see that we reference NPCs in the pipeline file. We'll need to make sure we have each of those NPCs available.
-Here is an example for the email assistant:
-```yaml
-name: email_assistant
-primary_directive: You are an AI assistant specialized in managing and summarizing emails. You should present the information in a clear and concise manner.
-model: gpt-4o-mini
-provider: openai
-```
-Now for the marketing analyst:
-```yaml
-name: market_analyst
-primary_directive: You are an AI assistant focused on monitoring and analyzing market trends. Provide de
-model: llama3.2
-provider: ollama
-```
-and then here is our trusty friend sibiji:
-```yaml
-name: sibiji
-primary_directive: You are a foundational AI assistant. Your role is to provide basic support and information. Respond to queries concisely and accurately.
-suggested_tools_to_use:
-  - simple data retrieval
-model: claude-3-5-sonnet-latest
-provider: anthropic
-```
-Now that we have our pipeline and NPCs defined, we also need to ensure that the source data we are referencing will be there. When we use source('market_events') and source('emails') we are asking npcsh to pull those data directly from tables in our npcsh database. For simplicity we will just make these in python to insert them for this demo:
-```python
-import pandas as pd
-from sqlalchemy import create_engine
-import os
-
-# Sample market events data
-market_events_data = {
-    "datetime": [
-        "2023-10-15 09:00:00",
-        "2023-10-16 10:30:00",
-        "2023-10-17 11:45:00",
-        "2023-10-18 13:15:00",
-        "2023-10-19 14:30:00",
-    ],
-    "headline": [
-        "Stock Market Rallies Amid Positive Economic Data",
-        "Tech Giant Announces New Product Line",
-        "Federal Reserve Hints at Interest Rate Pause",
-        "Oil Prices Surge Following Supply Concerns",
-        "Retail Sector Reports Record Q3 Earnings",
-    ],
-}
-
-# Create a DataFrame
-market_events_df = pd.DataFrame(market_events_data)
-
-# Define database path relative to user's home directory
-db_path = os.path.expanduser("~/npcsh_history.db")
-
-# Create a connection to the SQLite database
-engine = create_engine(f"sqlite:///{db_path}")
-with engine.connect() as connection:
-    # Write the data to a new table 'market_events', replacing existing data
-    market_events_df.to_sql(
-        "market_events", con=connection, if_exists="replace", index=False
-    )
-
-print("Market events have been added to the database.")
-
-email_data = {
-    "datetime": [
-        "2023-10-10 10:00:00",
-        "2023-10-11 11:00:00",
-        "2023-10-12 12:00:00",
-        "2023-10-13 13:00:00",
-        "2023-10-14 14:00:00",
-    ],
-    "subject": [
-        "Meeting Reminder",
-        "Project Update",
-        "Invoice Attached",
-        "Weekly Report",
-        "Holiday Notice",
-    ],
-    "sender": [
-        "alice@example.com",
-        "bob@example.com",
-        "carol@example.com",
-        "dave@example.com",
-        "eve@example.com",
-    ],
-    "recipient": [
-        "bob@example.com",
-        "carol@example.com",
-        "dave@example.com",
-        "eve@example.com",
-        "alice@example.com",
-    ],
-    "body": [
-        "Don't forget the meeting tomorrow at 10 AM.",
-        "The project is progressing well, see attached update.",
-        "Please find your invoice attached.",
-        "Here is the weekly report.",
-        "The office will be closed on holidays, have a great time!",
-    ],
-}
-
-# Create a DataFrame
-emails_df = pd.DataFrame(email_data)
-
-# Define database path relative to user's home directory
-db_path = os.path.expanduser("~/npcsh_history.db")
-
-# Create a connection to the SQLite database
-engine = create_engine(f"sqlite:///{db_path}")
-with engine.connect() as connection:
-    # Write the data to a new table 'emails', replacing existing data
-    emails_df.to_sql("emails", con=connection, if_exists="replace", index=False)
-
-print("Sample emails have been added to the database.")
-
-```
-
-
-With these data now in place, we can proceed with running the pipeline. We can do this in npcsh by using the /compile command.
-
-
-
-
-```npcsh
-npcsh> /compile morning_routine.pipe
-```
-
-
-
-Alternatively we can run a pipeline like so in Python:
-
-```bash
-from npcsh.npc_compiler import PipelineRunner
-import os
-
-pipeline_runner = PipelineRunner(
-    pipeline_file="morning_routine.pipe",
-    npc_root_dir=os.path.abspath("./"),
-    db_path="~/npcsh_history.db",
-)
-pipeline_runner.execute_pipeline(inputs)
-```
-
-What if you wanted to run operations on each row and some operations on all the data at once? We can do this with the pipelines as well. Here we will build a pipeline for news article analysis.
-First we make the data for the pipeline that well use:
-```python
-import pandas as pd
-from sqlalchemy import create_engine
-import os
-
-# Sample data generation for news articles
-news_articles_data = {
-    "news_article_id": list(range(1, 21)),
-    "headline": [
-        "Economy sees unexpected growth in Q4",
-        "New tech gadget takes the world by storm",
-        "Political debate heats up over new policy",
-        "Health concerns rise amid new disease outbreak",
-        "Sports team secures victory in last minute",
-        "New economic policy introduced by government",
-        "Breakthrough in AI technology announced",
-        "Political leader delivers speech on reforms",
-        "Healthcare systems pushed to limits",
-        "Celebrated athlete breaks world record",
-        "Controversial economic measures spark debate",
-        "Innovative tech startup gains traction",
-        "Political scandal shakes administration",
-        "Healthcare workers protest for better pay",
-        "Major sports event postponed due to weather",
-        "Trade tensions impact global economy",
-        "Tech company accused of data breach",
-        "Election results lead to political upheaval",
-        "Vaccine developments offer hope amid pandemic",
-        "Sports league announces return to action",
-    ],
-    "content": ["Article content here..." for _ in range(20)],
-    "publication_date": pd.date_range(start="1/1/2023", periods=20, freq="D"),
-}
-```
-
-Then we will create the pipeline file:
-```yaml
-# news_analysis.pipe
-steps:
-  - step_name: "classify_news"
-    npc: "{{ ref('news_assistant') }}"
-    task: |
-      Classify the following news articles into one of the categories:
-      ["Politics", "Economy", "Technology", "Sports", "Health"].
-      {{ source('news_articles') }}
-
-  - step_name: "analyze_news"
-    npc: "{{ ref('news_assistant') }}"
-    batch_mode: true  # Process articles with knowledge of their tags
-    task: |
-      Based on the category assigned in {{classify_news}}, provide an in-depth
-      analysis and perspectives on the article. Consider these aspects:
-      ["Impacts", "Market Reaction", "Cultural Significance", "Predictions"].
-      {{ source('news_articles') }}
-```
-
-Then we can run the pipeline like so:
-```bash
-/compile ./npc_team/news_analysis.pipe
-```
-or in python like:
-
-```bash
-
-from npcsh.npc_compiler import PipelineRunner
-import os
-runner = PipelineRunner(
-    "./news_analysis.pipe",
-    db_path=os.path.expanduser("~/npcsh_history.db"),
-    npc_root_dir=os.path.abspath("."),
-)
-results = runner.execute_pipeline()
-```
-
-Alternatively, if youd like to use a mixture of agents in your pipeline, set one up like this:
-```yaml
-steps:
-  - step_name: "classify_news"
-    npc: "news_assistant"
-    mixa: true
-    mixa_agents:
-      - "{{ ref('news_assistant') }}"
-      - "{{ ref('journalist_npc') }}"
-      - "{{ ref('data_scientist_npc') }}"
-    mixa_voters:
-      - "{{ ref('critic_npc') }}"
-      - "{{ ref('editor_npc') }}"
-      - "{{ ref('researcher_npc') }}"
-    mixa_voter_count: 5
-    mixa_turns: 3
-    mixa_strategy: "vote"
-    task: |
-      Classify the following news articles...
-      {{ source('news_articles') }}
-```
-You'll have to make npcs for these references to work, here are versions that should work with the above:
-```yaml
-name: news_assistant
-```
-Then, we can run the mixture of agents method like:
-
-```bash
-/compile ./npc_team/news_analysis_mixa.pipe
-```
-or in python like:
-
-```bash
-
-from npcsh.npc_compiler import PipelineRunner
-import os
-
-runner = PipelineRunner(
-    "./news_analysis_mixa.pipe",
-    db_path=os.path.expanduser("~/npcsh_history.db"),
-    npc_root_dir=os.path.abspath("."),
-)
-results = runner.execute_pipeline()
-```
-
-
-
-Note, in the future we will aim to separate compilation and running so that we will have a compilation step that is more like a jinja rendering of the relevant information so that it can be more easily audited.
-
-
-## npcsql: SQL Integration and pipelines (UNDER CONSTRUCTION)
-
-
-In addition to NPCs being used in `npcsh` and through the python package, users may wish to take advantage of agentic interactions in SQL-like pipelines.
-`npcsh` contains a pseudo-SQL interpreter that processes SQL models which lets users write queries containing LLM-function calls that reference specific NPCs. `npcsh` interprets these queries, renders any jinja template references through its python implementation, and then executes them accordingly.
-
-Here is an example of a SQL-like query that uses NPCs to analyze data:
-```sql
-SELECT debate(['logician','magician'], 'Analyze the sentiment of the customer feedback.') AS sentiment_analysis
-```
-
-### squish
-squish is an aggregate NPC LLM function that compresses information contained in whole columns or grouped chunks of data based on the SQL aggregation.
-
-### splat
-Splat is a row-wise NPC LLM function that allows for the application of an LLM function on each row of a dataset or a re-sampling
-
-
-
-
-
-
-
-## Contributing
-Contributions are welcome! Please submit issues and pull requests on the GitHub repository.
-
-## Support
-If you appreciate the work here, [consider supporting NPC Worldwide](https://buymeacoffee.com/npcworldwide). If you'd like to explore how to use `npcsh` to help your business, please reach out to info@npcworldwi.de .
-
-
-## NPC Studio
-Coming soon! NPC Studio will be a desktop application for managing chats and agents on your own machine.
-Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A) to hear updates!
-
-## License
-This project is licensed under the MIT License.

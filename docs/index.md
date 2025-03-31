@@ -22,6 +22,7 @@
 * **Powerful Tool integrations:** `npcsh` has built-in tools for users to have agents execute code, analyze data, generate images, search the web, and more. Tools can be defined in YAML files as part of project-specific `npc_team`s or in the global `~/.npcsh/npc_team` directory or simply in python scripts. Once compiled, the tools can be used as macros in the `npc` cli as well as `/{tool_name}` commands in the `npcsh` shell.
 
 
+
 Interested to stay in the loop and to hear the latest and greatest about `npcsh` ? Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A)!
 
 
@@ -29,6 +30,25 @@ Interested to stay in the loop and to hear the latest and greatest about `npcsh`
 ## Quick Links
 - [Installation Guide](installation.md)
 - [NPC Shell User Guide](guide.md)
+- [NPC Data Layer](npc_data_layer.md)
 - [TLDR Cheat Sheet](TLDR_Cheat_sheet.md)
 - [API Reference](api/index.md)
+
+
+
+
+
+## Contributing
+Contributions are welcome! Please submit issues and pull requests on the GitHub repository.
+
+## Support
+If you appreciate the work here, [consider supporting NPC Worldwide](https://buymeacoffee.com/npcworldwide). If you'd like to explore how to use `npcsh` to help your business, please reach out to info@npcworldwi.de .
+
+
+## NPC Studio
+Coming soon! NPC Studio will be a desktop application for managing chats and agents on your own machine.
+Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A) to hear updates!
+
+## License
+This project is licensed under the MIT License.
 
