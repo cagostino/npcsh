@@ -15,6 +15,7 @@ kuzu
 markdown
 matplotlib
 mkdocstrings-python
+mkdocs-material
 nltk
 numpy
 ollama
