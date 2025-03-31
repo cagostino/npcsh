@@ -15,28 +15,21 @@ markdown_extensions:
   - attr_list
   - pymdownx.highlight:
       anchor_linenums: true
+
 plugins:
   - mkdocstrings:
       handlers:
         python:
-          options:
-            filters:
-              - "!^_[^_]"        # Exclude private members
-              - "!^[A-Z_]+$"      # Exclude all-uppercase constants
-              - "!test_"          # Exclude test functions
-              - "!^npcsh\."       # Exclude all imported npcsh modules
+          import:
+            - https://docs.python.org/3/objects.inv
           selection:
             members:
               - public
+            filters:
+              - "!^__init__$"  # Properly excludes __init__
           rendering:
             show_source: true
             show_root_heading: false
-            separate_signature: true
-            merge_init_into_class: true
-            show_if_no_docstring: false
-            show_submodules: false
-
-
 nav:
   - Home: index.md
   - Installation: installation.md
