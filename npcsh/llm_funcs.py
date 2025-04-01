@@ -35,7 +35,6 @@ from npcsh.npc_sysenv import (
     NPCSH_REASONING_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
-    NPCSH_API_URL,
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     available_reasoning_models,
@@ -78,6 +77,12 @@ from npcsh.embeddings import (
     get_anthropic_embeddings,
     store_embeddings_for_model,
 )
+
+import asyncio
+import sys
+from queue import Queue
+from threading import Thread
+import select
 
 
 def generate_image(
@@ -1783,6 +1788,142 @@ def get_data_response(
     #    failures.append(str(e))
 
 
+def enter_chat_human_in_the_loop(
+    messages: List[Dict[str, str]],
+    reasoning_model: str = NPCSH_REASONING_MODEL,
+    reasoning_provider: str = NPCSH_REASONING_PROVIDER,
+    chat_model: str = NPCSH_CHAT_MODEL,
+    chat_provider: str = NPCSH_CHAT_PROVIDER,
+    npc: Any = None,
+    answer_only: bool = False,
+    context=None,
+) -> Generator[str, None, None]:
+    """
+    Stream responses while checking for think tokens and handling human input when needed.
+
+    Args:
+        messages: List of conversation messages
+        model: LLM model to use
+        provider: Model provider
+        npc: NPC instance if applicable
+
+    Yields:
+        Streamed response chunks
+    """
+    # Get the initial stream
+    if answer_only:
+        messages[-1]["content"] = (
+            messages[-1]["content"].replace(
+                "Think first though and use <think> tags", ""
+            )
+            + " Do not think just answer. "
+        )
+    else:
+        messages[-1]["content"] = (
+            messages[-1]["content"]
+            + "         Think first though and use <think> tags.  "
+        )
+
+    response_stream = get_stream(
+        messages,
+        model=reasoning_model,
+        provider=reasoning_provider,
+        npc=npc,
+        context=context,
+    )
+
+    thoughts = []
+    response_chunks = []
+    in_think_block = False
+
+    for chunk in response_stream:
+        # Check for user interrupt
+        if not input_queue.empty():
+            user_interrupt = input_queue.get()
+            yield "\n[Stream interrupted by user]\n"
+            yield "Enter your additional input: "
+
+            # Get the full interrupt message
+            full_interrupt = user_interrupt
+            while not input_queue.empty():
+                full_interrupt += "\n" + input_queue.get()
+
+            # Add the interruption to messages and restart stream
+            messages.append(
+                {"role": "user", "content": f"[INTERRUPT] {full_interrupt}"}
+            )
+
+            yield f"\n[Continuing with added context...]\n"
+            yield from enter_chat_human_in_the_loop(
+                messages,
+                reasoning_model=reasoning_model,
+                reasoning_provider=reasoning_provider,
+                chat_model=chat_model,
+                chat_provider=chat_provider,
+                npc=npc,
+                answer_only=True,
+            )
+            return
+
+        # Extract content based on provider
+        if reasoning_provider == "ollama":
+            chunk_content = chunk.get("message", {}).get("content", "")
+        elif reasoning_provider == "openai" or reasoning_provider == "deepseek":
+            chunk_content = "".join(
+                choice.delta.content
+                for choice in chunk.choices
+                if choice.delta.content is not None
+            )
+        elif reasoning_provider == "anthropic":
+            if chunk.type == "content_block_delta":
+                chunk_content = chunk.delta.text
+            else:
+                chunk_content = ""
+        else:
+            chunk_content = str(chunk)
+
+        response_chunks.append(chunk_content)
+        combined_text = "".join(response_chunks)
+
+        # Check for LLM request block
+        if (
+            "<request_for_input>" in combined_text
+            and "</request_for_input>" not in combined_text
+        ):
+            in_think_block = True
+
+        if in_think_block:
+            thoughts.append(chunk_content)
+            yield chunk
+
+        if "</request_for_input>" in combined_text:
+            # Process the LLM's input request
+            request_text = "".join(thoughts)
+            yield "\nPlease provide the requested information: "
+
+            # Wait for user input (blocking here is OK since we explicitly asked)
+            user_input = input()
+
+            # Add the interaction to messages and restart stream
+            messages.append({"role": "assistant", "content": request_text})
+            messages.append({"role": "user", "content": user_input})
+
+            yield "\n[Continuing with provided information...]\n"
+            yield from enter_chat_human_in_the_loop(
+                messages,
+                reasoning_model=reasoning_model,
+                reasoning_provider=reasoning_provider,
+                chat_model=chat_model,
+                chat_provider=chat_provider,
+                npc=npc,
+                answer_only=True,
+            )
+            return
+
+        if not in_think_block:
+            yield chunk
+
+
 def enter_reasoning_human_in_the_loop(
     messages: List[Dict[str, str]],
     reasoning_model: str = NPCSH_REASONING_MODEL,
@@ -1832,7 +1973,35 @@ def enter_reasoning_human_in_the_loop(
     in_think_block = False
 
     for chunk in response_stream:
-        # Extract content based on provider/model type
+        # Check for user interrupt
+        if not input_queue.empty():
+            user_interrupt = input_queue.get()
+            yield "\n[Stream interrupted by user]\n"
+            yield "Enter your additional input: "
+
+            # Get the full interrupt message
+            full_interrupt = user_interrupt
+            while not input_queue.empty():
+                full_interrupt += "\n" + input_queue.get()
+
+            # Add the interruption to messages and restart stream
+            messages.append(
+                {"role": "user", "content": f"[INTERRUPT] {full_interrupt}"}
+            )
+
+            yield f"\n[Continuing with added context...]\n"
+            yield from enter_reasoning_human_in_the_loop(
+                messages,
+                reasoning_model=reasoning_model,
+                reasoning_provider=reasoning_provider,
+                chat_model=chat_model,
+                chat_provider=chat_provider,
+                npc=npc,
+                answer_only=True,
+            )
+            return
+
+        # Extract content based on provider
         if reasoning_provider == "ollama":
             chunk_content = chunk.get("message", {}).get("content", "")
         elif reasoning_provider == "openai" or reasoning_provider == "deepseek":
@@ -1847,74 +2016,48 @@ def enter_reasoning_human_in_the_loop(
             else:
                 chunk_content = ""
         else:
-            # Default extraction
             chunk_content = str(chunk)
 
-        # Always yield the chunk whether in think block or not
         response_chunks.append(chunk_content)
-        # Track think block state and accumulate thoughts
-        if answer_only:
+        combined_text = "".join(response_chunks)
+
+        # Check for LLM request block
+        if (
+            "<request_for_input>" in combined_text
+            and "</request_for_input>" not in combined_text
+        ):
+            in_think_block = True
+
+        if in_think_block:
+            thoughts.append(chunk_content)
             yield chunk
-        else:
-            if "<th" in "".join(response_chunks) and "/th" not in "".join(
-                response_chunks
-            ):
-                in_think_block = True
 
-            if in_think_block:
-                thoughts.append(chunk_content)
-                yield chunk  # Show the thoughts as they come
+        if "</request_for_input>" in combined_text:
+            # Process the LLM's input request
+            request_text = "".join(thoughts)
+            yield "\nPlease provide the requested information: "
 
-            if "</th" in "".join(response_chunks):
-                thought_text = "".join(thoughts)
-                # Analyze thoughts before stopping
-                input_needed = analyze_thoughts_for_input(
-                    thought_text, model=chat_model, provider=chat_provider
-                )
+            # Wait for user input (blocking here is OK since we explicitly asked)
+            user_input = input()
 
-                if input_needed:
-                    # If input needed, get it and restart with new context
-                    user_input = request_user_input(input_needed)
+            # Add the interaction to messages and restart stream
+            messages.append({"role": "assistant", "content": request_text})
+            messages.append({"role": "user", "content": user_input})
 
-                    messages.append(
-                        {
-                            "role": "assistant",
-                            "content": f"""its clear that extra input is required.
-                                            could you please provide it? Here is the reason:
+            yield "\n[Continuing with provided information...]\n"
+            yield from enter_reasoning_human_in_the_loop(
+                messages,
+                reasoning_model=reasoning_model,
+                reasoning_provider=reasoning_provider,
+                chat_model=chat_model,
+                chat_provider=chat_provider,
+                npc=npc,
+                answer_only=True,
+            )
+            return
 
-                                            {input_needed['reason']},
-
-                                            and the prompt: {input_needed['prompt']}""",
-                        }
-                    )
-
-                    messages.append({"role": "user", "content": user_input})
-                    yield from enter_reasoning_human_in_the_loop(
-                        messages,
-                        reasoning_model=reasoning_model,
-                        reasoning_provider=reasoning_provider,
-                        chat_model=chat_model,
-                        chat_provider=chat_provider,
-                        npc=npc,
-                        answer_only=True,
-                    )
-                else:
-                    # If no input needed, just get the answer
-                    messages.append({"role": "assistant", "content": thought_text})
-                    messages.append(
-                        {"role": "user", "content": messages[-2]["content"]}
-                    )
-                    yield from enter_reasoning_human_in_the_loop(  # Restart with new context
-                        messages,
-                        reasoning_model=reasoning_model,
-                        reasoning_provider=reasoning_provider,
-                        chat_model=chat_model,
-                        chat_provider=chat_provider,
-                        npc=npc,
-                        answer_only=True,
-                    )
-
-                return  # Stop the original stream in either case
+        if not in_think_block:
+            yield chunk
 
 
 def handle_request_input(
@@ -2031,3 +2174,89 @@ def request_user_input(input_request: Dict[str, str]) -> str:
     """
     print(f"\nAdditional input needed: {input_request['reason']}")
     return input(f"{input_request['prompt']}: ")
+
+
+def check_user_input() -> Optional[str]:
+    """
+    Non-blocking check for user input.
+    Returns None if no input is available, otherwise returns the input string.
+    """
+    if select.select([sys.stdin], [], [], 0.0)[0]:
+        return input()
+    return None
+
+
+def input_listener(input_queue: Queue):
+    """
+    Continuously listen for user input in a separate thread.
+    """
+    while True:
+        try:
+            user_input = input()
+            input_queue.put(user_input)
+        except EOFError:
+            break
+
+
+def stream_with_interrupts(
+    messages: List[Dict[str, str]],
+    model: str,
+    provider: str,
+    npc: Any = None,
+    context=None,
+) -> Generator[str, None, None]:
+    """Stream responses with basic Ctrl+C handling and recursive conversation loop."""
+    response_stream = get_stream(
+        messages, model=model, provider=provider, npc=npc, context=context
+    )
+
+    try:
+        # Flag to track if streaming is complete
+        streaming_complete = False
+
+        for chunk in response_stream:
+            if provider == "ollama":
+                chunk_content = chunk.get("message", {}).get("content", "")
+            elif provider in ["openai", "deepseek"]:
+                chunk_content = "".join(
+                    choice.delta.content
+                    for choice in chunk.choices
+                    if choice.delta.content is not None
+                )
+            elif provider == "anthropic":
+                chunk_content = (
+                    chunk.delta.text if chunk.type == "content_block_delta" else ""
+                )
+            else:
+                chunk_content = str(chunk)
+
+            yield chunk_content
+
+            # Optional: Mark streaming as complete when no more chunks
+            if not chunk_content:
+                streaming_complete = True
+
+    except KeyboardInterrupt:
+        # Handle keyboard interrupt by getting user input
+        user_input = input("\n> ")
+        messages.append({"role": "user", "content": user_input})
+        yield from stream_with_interrupts(
+            messages, model=model, provider=provider, npc=npc, context=context
+        )
+
+    finally:
+        # Prompt for next input and continue conversation
+        while True:
+            user_input = input("\n> ")
+
+            # Option to exit the loop
+            if user_input.lower() in ["exit", "quit", "q"]:
+                break
+
+            # Add user input to messages
+            messages.append({"role": "user", "content": user_input})
+
+            # Recursively continue the conversation
+            yield from stream_with_interrupts(
+                messages, model=model, provider=provider, npc=npc, context=context
+            )
