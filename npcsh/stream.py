@@ -55,16 +55,20 @@ def get_anthropic_stream(
         system_message = "You are a helpful assistant."
 
     # Preprocess messages to ensure content is a list of dicts
+    messages_to_use = []
     for message in messages:
         if isinstance(message["content"], str):
-            message["content"] = [{"type": "text", "text": message["content"]}]
+            content = [{"type": "text", "text": message["content"]}]
+        else:
+            content = message["content"]
+        messages_to_use.append({"role": message["role"], "content": content})
     # Add images if provided
     if images:
         for img in images:
             with open(img["file_path"], "rb") as image_file:
                 img["data"] = base64.b64encode(image_file.read()).decode("utf-8")
                 img["media_type"] = "image/jpeg"
-                messages[-1]["content"].append(
+                messages_to_use[-1]["content"].append(
                     {
                         "type": "image",
                         "source": {
@@ -78,7 +82,7 @@ def get_anthropic_stream(
     # Prepare API call parameters
     api_params = {
         "model": model,
-        "messages": messages,
+        "messages": messages_to_use,
         "max_tokens": kwargs.get("max_tokens", 8192),
         "stream": True,
         "system": system_message,
@@ -93,6 +97,7 @@ def get_anthropic_stream(
         api_params["tool_choice"] = tool_choice
 
     # Make the API call
+    print(api_params)
     response = client.messages.create(**api_params)
 
     for chunk in response:

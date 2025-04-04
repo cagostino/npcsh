@@ -11,8 +11,8 @@ except ModuleNotFoundError:
 from typing import Optional, Dict, List, Union, Tuple
 
 
-from .llm_funcs import get_llm_response, get_embeddings
-from .npc_compiler import NPC
+from npcsh.llm_funcs import get_llm_response, get_embeddings
+from npcsh.npc_compiler import NPC
 import sqlite3
 
 
@@ -738,7 +738,7 @@ def process_text_with_chroma(
         print(f"\nProcessing batch {i//batch_size + 1} ({len(batch)} facts)")
 
         # Generate embeddings for the batch using npcsh.llm_funcs.get_embeddings
-        from .llm_funcs import get_embeddings
+        from npcsh.llm_funcs import get_embeddings
 
         batch_embeddings = get_embeddings(
             batch,
@@ -812,7 +812,7 @@ def hybrid_search_with_chroma(
         List of dictionaries with combined results
     """
     # Get embedding for query using npcsh.llm_funcs.get_embeddings
-    from .llm_funcs import get_embeddings
+    from npcsh.llm_funcs import get_embeddings
 
     query_embedding = get_embeddings([query])[0]
 

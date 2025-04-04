@@ -19,7 +19,7 @@ from google.generativeai import types
 import google.generativeai as genai
 from sqlalchemy import create_engine
 
-from .npc_sysenv import (
+from npcsh.npc_sysenv import (
     get_system_message,
     get_available_models,
     get_model_and_provider,
@@ -35,14 +35,13 @@ from .npc_sysenv import (
     NPCSH_REASONING_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
-    NPCSH_API_URL,
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     available_reasoning_models,
     available_chat_models,
 )
 
-from .stream import (
+from npcsh.stream import (
     get_ollama_stream,
     get_openai_stream,
     get_anthropic_stream,
@@ -50,7 +49,7 @@ from .stream import (
     get_deepseek_stream,
     get_gemini_stream,
 )
-from .conversation import (
+from npcsh.conversation import (
     get_ollama_conversation,
     get_openai_conversation,
     get_openai_like_conversation,
@@ -59,7 +58,7 @@ from .conversation import (
     get_gemini_conversation,
 )
 
-from .response import (
+from npcsh.response import (
     get_ollama_response,
     get_openai_response,
     get_anthropic_response,
@@ -67,17 +66,23 @@ from .response import (
     get_deepseek_response,
     get_gemini_response,
 )
-from .image_gen import (
+from npcsh.image_gen import (
     generate_image_openai,
     generate_image_hf_diffusion,
 )
 
-from .embeddings import (
+from npcsh.embeddings import (
     get_ollama_embeddings,
     get_openai_embeddings,
     get_anthropic_embeddings,
     store_embeddings_for_model,
 )
+
+import asyncio
+import sys
+from queue import Queue
+from threading import Thread
+import select
 
 
 def generate_image(
@@ -87,9 +92,7 @@ def generate_image(
     filename: str = None,
     npc: Any = None,
 ):
-    """
-    Function Description:
-        This function generates an image using the specified provider and model.
+    """This function generates an image using the specified provider and model.
     Args:
         prompt (str): The prompt for generating the image.
     Keyword Args:
@@ -191,9 +194,7 @@ def get_llm_response(
     context=None,
     **kwargs,
 ):
-    """
-    Function Description:
-        This function generates a response using the specified provider and model.
+    """This function generates a response using the specified provider and model.
     Args:
         prompt (str): The prompt for generating the response.
     Keyword Args:
@@ -318,9 +319,7 @@ def get_stream(
     context=None,
     **kwargs,
 ) -> List[Dict[str, str]]:
-    """
-    Function Description:
-        This function generates a streaming response using the specified provider and model
+    """This function generates a streaming response using the specified provider and model
     Args:
         messages (List[Dict[str, str]]): The list of messages in the conversation.
     Keyword Args:
@@ -385,9 +384,7 @@ def get_conversation(
     context=None,
     **kwargs,
 ) -> List[Dict[str, str]]:
-    """
-    Function Description:
-        This function generates a conversation using the specified provider and model.
+    """This function generates a conversation using the specified provider and model.
     Args:
         messages (List[Dict[str, str]]): The list of messages in the conversation.
     Keyword Args:
@@ -540,9 +537,7 @@ def execute_llm_command(
     stream=False,
     context=None,
 ) -> str:
-    """
-    Function Description:
-        This function executes an LLM command.
+    """This function executes an LLM command.
     Args:
         command (str): The command to execute.
 
@@ -749,6 +744,7 @@ def check_llm_command(
     api_url: str = NPCSH_API_URL,
     api_key: str = None,
     npc: Any = None,
+    npc_team: Any = None,
     retrieved_docs=None,
     messages: List[Dict[str, str]] = None,
     images: list = None,
@@ -756,9 +752,7 @@ def check_llm_command(
     stream=False,
     context=None,
 ):
-    """
-    Function Description:
-        This function checks an LLM command.
+    """This function checks an LLM command.
     Args:
         command (str): The command to check.
     Keyword Args:
@@ -814,71 +808,74 @@ ReAct choices then will enter reasoning flow
 
     4. Is it a complex request that actually requires more than one
         tool to be called, perhaps in a sequence?
+        Sequences should only be used for more than one consecutive tool call. do not invoke seequences for single tool calls.
 
     5. is there a need for the user to provide additional input to fulfill the request?
 
 
 
-    Available tools:
     """
 
-    if (npc.tools_dict is None or npc.tools_dict == {}) & (
-        npc.all_tools_dict is None or npc.all_tools_dict == {}
-    ):
-        prompt += "No tools available. Do not invoke tools."
-    else:
-        tools_set = {}
+    if npc is not None or npc_team is not None:
+        if (npc.tools_dict is None or npc.tools_dict == {}) & (
+            npc.all_tools_dict is None or npc.all_tools_dict == {}
+        ):
+            prompt += "No tools available. Do not invoke tools."
+        else:
+            prompt += "Available tools: \n"
+            tools_set = {}
 
-        if npc.tools_dict is not None:
-            for tool_name, tool in npc.tools_dict.items():
-                if tool_name not in tools_set:
-                    tools_set[tool_name] = tool.description
-        if npc.all_tools_dict is not None:
-            for tool_name, tool in npc.all_tools_dict.items():
-                if tool_name not in tools_set:
-                    tools_set[tool_name] = tool.description
+            if npc.tools_dict is not None:
+                for tool_name, tool in npc.tools_dict.items():
+                    if tool_name not in tools_set:
+                        tools_set[tool_name] = tool.description
+            if npc.all_tools_dict is not None:
+                for tool_name, tool in npc.all_tools_dict.items():
+                    if tool_name not in tools_set:
+                        tools_set[tool_name] = tool.description
 
-        for tool_name, tool_description in tools_set.items():
+            for tool_name, tool_description in tools_set.items():
+                prompt += f"""
+
+                            {tool_name} : {tool_description} \n
+                            """
+
+        if len(npc.resolved_npcs) == 0:
+            prompt += "No NPCs available for alternative answers."
+        else:
+
             prompt += f"""
-
-                        {tool_name} : {tool_description} \n
-                        """
-
-    prompt += f"""
-    Available NPCs for alternative answers:
-
-    """
-    if len(npc.resolved_npcs) == 0:
-        prompt += "No NPCs available for alternative answers."
-    else:
-        print(npc.resolved_npcs)
-        for i, npc_in_network in enumerate(npc.resolved_npcs):
-            name = list(npc_in_network.keys())[0]
-            npc_obj = npc_in_network[name]
-
-            if hasattr(npc_obj, "name"):
-                name_to_include = npc_obj.name
-            elif "name " in npc_obj:
-                name_to_include = npc_obj["name"]
-
-            if hasattr(npc_obj, "primary_directive"):
-                primary_directive_to_include = npc_obj.primary_directive
-            elif "primary_directive" in npc_obj:
-                primary_directive_to_include = npc_obj["primary_directive"]
-            prompt += f"""
-            ({i})
-
-            NPC: {name_to_include}
-            Primary Directive : {primary_directive_to_include}
+            Available NPCs for alternative answers:
 
             """
-    if npc.shared_context:
-        prompt += f"""
-        Relevant shared context for the npc:
-        {npc.shared_context}
-        """
-        # print("shared_context: " + str(npc.shared_context))
-    # print(prompt)
+            print(npc.resolved_npcs)
+            for i, npc_in_network in enumerate(npc.resolved_npcs):
+                name = list(npc_in_network.keys())[0]
+                npc_obj = npc_in_network[name]
+
+                if hasattr(npc_obj, "name"):
+                    name_to_include = npc_obj.name
+                elif "name " in npc_obj:
+                    name_to_include = npc_obj["name"]
+
+                if hasattr(npc_obj, "primary_directive"):
+                    primary_directive_to_include = npc_obj.primary_directive
+                elif "primary_directive" in npc_obj:
+                    primary_directive_to_include = npc_obj["primary_directive"]
+                prompt += f"""
+                ({i})
+
+                NPC: {name_to_include}
+                Primary Directive : {primary_directive_to_include}
+
+                """
+        if npc.shared_context:
+            prompt += f"""
+            Relevant shared context for the npc:
+            {npc.shared_context}
+            """
+            # print("shared_context: " + str(npc.shared_context))
+        # print(prompt)
 
     prompt += f"""
     In considering how to answer this, consider:
@@ -891,7 +888,7 @@ ReAct choices then will enter reasoning flow
     - Whether a tool should be used.
 
 
-    Excluding time-sensitive phenomena,
+    Excluding time-sensitive phenomena or ones that require external data inputs /information,
     most general questions can be answered without any
     extra tools or agent passes.
     Only use tools or pass to other NPCs
@@ -926,7 +923,8 @@ ReAct choices then will enter reasoning flow
     }}
 
     If you execute a sequence, ensure that you have a specified NPC for each tool use.
-
+        question answering is not a tool use.
+        "invoke_tool" should never be used in the list of tools when executing a sequence.
     Remember, do not include ANY ADDITIONAL MARKDOWN FORMATTING.
     There should be no leading ```json.
 
@@ -979,6 +977,7 @@ ReAct choices then will enter reasoning flow
     print(f"action chosen: {action}")
     print(f"explanation given: {explanation}")
 
+    print(response_content)
     if response_content_parsed.get("tool_name"):
         print(f"tool name: {response_content_parsed.get('tool_name')}")
 
@@ -1110,15 +1109,22 @@ ReAct choices then will enter reasoning flow
     elif action == "execute_sequence":
         tool_names = response_content_parsed.get("tool_name")
         npc_names = response_content_parsed.get("npc_name")
+
         # print(npc_names)
         npcs = []
-        # print(tool_names, npc_names)
+        print(tool_names, npc_names)
         if isinstance(npc_names, list):
+            if len(npc_names) == 0:
+                # if no npcs are specified, just have the npc take care of it itself instead of trying to force it to generate npc names for sequences all the time
+
+                npcs = [npc] * len(tool_names)
             for npc_name in npc_names:
                 for npc_obj in npc.resolved_npcs:
                     if npc_name in npc_obj:
                         npcs.append(npc_obj[npc_name])
                         break
+                if len(npcs) < len(tool_names):
+                    npcs.append(npc)
 
         output = ""
         results_tool_calls = []
@@ -1137,10 +1143,11 @@ ReAct choices then will enter reasoning flow
                     retrieved_docs=retrieved_docs,
                     stream=stream,
                 )
+                print(result)
                 results_tool_calls.append(result)
                 messages = result.get("messages", messages)
                 output += result.get("output", "")
-                print(output)
+                print(results_tool_calls)
         else:
             for npc_obj in npcs:
                 result = npc.handle_agent_pass(
@@ -1181,9 +1188,7 @@ def handle_tool_call(
     attempt=0,
     context=None,
 ) -> Union[str, Dict[str, Any]]:
-    """
-    Function Description:
-        This function handles a tool call.
+    """This function handles a tool call.
     Args:
         command (str): The command.
         tool_name (str): The tool name.
@@ -1312,22 +1317,22 @@ def handle_tool_call(
     # try:
     print("Executing tool with input values:", input_values)
 
-    try:
-        tool_output = tool.execute(
-            input_values,
-            npc.all_tools_dict,
-            jinja_env,
-            command,
-            model=model,
-            provider=provider,
-            npc=npc,
-            stream=stream,
-            messages=messages,
-        )
-        if not stream:
-            if "Error" in tool_output:
-                raise Exception(tool_output)
-    except Exception as e:
+    # try:
+    tool_output = tool.execute(
+        input_values,
+        npc.all_tools_dict,
+        jinja_env,
+        command,
+        model=model,
+        provider=provider,
+        npc=npc,
+        stream=stream,
+        messages=messages,
+    )
+    if not stream:
+        if "Error" in tool_output:
+            raise Exception(tool_output)
+        # except Exception as e:
         # diagnose_problem = get_llm_response(
         ##    f"""a problem has occurred.
         #                                    Please provide a diagnosis of the problem and a suggested #fix.
@@ -1352,24 +1357,32 @@ def handle_tool_call(
         # suggested_solution = diagnose_problem.get("response", {}).get(
         #    "suggested_solution"
         # )
-
-        tool_output = handle_tool_call(
-            command,
-            tool_name,
-            model=model,
-            provider=provider,
-            messages=messages,
-            npc=npc,
-            api_url=api_url,
-            api_key=api_key,
-            retrieved_docs=retrieved_docs,
-            n_docs=n_docs,
-            stream=stream,
-            attempt=attempt + 1,
-            n_attempts=n_attempts,
-            context=f""" \n \n \n "tool failed: {e}  \n \n \n here was the previous attempt: {input_values}""",
-        )
-
+        '''
+        print(f"An error occurred while executing the tool: {e}")
+        print(f"trying again, attempt {attempt+1}")
+        if attempt < n_attempts:
+            tool_output = handle_tool_call(
+                command,
+                tool_name,
+                model=model,
+                provider=provider,
+                messages=messages,
+                npc=npc,
+                api_url=api_url,
+                api_key=api_key,
+                retrieved_docs=retrieved_docs,
+                n_docs=n_docs,
+                stream=stream,
+                attempt=attempt + 1,
+                n_attempts=n_attempts,
+                context=f""" \n \n \n "tool failed: {e}  \n \n \n here was the previous attempt: {input_values}""",
+            )
+        else:
+            user_input = input(
+                "the tool execution has failed after three tries, can you add more context to help or would you like to run again?"
+            )
+            return
+        '''
     if stream:
         return tool_output
     # print(f"Tool output: {tool_output}")
@@ -1388,9 +1401,7 @@ def execute_data_operations(
     npc: Any = None,
     db_path: str = "~/npcsh_history.db",
 ):
-    """
-    Function Description:
-        This function executes data operations.
+    """This function executes data operations.
     Args:
         query (str): The query to execute.
 
@@ -1777,6 +1788,142 @@ def get_data_response(
     #    failures.append(str(e))
 
 
+def enter_chat_human_in_the_loop(
+    messages: List[Dict[str, str]],
+    reasoning_model: str = NPCSH_REASONING_MODEL,
+    reasoning_provider: str = NPCSH_REASONING_PROVIDER,
+    chat_model: str = NPCSH_CHAT_MODEL,
+    chat_provider: str = NPCSH_CHAT_PROVIDER,
+    npc: Any = None,
+    answer_only: bool = False,
+    context=None,
+) -> Generator[str, None, None]:
+    """
+    Stream responses while checking for think tokens and handling human input when needed.
+
+    Args:
+        messages: List of conversation messages
+        model: LLM model to use
+        provider: Model provider
+        npc: NPC instance if applicable
+
+    Yields:
+        Streamed response chunks
+    """
+    # Get the initial stream
+    if answer_only:
+        messages[-1]["content"] = (
+            messages[-1]["content"].replace(
+                "Think first though and use <think> tags", ""
+            )
+            + " Do not think just answer. "
+        )
+    else:
+        messages[-1]["content"] = (
+            messages[-1]["content"]
+            + "         Think first though and use <think> tags.  "
+        )
+
+    response_stream = get_stream(
+        messages,
+        model=reasoning_model,
+        provider=reasoning_provider,
+        npc=npc,
+        context=context,
+    )
+
+    thoughts = []
+    response_chunks = []
+    in_think_block = False
+
+    for chunk in response_stream:
+        # Check for user interrupt
+        if not input_queue.empty():
+            user_interrupt = input_queue.get()
+            yield "\n[Stream interrupted by user]\n"
+            yield "Enter your additional input: "
+
+            # Get the full interrupt message
+            full_interrupt = user_interrupt
+            while not input_queue.empty():
+                full_interrupt += "\n" + input_queue.get()
+
+            # Add the interruption to messages and restart stream
+            messages.append(
+                {"role": "user", "content": f"[INTERRUPT] {full_interrupt}"}
+            )
+
+            yield f"\n[Continuing with added context...]\n"
+            yield from enter_chat_human_in_the_loop(
+                messages,
+                reasoning_model=reasoning_model,
+                reasoning_provider=reasoning_provider,
+                chat_model=chat_model,
+                chat_provider=chat_provider,
+                npc=npc,
+                answer_only=True,
+            )
+            return
+
+        # Extract content based on provider
+        if reasoning_provider == "ollama":
+            chunk_content = chunk.get("message", {}).get("content", "")
+        elif reasoning_provider == "openai" or reasoning_provider == "deepseek":
+            chunk_content = "".join(
+                choice.delta.content
+                for choice in chunk.choices
+                if choice.delta.content is not None
+            )
+        elif reasoning_provider == "anthropic":
+            if chunk.type == "content_block_delta":
+                chunk_content = chunk.delta.text
+            else:
+                chunk_content = ""
+        else:
+            chunk_content = str(chunk)
+
+        response_chunks.append(chunk_content)
+        combined_text = "".join(response_chunks)
+
+        # Check for LLM request block
+        if (
+            "<request_for_input>" in combined_text
+            and "</request_for_input>" not in combined_text
+        ):
+            in_think_block = True
+
+        if in_think_block:
+            thoughts.append(chunk_content)
+            yield chunk
+
+        if "</request_for_input>" in combined_text:
+            # Process the LLM's input request
+            request_text = "".join(thoughts)
+            yield "\nPlease provide the requested information: "
+
+            # Wait for user input (blocking here is OK since we explicitly asked)
+            user_input = input()
+
+            # Add the interaction to messages and restart stream
+            messages.append({"role": "assistant", "content": request_text})
+            messages.append({"role": "user", "content": user_input})
+
+            yield "\n[Continuing with provided information...]\n"
+            yield from enter_chat_human_in_the_loop(
+                messages,
+                reasoning_model=reasoning_model,
+                reasoning_provider=reasoning_provider,
+                chat_model=chat_model,
+                chat_provider=chat_provider,
+                npc=npc,
+                answer_only=True,
+            )
+            return
+
+        if not in_think_block:
+            yield chunk
+
+
 def enter_reasoning_human_in_the_loop(
     messages: List[Dict[str, str]],
     reasoning_model: str = NPCSH_REASONING_MODEL,
@@ -1826,7 +1973,35 @@ def enter_reasoning_human_in_the_loop(
     in_think_block = False
 
     for chunk in response_stream:
-        # Extract content based on provider/model type
+        # Check for user interrupt
+        if not input_queue.empty():
+            user_interrupt = input_queue.get()
+            yield "\n[Stream interrupted by user]\n"
+            yield "Enter your additional input: "
+
+            # Get the full interrupt message
+            full_interrupt = user_interrupt
+            while not input_queue.empty():
+                full_interrupt += "\n" + input_queue.get()
+
+            # Add the interruption to messages and restart stream
+            messages.append(
+                {"role": "user", "content": f"[INTERRUPT] {full_interrupt}"}
+            )
+
+            yield f"\n[Continuing with added context...]\n"
+            yield from enter_reasoning_human_in_the_loop(
+                messages,
+                reasoning_model=reasoning_model,
+                reasoning_provider=reasoning_provider,
+                chat_model=chat_model,
+                chat_provider=chat_provider,
+                npc=npc,
+                answer_only=True,
+            )
+            return
+
+        # Extract content based on provider
         if reasoning_provider == "ollama":
             chunk_content = chunk.get("message", {}).get("content", "")
         elif reasoning_provider == "openai" or reasoning_provider == "deepseek":
@@ -1841,74 +2016,48 @@ def enter_reasoning_human_in_the_loop(
             else:
                 chunk_content = ""
         else:
-            # Default extraction
             chunk_content = str(chunk)
 
-        # Always yield the chunk whether in think block or not
         response_chunks.append(chunk_content)
-        # Track think block state and accumulate thoughts
-        if answer_only:
+        combined_text = "".join(response_chunks)
+
+        # Check for LLM request block
+        if (
+            "<request_for_input>" in combined_text
+            and "</request_for_input>" not in combined_text
+        ):
+            in_think_block = True
+
+        if in_think_block:
+            thoughts.append(chunk_content)
             yield chunk
-        else:
-            if "<th" in "".join(response_chunks) and "/th" not in "".join(
-                response_chunks
-            ):
-                in_think_block = True
 
-            if in_think_block:
-                thoughts.append(chunk_content)
-                yield chunk  # Show the thoughts as they come
+        if "</request_for_input>" in combined_text:
+            # Process the LLM's input request
+            request_text = "".join(thoughts)
+            yield "\nPlease provide the requested information: "
 
-            if "</th" in "".join(response_chunks):
-                thought_text = "".join(thoughts)
-                # Analyze thoughts before stopping
-                input_needed = analyze_thoughts_for_input(
-                    thought_text, model=chat_model, provider=chat_provider
-                )
+            # Wait for user input (blocking here is OK since we explicitly asked)
+            user_input = input()
 
-                if input_needed:
-                    # If input needed, get it and restart with new context
-                    user_input = request_user_input(input_needed)
+            # Add the interaction to messages and restart stream
+            messages.append({"role": "assistant", "content": request_text})
+            messages.append({"role": "user", "content": user_input})
 
-                    messages.append(
-                        {
-                            "role": "assistant",
-                            "content": f"""its clear that extra input is required.
-                                            could you please provide it? Here is the reason:
+            yield "\n[Continuing with provided information...]\n"
+            yield from enter_reasoning_human_in_the_loop(
+                messages,
+                reasoning_model=reasoning_model,
+                reasoning_provider=reasoning_provider,
+                chat_model=chat_model,
+                chat_provider=chat_provider,
+                npc=npc,
+                answer_only=True,
+            )
+            return
 
-                                            {input_needed['reason']},
-
-                                            and the prompt: {input_needed['prompt']}""",
-                        }
-                    )
-
-                    messages.append({"role": "user", "content": user_input})
-                    yield from enter_reasoning_human_in_the_loop(
-                        messages,
-                        reasoning_model=reasoning_model,
-                        reasoning_provider=reasoning_provider,
-                        chat_model=chat_model,
-                        chat_provider=chat_provider,
-                        npc=npc,
-                        answer_only=True,
-                    )
-                else:
-                    # If no input needed, just get the answer
-                    messages.append({"role": "assistant", "content": thought_text})
-                    messages.append(
-                        {"role": "user", "content": messages[-2]["content"]}
-                    )
-                    yield from enter_reasoning_human_in_the_loop(  # Restart with new context
-                        messages,
-                        reasoning_model=reasoning_model,
-                        reasoning_provider=reasoning_provider,
-                        chat_model=chat_model,
-                        chat_provider=chat_provider,
-                        npc=npc,
-                        answer_only=True,
-                    )
-
-                return  # Stop the original stream in either case
+        if not in_think_block:
+            yield chunk
 
 
 def handle_request_input(
@@ -2025,3 +2174,89 @@ def request_user_input(input_request: Dict[str, str]) -> str:
     """
     print(f"\nAdditional input needed: {input_request['reason']}")
     return input(f"{input_request['prompt']}: ")
+
+
+def check_user_input() -> Optional[str]:
+    """
+    Non-blocking check for user input.
+    Returns None if no input is available, otherwise returns the input string.
+    """
+    if select.select([sys.stdin], [], [], 0.0)[0]:
+        return input()
+    return None
+
+
+def input_listener(input_queue: Queue):
+    """
+    Continuously listen for user input in a separate thread.
+    """
+    while True:
+        try:
+            user_input = input()
+            input_queue.put(user_input)
+        except EOFError:
+            break
+
+
+def stream_with_interrupts(
+    messages: List[Dict[str, str]],
+    model: str,
+    provider: str,
+    npc: Any = None,
+    context=None,
+) -> Generator[str, None, None]:
+    """Stream responses with basic Ctrl+C handling and recursive conversation loop."""
+    response_stream = get_stream(
+        messages, model=model, provider=provider, npc=npc, context=context
+    )
+
+    try:
+        # Flag to track if streaming is complete
+        streaming_complete = False
+
+        for chunk in response_stream:
+            if provider == "ollama":
+                chunk_content = chunk.get("message", {}).get("content", "")
+            elif provider in ["openai", "deepseek"]:
+                chunk_content = "".join(
+                    choice.delta.content
+                    for choice in chunk.choices
+                    if choice.delta.content is not None
+                )
+            elif provider == "anthropic":
+                chunk_content = (
+                    chunk.delta.text if chunk.type == "content_block_delta" else ""
+                )
+            else:
+                chunk_content = str(chunk)
+
+            yield chunk_content
+
+            # Optional: Mark streaming as complete when no more chunks
+            if not chunk_content:
+                streaming_complete = True
+
+    except KeyboardInterrupt:
+        # Handle keyboard interrupt by getting user input
+        user_input = input("\n> ")
+        messages.append({"role": "user", "content": user_input})
+        yield from stream_with_interrupts(
+            messages, model=model, provider=provider, npc=npc, context=context
+        )
+
+    finally:
+        # Prompt for next input and continue conversation
+        while True:
+            user_input = input("\n> ")
+
+            # Option to exit the loop
+            if user_input.lower() in ["exit", "quit", "q"]:
+                break
+
+            # Add user input to messages
+            messages.append({"role": "user", "content": user_input})
+
+            # Recursively continue the conversation
+            yield from stream_with_interrupts(
+                messages, model=model, provider=provider, npc=npc, context=context
+            )

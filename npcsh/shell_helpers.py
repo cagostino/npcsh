@@ -40,8 +40,15 @@ except:
         "Could not load the sentence-transformers package. If you want to use it or other local AI features, please run `pip install npcsh[local]` ."
     )
 
-from .load_data import load_pdf, load_csv, load_json, load_excel, load_txt, load_image
-from .npc_sysenv import (
+from npcsh.load_data import (
+    load_pdf,
+    load_csv,
+    load_json,
+    load_excel,
+    load_txt,
+    load_image,
+)
+from npcsh.npc_sysenv import (
     get_model_and_provider,
     get_available_models,
     get_system_message,
@@ -54,15 +61,15 @@ from .npc_sysenv import (
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
 )
-from .command_history import (
+from npcsh.command_history import (
     CommandHistory,
     save_attachment_to_message,
     save_conversation_message,
     start_new_conversation,
 )
-from .embeddings import search_similar_texts, chroma_client
+from npcsh.embeddings import search_similar_texts, chroma_client
 
-from .llm_funcs import (
+from npcsh.llm_funcs import (
     execute_llm_command,
     execute_llm_question,
     get_stream,
@@ -73,10 +80,10 @@ from .llm_funcs import (
     get_embeddings,
     get_stream,
 )
-from .plonk import plonk, action_space
-from .helpers import get_db_npcs, get_npc_path
+from npcsh.plonk import plonk, action_space
+from npcsh.helpers import get_db_npcs, get_npc_path
 
-from .npc_compiler import (
+from npcsh.npc_compiler import (
     NPCCompiler,
     NPC,
     load_npc_from_file,
@@ -86,10 +93,10 @@ from .npc_compiler import (
 )
 
 
-from .search import rag_search, search_web
-from .image import capture_screenshot, analyze_image
+from npcsh.search import rag_search, search_web
+from npcsh.image import capture_screenshot, analyze_image
 
-from .audio import calibrate_silence, record_audio, speak_text
+from npcsh.audio import calibrate_silence, record_audio, speak_text
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.syntax import Syntax

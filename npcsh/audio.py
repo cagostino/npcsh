@@ -12,7 +12,7 @@ import tempfile
 import os
 import time
 from typing import Optional, List
-from .llm_funcs import get_llm_response
+from npcsh.llm_funcs import get_llm_response
 
 
 def get_audio_level(audio_data):

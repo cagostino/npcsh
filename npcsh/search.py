@@ -89,7 +89,11 @@ def search_web(
         return search_result
 
     if provider == "duckduckgo":
-        ddgs = DDGS()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
+        }
+        ddgs = DDGS(headers=headers)
+
         try:
             search_results = ddgs.text(query, max_results=num_results)
             print(search_results, type(search_results))

@@ -8,11 +8,18 @@ import io
 from PIL import Image
 from typing import Optional
 
-from .llm_funcs import get_llm_response
-from .audio import process_audio
-from .video import process_video
+from npcsh.llm_funcs import get_llm_response
+from npcsh.audio import process_audio
+from npcsh.video import process_video
 
-from .load_data import load_pdf, load_csv, load_json, load_excel, load_txt, load_image
+from npcsh.load_data import (
+    load_pdf,
+    load_csv,
+    load_json,
+    load_excel,
+    load_txt,
+    load_image,
+)
 
 
 def load_data_into_table(

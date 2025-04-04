@@ -1,5 +1,5 @@
 import argparse
-from .npc_sysenv import (
+from npcsh.npc_sysenv import (
     NPCSH_CHAT_MODEL,
     NPCSH_CHAT_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
@@ -14,15 +14,15 @@ from .npc_sysenv import (
     NPCSH_STREAM_OUTPUT,
     NPCSH_SEARCH_PROVIDER,
 )
-from .serve import start_flask_server
-from .npc_compiler import (
+from npcsh.serve import start_flask_server
+from npcsh.npc_compiler import (
     initialize_npc_project,
     conjure_team,
     NPCCompiler,
     NPC,
     load_npc_from_file,
 )
-from .llm_funcs import (
+from npcsh.llm_funcs import (
     check_llm_command,
     execute_llm_command,
     execute_llm_question,
@@ -33,9 +33,9 @@ from .llm_funcs import (
     get_stream,
     get_conversation,
 )
-from .plonk import plonk, action_space
-from .search import search_web
-from .shell_helpers import *
+from npcsh.plonk import plonk, action_space
+from npcsh.search import search_web
+from npcsh.shell_helpers import *
 import os
 
 # check if ./npc_team exists
@@ -503,7 +503,7 @@ def main():
     elif args.command == "new":
         # create a new npc, tool, or assembly line
         if args.type == "npc":
-            from .npc_creator import create_new_npc
+            from npcsh.npc_creator import create_new_npc
 
             create_new_npc(
                 name=args.name,
@@ -514,7 +514,6 @@ def main():
                 autogen=args.autogen,
             )
         elif args.type == "tool":
-            from .tool_creator import create_new_tool
 
             create_new_tool(
                 name=args.name,
@@ -522,7 +521,6 @@ def main():
                 autogen=args.autogen,
             )
         elif args.type == "assembly_line":
-            from .assembly_creator import create_new_assembly_line
 
             create_new_assembly_line(
                 name=args.name,
