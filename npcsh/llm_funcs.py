@@ -41,30 +41,12 @@ from npcsh.npc_sysenv import (
     available_chat_models,
 )
 
-from npcsh.stream import (
-    get_ollama_stream,
-    get_openai_stream,
-    get_anthropic_stream,
-    get_openai_like_stream,
-    get_deepseek_stream,
-    get_gemini_stream,
-)
+from npcsh.stream import get_litellm_stream
 from npcsh.conversation import (
-    get_ollama_conversation,
-    get_openai_conversation,
-    get_openai_like_conversation,
-    get_anthropic_conversation,
-    get_deepseek_conversation,
-    get_gemini_conversation,
+    get_litellm_conversation,
 )
-
 from npcsh.response import (
-    get_ollama_response,
-    get_openai_response,
-    get_anthropic_response,
-    get_openai_like_response,
-    get_deepseek_response,
-    get_gemini_response,
+    get_litellm_response,
 )
 from npcsh.image_gen import (
     generate_image_openai,
@@ -209,6 +191,7 @@ def get_llm_response(
     """
     if model is not None and provider is not None:
         pass
+
     elif provider is None and model is not None:
         provider = lookup_provider(model)
 
@@ -228,84 +211,16 @@ def get_llm_response(
             model = "llama3.2"
     # print(provider, model)
     # print(provider, model)
-    if provider == "ollama":
-        if model is None:
-            if images is not None:
-                model = "llama:7b"
-            else:
-                model = "llama3.2"
-        elif images is not None and model not in [
-            "x/llama3.2-vision",
-            "llama3.2-vision",
-            "llava-llama3",
-            "bakllava",
-            "moondream",
-            "llava-phi3",
-            "minicpm-v",
-            "hhao/openbmb-minicpm-llama3-v-2_5",
-            "aiden_lu/minicpm-v2.6",
-            "xuxx/minicpm2.6",
-            "benzie/llava-phi-3",
-            "mskimomadto/chat-gph-vision",
-            "xiayu/openbmb-minicpm-llama3-v-2_5",
-            "0ssamaak0/xtuner-llava",
-            "srizon/pixie",
-            "jyan1/paligemma-mix-224",
-            "qnguyen3/nanollava",
-            "knoopx/llava-phi-2",
-            "nsheth/llama-3-lumimaid-8b-v0.1-iq-imatrix",
-            "bigbug/minicpm-v2.5",
-        ]:
-            model = "llava:7b"
-        # print(model)
-        return get_ollama_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
-    elif provider == "gemini":
-        if model is None:
-            model = "gemini-2.0-flash"
-        return get_gemini_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
 
-    elif provider == "deepseek":
-        if model is None:
-            model = "deepseek-chat"
-        # print(prompt, model, provider)
-        return get_deepseek_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
-    elif provider == "openai":
-        if model is None:
-            model = "gpt-4o-mini"
-        # print(model)
-        return get_openai_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
-    elif provider == "openai-like":
-        if api_url is None:
-            raise ValueError("api_url is required for openai-like provider")
-        return get_openai_like_response(
-            prompt,
-            model,
-            api_url,
-            api_key,
-            npc=npc,
-            messages=messages,
-            images=images,
-            **kwargs,
-        )
-
-    elif provider == "anthropic":
-        if model is None:
-            model = "claude-3-haiku-20240307"
-        return get_anthropic_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
-    else:
-        # print(provider)
-        # print(model)
-        return "Error: Invalid provider specified."
+    response = get_lite_llm_response(
+        prompt,
+        model=model,
+        provider=provider,
+        npc=npc,
+        api_url=api_url,
+        api_key=api_key,
+    )
+    return response
 
 
 def get_stream(
@@ -346,32 +261,16 @@ def get_stream(
         provider = "ollama"
         model = "llama3.2"
     # print(model, provider)
-    if provider == "ollama":
-        return get_ollama_stream(messages, model, npc=npc, images=images, **kwargs)
-    elif provider == "openai":
-        return get_openai_stream(
-            messages, model, npc=npc, api_key=api_key, images=images, **kwargs
-        )
-    elif provider == "anthropic":
-        return get_anthropic_stream(
-            messages, model, npc=npc, api_key=api_key, images=images, **kwargs
-        )
-    elif provider == "openai-like":
-        return get_openai_like_stream(
-            messages,
-            model,
-            api_url,
-            npc=npc,
-            api_key=api_key,
-            images=images,
-            **kwargs,
-        )
-    elif provider == "deepseek":
-        return get_deepseek_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
-    elif provider == "gemini":
-        return get_gemini_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
-    else:
-        return "Error: Invalid provider specified."
+    return get_litellm_stream(
+        messages,
+        model=model,
+        provider=provider,
+        npc=npc,
+        api_url=api_url,
+        api_key=api_key,
+        images=images,
+        **kwargs,
+    )
 
 
 def get_conversation(
@@ -394,7 +293,6 @@ def get_conversation(
     Returns:
         List[Dict[str, str]]: The list of messages in the conversation.
     """
-
     if model is not None and provider is not None:
         pass  # Use explicitly provided model and provider
     elif model is not None and provider is None:
@@ -407,30 +305,15 @@ def get_conversation(
         provider = "ollama"
         model = "llava:7b" if images is not None else "llama3.2"
 
-    # print(provider, model)
-    if provider == "ollama":
-        return get_ollama_conversation(
-            messages, model, npc=npc, images=images, **kwargs
-        )
-    elif provider == "openai":
-        return get_openai_conversation(
-            messages, model, npc=npc, images=images, **kwargs
-        )
-    elif provider == "openai-like":
-        return get_openai_like_conversation(
-            messages, model, api_url, npc=npc, images=images, **kwargs
-        )
-    elif provider == "anthropic":
-        return get_anthropic_conversation(
-            messages, model, npc=npc, images=images, **kwargs
-        )
-    elif provider == "gemini":
-        return get_gemini_conversation(messages, model, npc=npc, **kwargs)
-    elif provider == "deepseek":
-        return get_deepseek_conversation(messages, model, npc=npc, **kwargs)
-
-    else:
-        return "Error: Invalid provider specified."
+    return get_litellm_conversation(
+        messages,
+        model=model,
+        provider=provider,
+        npc=npc,
+        api_url=api_url,
+        images=images,
+        **kwargs,
+    )
 
 
 def execute_llm_question(

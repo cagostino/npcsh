@@ -425,6 +425,7 @@ def stream():
     # if len(images) > 0:
     # go straight to get stream instead of executing , will continue this way to avoid npc
     # loading issues for now.
+    print(model, provider)
     stream_response = get_stream(
         messages,
         images=images,
@@ -453,100 +454,31 @@ def stream():
     def event_stream():
         for response_chunk in stream_response:
             chunk_content = ""
-
-            # Extract content based on model type
-            if model.startswith("gpt-4o"):
-                chunk_content = "".join(
-                    choice.delta.content
+            chunk_content = "".join(
+                choice.delta.content
+                for choice in response_chunk.choices
+                if choice.delta.content is not None
+            )
+            if chunk_content:
+                complete_response.append(chunk_content)
+            chunk_data = {
+                "id": response_chunk.id,
+                "object": response_chunk.object,
+                "created": response_chunk.created,
+                "model": response_chunk.model,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "delta": {
+                            "content": choice.delta.content,
+                            "role": choice.delta.role,
+                        },
+                        "finish_reason": choice.finish_reason,
+                    }
                     for choice in response_chunk.choices
-                    if choice.delta.content is not None
-                )
-                if chunk_content:
-                    complete_response.append(chunk_content)
-                chunk_data = {
-                    "id": response_chunk.id,
-                    "object": response_chunk.object,
-                    "created": response_chunk.created,
-                    "model": response_chunk.model,
-                    "choices": [
-                        {
-                            "index": choice.index,
-                            "delta": {
-                                "content": choice.delta.content,
-                                "role": choice.delta.role,
-                            },
-                            "finish_reason": choice.finish_reason,
-                        }
-                        for choice in response_chunk.choices
-                    ],
-                }
-                yield f"data: {json.dumps(chunk_data)}\n\n"
-
-            elif model.startswith("llama"):
-                chunk_content = response_chunk["message"]["content"]
-                if chunk_content:
-                    complete_response.append(chunk_content)
-                chunk_data = {
-                    "id": None,
-                    "object": None,
-                    "created": response_chunk["created_at"],
-                    "model": response_chunk["model"],
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {
-                                "content": chunk_content,
-                                "role": response_chunk["message"]["role"],
-                            },
-                            "finish_reason": response_chunk.get("done_reason"),
-                        }
-                    ],
-                }
-                yield f"data: {json.dumps(chunk_data)}\n\n"
-
-            elif model.startswith("claude"):
-                print(response_chunk)
-                if response_chunk.type == "message_start":
-                    chunk_data = {
-                        "id": None,
-                        "object": None,
-                        "created": None,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {
-                                    "content": "",
-                                    "role": "assistant",
-                                },
-                                "finish_reason": "",
-                            }
-                        ],
-                    }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-
-                if response_chunk.type == "content_block_delta":
-                    chunk_content = response_chunk.delta.text
-                    if chunk_content:
-                        complete_response.append(chunk_content)
-                    chunk_data = {
-                        "id": None,
-                        "object": None,
-                        "created": None,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {
-                                    "content": chunk_content,
-                                    "role": "assistant",
-                                },
-                                "finish_reason": response_chunk.delta.type,
-                            }
-                        ],
-                    }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-
+                ],
+            }
+            yield f"data: {json.dumps(chunk_data)}\n\n"
             save_conversation_message(
                 command_history,
                 conversation_id,
