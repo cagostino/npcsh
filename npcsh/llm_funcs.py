@@ -49,8 +49,7 @@ from npcsh.response import (
     get_litellm_response,
 )
 from npcsh.image_gen import (
-    generate_image_openai,
-    generate_image_hf_diffusion,
+    generate_image_litellm,
 )
 
 from npcsh.embeddings import (
@@ -103,23 +102,11 @@ def generate_image(
             os.path.expanduser("~/.npcsh/images/")
             + f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         )
-
-    # if provider == "ollama":
-    #    image = generate_image_ollama(prompt, model)
-    if provider == "openai":
-        image = generate_image_openai(
-            prompt,
-            model,
-            npc=npc,
-        )
-    # elif provider == "anthropic":
-    #    image = generate_image_anthropic(prompt, model, anthropic_api_key)
-    # elif provider == "openai-like":
-    #    image = generate_image_openai_like(prompt, model, npc.api_url, openai_api_key)
-    elif provider == "diffusers":
-        image = generate_image_hf_diffusion(prompt, model)
-    else:
-        image = None
+    generate_image_litellm(
+        prompt=prompt,
+        model=model,
+        provider=provider,
+    )
     # save image
     # check if image is a PIL image
     if isinstance(image, PIL.Image.Image):
