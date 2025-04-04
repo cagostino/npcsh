@@ -199,7 +199,7 @@ def get_llm_response(
     # print(provider, model)
     # print(provider, model)
 
-    response = get_lite_llm_response(
+    response = get_litellm_response(
         prompt,
         model=model,
         provider=provider,
