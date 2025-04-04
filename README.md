@@ -26,6 +26,10 @@ See the open source code for NPC Studio [here](https://github.com/). Download th
 Interested to stay in the loop and to hear the latest and greatest about `npcsh` ? Be sure to sign up for the [npcsh newsletter](https://forms.gle/n1NzQmwjsV4xv1B2A)!
 
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=cagostino/npcsh&type=Date)](https://star-history.com/#cagostino/npcsh&Date)
+
 ## TLDR Cheat Sheet for NPC shell and cli
 Users can take advantage of `npcsh` through its custom shell or through a command-line interface (CLI) tool. Below is a cheat sheet that shows how to use `npcsh` commands in both the shell and the CLI. For the npcsh commands to work, one must activate `npcsh` by typing it in a shell.
 
@@ -474,10 +478,6 @@ if __name__ == "__main__":
 ```
 
 
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=cagostino/npcsh&type=Date)](https://star-history.com/#cagostino/npcsh&Date)
 
 ## Installation
 `npcsh` is available on PyPI and can be installed using pip. Before installing, make sure you have the necessary dependencies installed on your system. Below are the instructions for installing such dependencies on Linux, Mac, and Windows. If you find any other dependencies that are needed, please let us know so we can update the installation instructions to be more accommodating.
