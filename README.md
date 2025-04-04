@@ -8,6 +8,8 @@
 
 - `npcsh` is a python-based AI Agent framework designed to integrate Large Language Models (LLMs) and Agents into one's daily workflow by making them available and easily configurable through a command line shell as well as an extensible python library.
 
+Read the docs at [npcsh.readthedocs.io](https://npcsh.readthedocs.io/en/latest/)
+
 - **Smart Interpreter**: `npcsh` leverages the power of LLMs to understand your natural language commands and questions, executing tasks, answering queries, and providing relevant information from local files and the web.
 
 - **Macros**: `npcsh` provides macros to accomplish common tasks with LLMs like voice control (`/whisper`), image generation (`/vixynt`), screenshot capture and analysis (`/ots`), one-shot questions (`/sample`), computer use (`/plonk`),  retrieval augmented generation (`/rag`), search (`/search`) and more. Users can also build their own tools and call them like macros from the shell.
