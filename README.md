@@ -8,7 +8,7 @@
 
 - `npcsh` is a python-based AI Agent framework designed to integrate Large Language Models (LLMs) and Agents into one's daily workflow by making them available and easily configurable through a command line shell as well as an extensible python library.
 
-- `npcsh` stores your executed commands, conversations, generated images, captturerd screenshots, and more in a central database
+- `npcsh` stores your executed commands, conversations, generated images, captured screenshots, and more in a central database
 
 - The NPC shell understands natural language commands and provides a suite of built-in tools (macros) for tasks like voice control, image generation, and web searching, while allowing users to create custom NPCs (AI agents) with specific personalities and capabilities for complex workflows.
 
