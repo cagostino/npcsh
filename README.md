@@ -19,7 +19,7 @@
 Read the docs at [npcsh.readthedocs.io](https://npcsh.readthedocs.io/en/latest/)
 
 `npcsh` can be used in a graphical user interface through the NPC Studio.
-See the open source code for NPC Studio [here](https://github.com/). Download the executables at [our website](https://www.npcworldwi.de/npc-studio).
+See the open source code for NPC Studio [here](https://github.com/). Download the executables (soon) at [our website](https://www.npcworldwi.de/npc-studio).
 
 
 
