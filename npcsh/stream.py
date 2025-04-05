@@ -74,15 +74,15 @@ def get_litellm_stream(
             messages.append(last_user_message)
 
     # Prepare API call parameters
-    print("provider", provider)
-    print("model", model)
+    # print("provider", provider)
+    # print("model", model)
 
     api_params = {
         "model": f"{provider}/{model}",
         "messages": messages,
         "stream": True,
     }
-    print(api_params["model"])
+    # print(api_params["model"])
 
     if api_key is not None:
         print(api_key)
