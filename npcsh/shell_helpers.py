@@ -1795,8 +1795,8 @@ def execute_slash_command(
     log_action("Command Executed", command)
 
     command_parts = command.split()
-    command_name = command_parts[0]
-    args = command_parts[1:]
+    command_name = command_parts[0] if len(command_parts) >= 1 else None
+    args = command_parts[1:] if len(command_parts) >= 1 else []
 
     current_npc = npc
     if command_name in valid_npcs:
