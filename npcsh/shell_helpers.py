@@ -573,11 +573,11 @@ def setup_readline() -> str:
 
     readline.set_history_length(1000)
     readline.parse_and_bind("set enable-bracketed-paste on")  # Enable paste mode
-    readline.parse_and_bind('"\e[A": history-search-backward')
-    readline.parse_and_bind('"\e[B": history-search-forward')
-    readline.parse_and_bind('"\C-r": reverse-search-history')
-    readline.parse_and_bind("\C-e: end-of-line")
-    readline.parse_and_bind("\C-a: beginning-of-line")
+    readline.parse_and_bind(r'"\e[A": history-search-backward')
+    readline.parse_and_bind(r'"\e[B": history-search-forward')
+    readline.parse_and_bind(r'"\C-r": reverse-search-history')
+    readline.parse_and_bind(r'\C-e: end-of-line')
+    readline.parse_and_bind(r'\C-a: beginning-of-line')
 
     return history_file
 
