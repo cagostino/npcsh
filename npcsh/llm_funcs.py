@@ -843,7 +843,7 @@ ReAct choices then will enter reasoning flow
         response_content_parsed = response_content
 
     action = response_content_parsed.get("action")
-    explanation = response_content["explanation"]
+    explanation = response_content_parsed.get("explanation")
     print(f"action chosen: {action}")
     print(f"explanation given: {explanation}")
 

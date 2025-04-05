@@ -26,7 +26,7 @@ from litellm import completion
 
 import litellm
 
-litellm._turn_on_debug()
+# litellm._turn_on_debug()
 
 
 def get_litellm_stream(

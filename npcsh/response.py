@@ -30,31 +30,18 @@ def get_litellm_response(
     **kwargs,
 ) -> Dict[str, Any]:
     """
-    Function Description:
-        This function generates a response using the Lite LLM API.
-    Args:
-
-        prompt (str): The prompt for generating the response.
-        model (str): The model to use for generating the response.
-    Keyword Args:
-        images (List[Dict[str, str]]): The list of images.
-        npc (Any): The NPC object.
-        format (str): The format of the response.
-        messages (List[Dict[str, str]]): The list of messages.
-    Returns:
-        Dict
+    Improved version with consistent JSON parsing
     """
-
     system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+
     if messages is None or len(messages) == 0:
         messages = [
             {"role": "system", "content": system_message},
             {"role": "user", "content": [{"type": "text", "text": prompt}]},
         ]
+
     if images:
         for image in images:
-            # print(f"Image file exists: {os.path.exists(image['file_path'])}")
-
             with open(image["file_path"], "rb") as image_file:
                 image_data = base64.b64encode(compress_image(image_file.read())).decode(
                     "utf-8"
@@ -62,49 +49,56 @@ def get_litellm_response(
                 messages[-1]["content"].append(
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_data}",
-                        },
+                        "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
                     }
                 )
-    response_format = None if format == "json" else format
-    if response_format is None:
-        resp = completion(model=f"{provider}/{model}", messages=messages)
 
+    try:
+        # Make the API call
+        resp = completion(
+            model=f"{provider}/{model}",
+            messages=messages,
+            response_format={"type": "json_object"} if format == "json" else None,
+            **kwargs,
+        )
+
+        # Get the raw response content
         llm_response = resp.choices[0].message.content
-        items_to_return = {"response": llm_response}
 
-        items_to_return["messages"] = messages
-        # print(llm_response, model)
+        # Prepare return dict
+        items_to_return = {
+            "response": llm_response,
+            "messages": messages,
+            "raw_response": resp,  # Include the full response for debugging
+        }
+
+        # Handle JSON format requests
         if format == "json":
             try:
-                items_to_return["response"] = json.loads(llm_response)
-
+                if isinstance(llm_response, str):
+                    items_to_return["response"] = json.loads(llm_response)
+                else:
+                    items_to_return["response"] = (
+                        llm_response  # Assume it's already parsed
+                    )
+            except (json.JSONDecodeError, TypeError) as e:
+                print(f"JSON parsing error: {str(e)}")
+                print(f"Raw response: {llm_response}")
+                items_to_return["error"] = "Invalid JSON response"
                 return items_to_return
-            except json.JSONDecodeError:
-                print(f"Warning: Expected JSON response, but received: {llm_response}")
-                return {"error": "Invalid JSON response"}
-        else:
-            items_to_return["messages"].append(
-                {"role": "assistant", "content": llm_response}
-            )
-            return items_to_return
 
-    else:
-        if model in available_reasoning_models:
-            raise NotImplementedError("Reasoning models do not support JSON output.")
-        try:
-            resp = completion(
-                model=f"{provider}/{model}",
-                messages=messages,
-                response_format=response_format,
-            )
-            items_to_return = {"response": resp.choices[0].message.parsed.dict()}
-            items_to_return["messages"] = messages
+        # Add assistant response to message history
+        items_to_return["messages"].append(
+            {
+                "role": "assistant",
+                "content": (
+                    llm_response if isinstance(llm_response, str) else str(llm_response)
+                ),
+            }
+        )
 
-            items_to_return["messages"].append(
-                {"role": "assistant", "content": completion.choices[0].message.parsed}
-            )
-            return items_to_return
-        except Exception as e:
-            print("pydantic outputs not yet implemented with deepseek?")
+        return items_to_return
+
+    except Exception as e:
+        print(f"Error in get_litellm_response: {str(e)}")
+        return {"error": str(e), "messages": messages, "response": None}
