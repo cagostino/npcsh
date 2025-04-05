@@ -2080,13 +2080,15 @@ def execute_slash_command(
             files = None
 
         if len(command_parts) >= 2 and command_parts[1] == "reattach":
+            command_history = CommandHistory()
             last_conversation = command_history.get_last_conversation_by_path(
                 os.getcwd()
             )
             print(last_conversation)
             if last_conversation:
                 spool_context = [
-                    {"role": part[2], "content": part[3]} for part in last_conversation
+                    {"role": part["role"], "content": part["content"]}
+                    for part in last_conversation
                 ]
 
                 print(f"Reattached to previous conversation:\n\n")

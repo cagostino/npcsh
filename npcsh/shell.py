@@ -416,23 +416,9 @@ def main() -> None:
 
                     for chunk in output:
 
-                        if provider == "anthropic":
-                            chunk_content = (
-                                chunk.delta.text
-                                if chunk.type == "content_block_delta"
-                                else None
-                            )
-                        elif provider in ["openai", "deepseek", "openai-like"]:
-                            chunk_content = "".join(
-                                c.delta.content
-                                for c in chunk.choices
-                                if c.delta.content
-                            )
-                        elif provider == "ollama":
-                            chunk_content = chunk["message"]["content"]
-                        else:
-                            continue
-
+                        chunk_content = "".join(
+                            c.delta.content for c in chunk.choices if c.delta.content
+                        )
                         if not chunk_content:
                             continue
 
