@@ -206,6 +206,7 @@ def get_llm_response(
         npc=npc,
         api_url=api_url,
         api_key=api_key,
+        **kwargs,
     )
     return response
 
@@ -236,6 +237,7 @@ def get_stream(
     if model is not None and provider is not None:
         pass
     elif model is not None and provider is None:
+        print(provider)
         provider = lookup_provider(model)
     elif npc is not None:
         if npc.provider is not None:
@@ -248,6 +250,7 @@ def get_stream(
         provider = "ollama"
         model = "llama3.2"
     # print(model, provider)
+
     return get_litellm_stream(
         messages,
         model=model,
@@ -713,7 +716,6 @@ ReAct choices then will enter reasoning flow
         if len(npc.resolved_npcs) == 0:
             prompt += "No NPCs available for alternative answers."
         else:
-
             prompt += f"""
             Available NPCs for alternative answers:
 
@@ -847,7 +849,7 @@ ReAct choices then will enter reasoning flow
     print(f"action chosen: {action}")
     print(f"explanation given: {explanation}")
 
-    print(response_content)
+    # print(response_content)
     if response_content_parsed.get("tool_name"):
         print(f"tool name: {response_content_parsed.get('tool_name')}")
 
@@ -982,7 +984,7 @@ ReAct choices then will enter reasoning flow
 
         # print(npc_names)
         npcs = []
-        print(tool_names, npc_names)
+        # print(tool_names, npc_names)
         if isinstance(npc_names, list):
             if len(npc_names) == 0:
                 # if no npcs are specified, just have the npc take care of it itself instead of trying to force it to generate npc names for sequences all the time
@@ -1013,11 +1015,11 @@ ReAct choices then will enter reasoning flow
                     retrieved_docs=retrieved_docs,
                     stream=stream,
                 )
-                print(result)
+                # print(result)
                 results_tool_calls.append(result)
                 messages = result.get("messages", messages)
                 output += result.get("output", "")
-                print(results_tool_calls)
+                # print(results_tool_calls)
         else:
             for npc_obj in npcs:
                 result = npc.handle_agent_pass(
@@ -1031,7 +1033,7 @@ ReAct choices then will enter reasoning flow
 
                 messages = result.get("messages", messages)
                 results_tool_calls.append(result.get("response"))
-                print(messages[-1])
+                # print(messages[-1])
         # import pdb
 
         # pdb.set_trace()

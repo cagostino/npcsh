@@ -17,6 +17,36 @@ from npcsh.npc_sysenv import (
 )
 
 
+def generate_image_hf_diffusion(
+    prompt: str,
+    model: str = "runwayml/stable-diffusion-v1-5",
+    device: str = "cpu",
+):
+    """
+    Function Description:
+        This function generates an image using the Stable Diffusion API.
+    Args:
+        prompt (str): The prompt for generating the image.
+        model_id (str): The Hugging Face model ID to use for Stable Diffusion.
+        device (str): The device to run the model on ('cpu' or 'cuda').
+    Returns:
+        PIL.Image: The generated image.
+    """
+    # Load the Stable Diffusion pipeline
+    from diffusers import StableDiffusionPipeline
+
+    pipe = StableDiffusionPipeline.from_pretrained(model)
+    pipe = pipe.to(device)
+
+    # Generate the image
+    image = pipe(prompt)
+    image = image.images[0]
+    # ["sample"][0]
+    image.show()
+
+    return image
+
+
 def generate_image_litellm(
     prompt: str,
     model: str = NPCSH_IMAGE_GEN_MODEL,
@@ -41,7 +71,9 @@ def generate_image_litellm(
         model = "runwayml/stable-diffusion-v1-5"
     if size is None:
         size = "1024x1024"
-    response = image_generation(
-        prompt=prompt, model=f"{provider}/{model}", n=2, size="240x240"
-    )
-    return response
+    if provider == "diffusers":
+        return generate_image_hf_diffusion(prompt, model)
+    else:
+        return image_generation(
+            prompt=prompt, model=f"{provider}/{model}", n=2, size="240x240"
+        )

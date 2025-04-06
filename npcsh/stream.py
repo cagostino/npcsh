@@ -24,15 +24,14 @@ from npcsh.npc_sysenv import (
 
 from litellm import completion
 
-import litellm
-
+# import litellm
 # litellm._turn_on_debug()
 
 
 def get_litellm_stream(
     messages: List[Dict[str, str]],
     model: str,
-    provider: str,
+    provider: str = None,
     npc: Any = None,
     tools: list = None,
     images: List[Dict[str, str]] = None,
@@ -76,19 +75,23 @@ def get_litellm_stream(
     # Prepare API call parameters
     # print("provider", provider)
     # print("model", model)
+    if provider is not None:
+        model_str = f"{provider}/{model}"
+    else:
+        model_str = model
 
     api_params = {
-        "model": f"{provider}/{model}",
+        "model": model_str,
         "messages": messages,
         "stream": True,
     }
     # print(api_params["model"])
 
-    if api_key is not None:
+    if api_key is not None and provider == "openai-like":
         print(api_key)
         api_params["api_key"] = api_key
 
-    if api_url is not None:
+    if api_url is not None and provider == "openai-like":
         api_params["api_url"] = api_url
 
     # Add tools if provided
@@ -115,7 +118,7 @@ def get_litellm_stream(
                 "user",
             ]:
                 api_params[key] = value
-
+    print(api_params)
     stream = completion(**api_params)
 
     for chunk in stream:

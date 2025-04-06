@@ -422,10 +422,6 @@ def stream():
     )
     message_id = command_history.generate_message_id()
 
-    # if len(images) > 0:
-    # go straight to get stream instead of executing , will continue this way to avoid npc
-    # loading issues for now.
-    print(model, provider)
     stream_response = get_stream(
         messages,
         images=images,
@@ -434,19 +430,6 @@ def stream():
         npc=npc if isinstance(npc, NPC) else None,
     )
 
-    """else:
-
-        stream_response = execute_command_stream(
-            commandstr,
-            command_history,
-            db_path,
-            npc_compiler,
-            model=model,
-            provider=provider,
-            messages=messages,
-            images=images,  # Pass the processed images
-        )  # Get all conversation messages so far
-    """
     final_response = ""  # To accumulate the assistant's response
 
     complete_response = []  # List to store all chunks
