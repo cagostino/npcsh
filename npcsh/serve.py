@@ -285,7 +285,9 @@ def save_global_settings():
     except Exception as e:
         print(f"Error in save_global_settings: {str(e)}")
         return jsonify({"error": str(e)}), 500
+def get_available_models():
 
+    return
 
 @app.route("/api/settings/project", methods=["GET", "OPTIONS"])  # Add OPTIONS
 def get_project_settings():
