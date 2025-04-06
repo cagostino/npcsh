@@ -69,6 +69,105 @@ CORS(
 )
 
 
+def get_locally_available_models(project_directory):
+    # check if anthropic, gemini, openai keys exist in project folder env
+    # also try to get ollama
+    available_models_providers = []
+    # get the project env
+    env_path = os.path.join(project_directory, ".env")
+    env_vars = {}
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        env_vars[key.strip()] = value.strip().strip("\"'")
+    # check if the keys exist in the env
+    if "ANTHROPIC_API_KEY" in env_vars:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        models = client.models.list()
+        for model in models.data:
+
+            available_models_providers.append(
+                {
+                    "model": model.id,
+                    "provider": "anthropic",
+                }
+            )
+
+    if "OPENAI_API_KEY" in env_vars:
+        import openai
+
+        openai.api_key = env_vars["OPENAI_API_KEY"]
+        models = openai.models.list()
+
+        for model in models.data:
+            if (
+                (
+                    "gpt" in model.id
+                    or "o1" in model.id
+                    or "o3" in model.id
+                    or "chat" in model.id
+                )
+                and "audio" not in model.id
+                and "realtime" not in model.id
+            ):
+
+                available_models_providers.append(
+                    {
+                        "model": model.id,
+                        "provider": "openai",
+                    }
+                )
+    if "GEMINI_API_KEY" in env_vars:
+        import google.generativeai as gemini
+
+        gemini.configure(api_key=env_vars["GEMINI_API_KEY"])
+        models = gemini.list_models()
+        # available_models_providers.append(
+        #    {
+        #        "model": "gemini-2.5-pro",
+        #        "provider": "gemini",
+        #    }
+        # )
+        available_models_providers.append(
+            {
+                "model": "gemini-2.0-flash-lite",
+                "provider": "gemini",
+            }
+        )
+
+    if "DEEPSEEK_API_KEY" in env_vars:
+        available_models_providers.append(
+            {"model": "deepseek-chat", "provider": "deepseek"}
+        )
+        available_models_providers.append(
+            {"model": "deepseek-reasoner", "provider": "deepseek"}
+        )
+
+    try:
+        import ollama
+
+        models = ollama.list()
+        for model in models:
+            if "embed" not in model.model:
+                mod = model.model
+                available_models_providers.append(
+                    {
+                        "model": mod,
+                        "provider": "ollama",
+                    }
+                )
+
+    except Exception as e:
+        print(f"Error loading ollama models: {e}")
+    return available_models_providers
+
+
 def get_db_connection():
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -285,9 +384,7 @@ def save_global_settings():
     except Exception as e:
         print(f"Error in save_global_settings: {str(e)}")
         return jsonify({"error": str(e)}), 500
-def get_available_models():
 
-    return
 
 @app.route("/api/settings/project", methods=["GET", "OPTIONS"])  # Add OPTIONS
 def get_project_settings():
@@ -342,6 +439,67 @@ def save_project_settings():
     except Exception as e:
         print(f"Error in save_project_settings: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/models", methods=["GET"])
+def get_models():
+    """
+    Endpoint to retrieve available models based on the current project path.
+    Checks for local configurations (.env) and Ollama.
+    """
+    current_path = request.args.get("currentPath")
+    if not current_path:
+        # Fallback to a default path or user home if needed,
+        # but ideally the frontend should always provide it.
+        current_path = os.path.expanduser("~/.npcsh")  # Or handle error
+        print("Warning: No currentPath provided for /api/models, using default.")
+        # return jsonify({"error": "currentPath parameter is required"}), 400
+
+    try:
+        # Reuse the existing function to detect models
+        available_models = get_locally_available_models(current_path)
+
+        # Optionally, add more details or format the response if needed
+        # Example: Add a display name
+        formatted_models = []
+        for m in available_models:
+            # Basic formatting, customize as needed
+            text_only = (
+                "(text only)"
+                if m["provider"] == "ollama"
+                and m["model"] in ["llama3.2", "deepseek-v3", "phi4"]
+                else ""
+            )
+            # Handle specific known model names for display
+            display_model = m["model"]
+            if "claude-3-5-haiku-latest" in m["model"]:
+                display_model = "claude-3.5-haiku"
+            elif "claude-3-5-sonnet-latest" in m["model"]:
+                display_model = "claude-3.5-sonnet"
+            elif "gemini-1.5-flash" in m["model"]:
+                display_model = "gemini-1.5-flash"  # Handle multiple versions if needed
+            elif "gemini-2.0-flash-lite-preview-02-05" in m["model"]:
+                display_model = "gemini-2.0-flash-lite-preview"
+
+            display_name = f"{display_model} | {m['provider']} {text_only}".strip()
+
+            formatted_models.append(
+                {
+                    "value": m["model"],  # Use the actual model ID as the value
+                    "provider": m["provider"],
+                    "display_name": display_name,
+                }
+            )
+
+        return jsonify({"models": formatted_models, "error": None})
+
+    except Exception as e:
+        print(f"Error getting available models: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
+        # Return an empty list or a specific error structure
+        return jsonify({"models": [], "error": str(e)}), 500
 
 
 @app.route("/api/stream", methods=["POST"])
