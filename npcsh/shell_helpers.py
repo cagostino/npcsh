@@ -803,6 +803,10 @@ def execute_splat_command():
     return
 
 
+def execute_roll_command():
+    return generate_video_stable_diffusion
+
+
 def execute_rag_command(
     command: str,
     messages=None,
@@ -2009,6 +2013,10 @@ def execute_slash_command(
 
     elif command_name == "rag":
         output = execute_rag_command(command, messages=messages)
+        messages = output["messages"]
+        output = output["output"]
+    elif command_name == "roll":
+        output = execute_roll_command(command)
         messages = output["messages"]
         output = output["output"]
 
