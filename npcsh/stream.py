@@ -118,7 +118,7 @@ def get_litellm_stream(
                 "user",
             ]:
                 api_params[key] = value
-    print(api_params)
+    # print(api_params)
     stream = completion(**api_params)
 
     for chunk in stream:

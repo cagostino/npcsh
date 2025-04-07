@@ -624,6 +624,7 @@ def check_llm_command(
     n_docs=5,
     stream=False,
     context=None,
+    whisper=False,
 ):
     """This function checks an LLM command.
     Args:
@@ -816,6 +817,20 @@ ReAct choices then will enter reasoning flow
         {context}
 
         """
+    if whisper:
+        prompt += f"""
+        This check is part of a npcsh whisper mode conversation.
+        This mode is a mode wherein the user speaks and receives
+        audio that has been played through TTS.
+        Thus, consider it to be a more casual conversation
+        and engage in regular conversation
+        unless they specifically mention in their request.
+        And if something is confusing or seems like it needs additional context,
+        do not worry too mucuh about it because this
+        information is likely contained within the historical messages between
+        the user and the LLM and you can let the downstream
+        agent navigate asking followup questions ."""
+
     action_response = get_llm_response(
         prompt,
         model=model,
@@ -1936,6 +1951,7 @@ def handle_request_input(
     context: str,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    whisper: bool = False,
 ):
     """
     Analyze text and decide what to request from the user
@@ -1968,7 +1984,7 @@ def handle_request_input(
         result = json.loads(result)
 
     user_input = request_user_input(
-        {"reason": result["request_reason"], "prompt": result["request_prompt"]}
+        {"reason": result["request_reason"], "prompt": result["request_prompt"]},
     )
     return user_input
 

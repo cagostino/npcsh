@@ -15,9 +15,9 @@ from npcsh.npc_sysenv import (
 
 from litellm import completion
 
-import litellm
+# import litellm
 
-litellm._turn_on_debug()
+# litellm._turn_on_debug()
 
 try:
     import ollama
@@ -216,7 +216,7 @@ def get_litellm_response(
                 api_params[key] = value
 
     try:
-        print(api_params)
+        # print(api_params)
         # litellm completion appears to have some
         # ollama issues, so will default to our
         # custom implementation until we can revisit
