@@ -819,17 +819,24 @@ ReAct choices then will enter reasoning flow
         """
     if whisper:
         prompt += f"""
+        IMPORTANT!!!
+
         This check is part of a npcsh whisper mode conversation.
+
         This mode is a mode wherein the user speaks and receives
         audio that has been played through TTS.
         Thus, consider it to be a more casual conversation
         and engage in regular conversation
         unless they specifically mention in their request.
-        And if something is confusing or seems like it needs additional context,
+        And if something is confusing or seems like it needs
+        additional context,
         do not worry too mucuh about it because this
         information is likely contained within the historical messages between
         the user and the LLM and you can let the downstream
-        agent navigate asking followup questions ."""
+        agent navigate asking followup questions .
+
+
+        """
 
     action_response = get_llm_response(
         prompt,

@@ -2812,7 +2812,7 @@ def enter_whisper_mode(
     continuous=False,
     stream=True,
     tts_model="kokoro",
-    voice="af_heart",  # Default voice
+    voice="af_heart",  # Default voice,
 ) -> Dict[str, Any]:
     # Initialize state
     running = True
@@ -2902,12 +2902,13 @@ def enter_whisper_mode(
                         generate_and_play_speech(text_to_speak)
 
                         # Delay after speech to prevent echo
-                        time.sleep(0.5)
+                        time.sleep(0.5 * len(text_to_speak))
+                        print(len(text_to_speak))
 
                         # Clear the speaking flag to allow listening again
                         is_speaking.clear()
                 else:
-                    time.sleep(0.05)
+                    time.sleep(0.5)
             except Exception as e:
                 print(f"Error in speech thread: {e}")
                 is_speaking.clear()  # Make sure to clear the flag if there's an error
@@ -3083,7 +3084,7 @@ def enter_whisper_mode(
                         speech_prob = vad_model(tensor, RATE).item()
                         current_time = time.time()
 
-                        if speech_prob > 0.4:  # VAD threshold
+                        if speech_prob > 0.5:  # VAD threshold
                             last_speech_time = current_time
                             if not is_recording:
                                 is_recording = True
@@ -3094,7 +3095,7 @@ def enter_whisper_mode(
                         else:
                             if is_recording:
                                 if (
-                                    current_time - last_speech_time > 0.3
+                                    current_time - last_speech_time > 1
                                 ):  # silence duration
                                     is_recording = False
                                     print("Speech ended, transcribing...")
@@ -3146,20 +3147,22 @@ def enter_whisper_mode(
 
     # Now that functions are defined, play welcome messages
     speak_text("Entering whisper mode. Please wait.")
-    speak_text(f"Using model {model} with provider {provider}")
-
-    print("\nWhisper mode active. Speak, or type 'exit' to quit.")
-    speak_text("Whisper mode is now active. You can start speaking.")
 
     try:
+
         while running:
+
             # First check for typed input (non-blocking)
             import select
             import sys
 
             # Don't spam the console with prompts when speaking
             if not is_speaking.is_set():
-                print("\nType your message (or 'exit' to quit): ", end="", flush=True)
+                print(
+                    "\Speak or type your message (or 'exit' to quit): ",
+                    end="",
+                    flush=True,
+                )
 
             rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
             if rlist:
