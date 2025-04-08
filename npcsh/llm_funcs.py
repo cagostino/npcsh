@@ -53,6 +53,9 @@ from npcsh.response import (
 from npcsh.image_gen import (
     generate_image_litellm,
 )
+from npcsh.video_gen import (
+    generate_video_diffusers,
+)
 
 from npcsh.embeddings import (
     get_ollama_embeddings,
@@ -293,7 +296,6 @@ def generate_video(
         model,
         npc=npc,
         device=device,
-        model=model,
     )
     if provider == "diffusers":
         return {"output": "output path at " + output_path, "messages": messages}

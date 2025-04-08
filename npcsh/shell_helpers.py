@@ -76,13 +76,6 @@ except:
         "Could not load the sentence-transformers package. If you want to use it or other local AI features, please run `pip install npcsh[local]` ."
     )
 
-try:
-    from npcsh.video_gen import generate_video_diffusers
-except:
-    print(
-        "Could not load the video generation package. If you want to use it or other local AI features, please run `pip install npcsh[local]` ."
-    )
-
 from npcsh.load_data import (
     load_pdf,
     load_csv,
@@ -103,6 +96,8 @@ from npcsh.npc_sysenv import (
     NPCSH_VISION_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
+    NPCSH_VIDEO_GEN_MODEL,
+    NPCSH_VIDEO_GEN_PROVIDER,
 )
 from npcsh.command_history import (
     CommandHistory,
@@ -2059,11 +2054,10 @@ def execute_slash_command(
 
         output = generate_video(
             command,
+            model=NPCSH_VIDEO_GEN_MODEL,
+            provider=NPCSH_VIDEO_GEN_PROVIDER,
             npc=npc,
             messages=messages,
-            model=model,
-            provider=provider,
-            stream=stream,
         )
         messages = output["messages"]
         output = output["output"]
