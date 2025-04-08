@@ -663,6 +663,7 @@ def check_llm_command(
     stream=False,
     context=None,
     whisper=False,
+    synthesisze=False,
 ):
     """This function checks an LLM command.
     Args:
@@ -1060,6 +1061,9 @@ ReAct choices then will enter reasoning flow
 
         output = ""
         results_tool_calls = []
+        if synthesize:
+            # carry out fact extraction
+            print("synthesize not yet implemented")
 
         if len(tool_names) > 0:
             for npc_obj, tool_name in zip(npcs, tool_names):
