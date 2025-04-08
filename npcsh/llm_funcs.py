@@ -35,6 +35,8 @@ from npcsh.npc_sysenv import (
     NPCSH_REASONING_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
+    NPCSH_VIDEO_GEN_MODEL,
+    NPCSH_VIDEO_GEN_PROVIDER,
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     available_reasoning_models,
@@ -261,6 +263,40 @@ def get_stream(
         images=images,
         **kwargs,
     )
+
+
+def generate_video(
+    prompt,
+    model: str = NPCSH_VIDEO_GEN_MODEL,
+    provider: str = NPCSH_VIDEO_GEN_PROVIDER,
+    npc: Any = None,
+    device: str = "cpu",
+    output_path="",
+    num_inference_steps=10,
+    num_frames=10,
+    height=256,
+    width=256,
+    messages: list = None,
+):
+    """
+    Function Description:
+        This function generates a video using the Stable Diffusion API.
+    Args:
+        prompt (str): The prompt for generating the video.
+        model_id (str): The Hugging Face model ID to use for Stable Diffusion.
+        device (str): The device to run the model on ('cpu' or 'cuda').
+    Returns:
+        PIL.Image: The generated image.
+    """
+    output_path = generate_video_diffusers(
+        prompt,
+        model,
+        npc=npc,
+        device=device,
+        model=model,
+    )
+    if provider == "diffusers":
+        return {"output": "output path at " + output_path, "messages": messages}
 
 
 def get_conversation(

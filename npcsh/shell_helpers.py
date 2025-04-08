@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 
+import threading
+
 from typing import Dict, Any, List, Optional, Union
 import numpy as np
 import readline
@@ -25,12 +27,46 @@ import signal
 import platform
 import time
 
+import tempfile
+
+
+# Global variables
+running = True
+is_recording = False
+recording_data = []
+buffer_data = []
+last_speech_time = 0
+
 
 try:
     import whisper
-except:
+    from faster_whisper import WhisperModel
+    from gtts import gTTS
+    import torch
+    import pyaudio
+    import wave
+    import queue
+
+    from npcsh.audio import (
+        cleanup_temp_files,
+        FORMAT,
+        CHANNELS,
+        RATE,
+        device,
+        vad_model,
+        CHUNK,
+        whisper_model,
+        transcribe_recording,
+        convert_mp3_to_wav,
+    )
+
+
+except Exception as e:
     print(
-        "Could not load the whisper package. If you want to use tts/stt features, please run `pip install npcsh[audio]` and follow the instructions in the npcsh github readme to  ensure your OS can handle the audio dependencies."
+        "Exception: "
+        + str(e)
+        + "\n"
+        + "Could not load the whisper package. If you want to use tts/stt features, please run `pip install npcsh[audio]` and follow the instructions in the npcsh github readme to  ensure your OS can handle the audio dependencies."
     )
 try:
     from sentence_transformers import SentenceTransformer
@@ -38,6 +74,13 @@ except:
 
     print(
         "Could not load the sentence-transformers package. If you want to use it or other local AI features, please run `pip install npcsh[local]` ."
+    )
+
+try:
+    from npcsh.video_gen import generate_video_diffusers
+except:
+    print(
+        "Could not load the video generation package. If you want to use it or other local AI features, please run `pip install npcsh[local]` ."
     )
 
 from npcsh.load_data import (
@@ -77,6 +120,7 @@ from npcsh.llm_funcs import (
     get_llm_response,
     check_llm_command,
     generate_image,
+    generate_video,
     get_embeddings,
     get_stream,
 )
@@ -801,10 +845,6 @@ def execute_squish_command():
 
 def execute_splat_command():
     return
-
-
-def execute_roll_command():
-    return generate_video_stable_diffusion
 
 
 def execute_rag_command(
@@ -2016,7 +2056,15 @@ def execute_slash_command(
         messages = output["messages"]
         output = output["output"]
     elif command_name == "roll":
-        output = execute_roll_command(command)
+
+        output = generate_video(
+            command,
+            npc=npc,
+            messages=messages,
+            model=model,
+            provider=provider,
+            stream=stream,
+        )
         messages = output["messages"]
         output = output["output"]
 
@@ -2755,56 +2803,6 @@ def execute_command_stream(
             )
 
 
-from npcsh.video import generate_video_stable_diffusion
-
-
-import threading
-import time
-import queue
-from typing import List, Dict, Any, Optional
-import torch
-import numpy as np
-
-# Global variables
-running = True
-is_recording = False
-recording_data = []
-buffer_data = []
-last_speech_time = 0
-
-import threading
-import queue
-
-import os
-import numpy as np
-import tempfile
-import threading
-import time
-import queue
-import re
-import json
-import torch
-import pyaudio
-import wave
-from typing import Optional, List, Dict, Any
-from gtts import gTTS
-from faster_whisper import WhisperModel
-import pygame
-
-from npcsh.audio import (
-    cleanup_temp_files,
-    FORMAT,
-    CHANNELS,
-    RATE,
-    device,
-    vad_model,
-    CHUNK,
-    whisper_model,
-    transcribe_recording,
-    convert_mp3_to_wav,
-)
-
-
 def enter_whisper_mode(
     messages: list = None,
     npc: Any = None,
@@ -2902,7 +2900,7 @@ def enter_whisper_mode(
                         generate_and_play_speech(text_to_speak)
 
                         # Delay after speech to prevent echo
-                        time.sleep(0.5 * len(text_to_speak))
+                        time.sleep(0.05 * len(text_to_speak))
                         print(len(text_to_speak))
 
                         # Clear the speaking flag to allow listening again

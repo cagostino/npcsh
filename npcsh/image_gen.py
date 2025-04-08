@@ -17,7 +17,7 @@ from npcsh.npc_sysenv import (
 )
 
 
-def generate_image_hf_diffusion(
+def generate_image_diffusers(
     prompt: str,
     model: str = "runwayml/stable-diffusion-v1-5",
     device: str = "cpu",
@@ -72,7 +72,7 @@ def generate_image_litellm(
     if size is None:
         size = "1024x1024"
     if provider == "diffusers":
-        return generate_image_hf_diffusion(prompt, model)
+        return generate_image_diffusers(prompt, model)
     else:
         return image_generation(
             prompt=prompt, model=f"{provider}/{model}", n=2, size="240x240"
