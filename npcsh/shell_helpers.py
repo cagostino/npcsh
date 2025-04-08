@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 
+import threading
+
 from typing import Dict, Any, List, Optional, Union
 import numpy as np
 import readline
@@ -25,12 +27,46 @@ import signal
 import platform
 import time
 
+import tempfile
+
+
+# Global variables
+running = True
+is_recording = False
+recording_data = []
+buffer_data = []
+last_speech_time = 0
+
 
 try:
     import whisper
-except:
+    from faster_whisper import WhisperModel
+    from gtts import gTTS
+    import torch
+    import pyaudio
+    import wave
+    import queue
+
+    from npcsh.audio import (
+        cleanup_temp_files,
+        FORMAT,
+        CHANNELS,
+        RATE,
+        device,
+        vad_model,
+        CHUNK,
+        whisper_model,
+        transcribe_recording,
+        convert_mp3_to_wav,
+    )
+
+
+except Exception as e:
     print(
-        "Could not load the whisper package. If you want to use tts/stt features, please run `pip install npcsh[audio]` and follow the instructions in the npcsh github readme to  ensure your OS can handle the audio dependencies."
+        "Exception: "
+        + str(e)
+        + "\n"
+        + "Could not load the whisper package. If you want to use tts/stt features, please run `pip install npcsh[audio]` and follow the instructions in the npcsh github readme to  ensure your OS can handle the audio dependencies."
     )
 try:
     from sentence_transformers import SentenceTransformer
@@ -60,6 +96,8 @@ from npcsh.npc_sysenv import (
     NPCSH_VISION_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
+    NPCSH_VIDEO_GEN_MODEL,
+    NPCSH_VIDEO_GEN_PROVIDER,
 )
 from npcsh.command_history import (
     CommandHistory,
@@ -77,6 +115,7 @@ from npcsh.llm_funcs import (
     get_llm_response,
     check_llm_command,
     generate_image,
+    generate_video,
     get_embeddings,
     get_stream,
 )
@@ -96,7 +135,7 @@ from npcsh.npc_compiler import (
 from npcsh.search import rag_search, search_web
 from npcsh.image import capture_screenshot, analyze_image
 
-from npcsh.audio import calibrate_silence, record_audio, speak_text
+# from npcsh.audio import calibrate_silence, record_audio, speak_text
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.syntax import Syntax
@@ -1979,6 +2018,7 @@ def execute_slash_command(
             command_parts, model=model, provider=provider, npc=npc, api_url=api_url
         )
     elif command_name == "help":  # New help command
+        print(get_help())
         return {
             "messages": messages,
             "output": get_help(),
@@ -2008,6 +2048,17 @@ def execute_slash_command(
 
     elif command_name == "rag":
         output = execute_rag_command(command, messages=messages)
+        messages = output["messages"]
+        output = output["output"]
+    elif command_name == "roll":
+
+        output = generate_video(
+            command,
+            model=NPCSH_VIDEO_GEN_MODEL,
+            provider=NPCSH_VIDEO_GEN_PROVIDER,
+            npc=npc,
+            messages=messages,
+        )
         messages = output["messages"]
         output = output["output"]
 
@@ -2080,13 +2131,15 @@ def execute_slash_command(
             files = None
 
         if len(command_parts) >= 2 and command_parts[1] == "reattach":
+            command_history = CommandHistory()
             last_conversation = command_history.get_last_conversation_by_path(
                 os.getcwd()
             )
             print(last_conversation)
             if last_conversation:
                 spool_context = [
-                    {"role": part[2], "content": part[3]} for part in last_conversation
+                    {"role": part["role"], "content": part["content"]}
+                    for part in last_conversation
                 ]
 
                 print(f"Reattached to previous conversation:\n\n")
@@ -2749,98 +2802,428 @@ def enter_whisper_mode(
     npc: Any = None,
     spool=False,
     continuous=False,
-    stream=False,
-) -> str:
-    """
-    Function Description:
-        This function is used to enter the whisper mode.
-    Args:
-    Keyword Args:
-        npc : Any : The NPC object.
-    Returns:
-        str : The output of the whisper mode.
-    """
+    stream=True,
+    tts_model="kokoro",
+    voice="af_heart",  # Default voice,
+) -> Dict[str, Any]:
+    # Initialize state
+    running = True
+    is_recording = False
+    recording_data = []
+    buffer_data = []
+    last_speech_time = 0
 
-    try:
-        model = whisper.load_model("base")
-    except Exception as e:
-        return f"Error: Unable to load Whisper model due to {str(e)}"
+    print("Entering whisper mode. Initializing...")
 
-    whisper_output = []
-    if npc:
-        npc_info = f" (NPC: {npc.name})"
-    else:
-        npc_info = ""
+    # Update the system message to encourage concise responses
+    concise_instruction = "Please provide brief responses of 1-2 sentences unless the user specifically asks for more detailed information. Keep responses clear and concise."
+
+    model = select_model() if npc is None else npc.model or NPCSH_CHAT_MODEL
+    provider = (
+        NPCSH_CHAT_PROVIDER if npc is None else npc.provider or NPCSH_CHAT_PROVIDER
+    )
+    api_url = NPCSH_API_URL if npc is None else npc.api_url or NPCSH_API_URL
+
+    print(f"\nUsing model: {model} with provider: {provider}")
+
+    system_message = get_system_message(npc) if npc else "You are a helpful assistant."
+
+    # Add conciseness instruction to the system message
+    system_message = system_message + " " + concise_instruction
 
     if messages is None:
-        messages = []  # Initialize messages list if not provided
+        messages = [{"role": "system", "content": system_message}]
+    elif messages and messages[0]["role"] == "system":
+        # Update the existing system message
+        messages[0]["content"] = messages[0]["content"] + " " + concise_instruction
+    else:
+        messages.insert(0, {"role": "system", "content": system_message})
 
-    # Begin whisper mode functionality
-    whisper_output.append(
-        f"Entering whisper mode{npc_info}. Calibrating silence level..."
-    )
+    kokoro_pipeline = None
+    if tts_model == "kokoro":
+        try:
+            from kokoro import KPipeline
+            import soundfile as sf
+
+            kokoro_pipeline = KPipeline(lang_code="a")
+            print("Kokoro TTS model initialized")
+        except ImportError:
+            print("Kokoro not installed, falling back to gTTS")
+            tts_model = "gtts"
+
+    # Initialize PyAudio
+    pyaudio_instance = pyaudio.PyAudio()
+    audio_stream = None  # We'll open and close as needed
+    transcription_queue = queue.Queue()
+
+    # Create and properly use the is_speaking event
+    is_speaking = threading.Event()
+    is_speaking.clear()  # Not speaking initially
+
+    speech_queue = queue.Queue(maxsize=20)
+    speech_thread_active = threading.Event()
+    speech_thread_active.set()
+
+    def speech_playback_thread():
+        nonlocal running, audio_stream
+
+        while running and speech_thread_active.is_set():
+            try:
+                # Get next speech item from queue
+                if not speech_queue.empty():
+                    text_to_speak = speech_queue.get(timeout=0.1)
+
+                    # Only process if there's text to speak
+                    if text_to_speak.strip():
+                        # IMPORTANT: Set is_speaking flag BEFORE starting audio output
+                        is_speaking.set()
+
+                        # Safely close the audio input stream before speaking
+                        current_audio_stream = audio_stream
+                        audio_stream = (
+                            None  # Set to None to prevent capture thread from using it
+                        )
+
+                        if current_audio_stream and current_audio_stream.is_active():
+                            current_audio_stream.stop_stream()
+                            current_audio_stream.close()
+
+                        print(f"Speaking full response...")
+
+                        # Generate and play speech
+                        generate_and_play_speech(text_to_speak)
+
+                        # Delay after speech to prevent echo
+                        time.sleep(0.005 * len(text_to_speak))
+                        print(len(text_to_speak))
+
+                        # Clear the speaking flag to allow listening again
+                        is_speaking.clear()
+                else:
+                    time.sleep(0.5)
+            except Exception as e:
+                print(f"Error in speech thread: {e}")
+                is_speaking.clear()  # Make sure to clear the flag if there's an error
+                time.sleep(0.1)
+
+    def safely_close_audio_stream(stream):
+        """Safely close an audio stream with error handling"""
+        if stream:
+            try:
+                if stream.is_active():
+                    stream.stop_stream()
+                stream.close()
+            except Exception as e:
+                print(f"Error closing audio stream: {e}")
+
+    # Start speech thread
+    speech_thread = threading.Thread(target=speech_playback_thread)
+    speech_thread.daemon = True
+    speech_thread.start()
+
+    def generate_and_play_speech(text):
+        try:
+            # Create a temporary file for audio
+            unique_id = str(time.time()).replace(".", "")
+            temp_dir = tempfile.gettempdir()
+            wav_file = os.path.join(temp_dir, f"temp_{unique_id}.wav")
+
+            # Generate speech based on selected TTS model
+            if tts_model == "kokoro" and kokoro_pipeline:
+                # Use Kokoro for generation
+                generator = kokoro_pipeline(text, voice=voice)
+
+                # Get the audio from the generator
+                for _, _, audio in generator:
+                    # Save audio to WAV file
+                    import soundfile as sf
+
+                    sf.write(wav_file, audio, 24000)
+                    break  # Just use the first chunk for now
+            else:
+                # Fall back to gTTS
+                mp3_file = os.path.join(temp_dir, f"temp_{unique_id}.mp3")
+                tts = gTTS(text=text, lang="en", slow=False)
+                tts.save(mp3_file)
+                convert_mp3_to_wav(mp3_file, wav_file)
+
+            # Play the audio
+            wf = wave.open(wav_file, "rb")
+            p = pyaudio.PyAudio()
+
+            stream = p.open(
+                format=p.get_format_from_width(wf.getsampwidth()),
+                channels=wf.getnchannels(),
+                rate=wf.getframerate(),
+                output=True,
+            )
+
+            data = wf.readframes(4096)
+            while data and running:
+                stream.write(data)
+                data = wf.readframes(4096)
+
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
+
+            # Cleanup temp files
+            try:
+                if os.path.exists(wav_file):
+                    os.remove(wav_file)
+                if tts_model == "gtts" and "mp3_file" in locals():
+                    if os.path.exists(mp3_file):
+                        os.remove(mp3_file)
+            except Exception as e:
+                print(f"Error removing temp file: {e}")
+
+        except Exception as e:
+            print(f"Error in TTS process: {e}")
+
+    # Modified speak_text function that just queues text
+    def speak_text(text):
+        speech_queue.put(text)
+
+    def process_input(user_input):
+        nonlocal messages
+
+        # Add user message
+        messages.append({"role": "user", "content": user_input})
+
+        # Process with LLM and collect the ENTIRE response first
+        try:
+            full_response = ""
+
+            # Use get_stream for streaming response
+            check = check_llm_command(
+                user_input,
+                npc=npc,
+                messages=messages,
+                model=model,
+                provider=provider,
+                stream=True,
+                whisper=True,
+            )
+
+            # Collect the entire response first
+            for chunk in check:
+                if chunk:
+                    chunk_content = "".join(
+                        choice.delta.content
+                        for choice in chunk.choices
+                        if choice.delta.content is not None
+                    )
+
+                    full_response += chunk_content
+
+                    # Show progress in console
+                    print(chunk_content, end="", flush=True)
+
+            print("\n")  # End the progress display
+
+            # Process and speak the entire response at once
+            if full_response.strip():
+                processed_text = process_text_for_tts(full_response)
+                speak_text(processed_text)
+
+            # Add assistant's response to messages
+            messages.append({"role": "assistant", "content": full_response})
+
+        except Exception as e:
+            print(f"Error in LLM response: {e}")
+            speak_text("I'm sorry, there was an error processing your request.")
+
+    # Function to capture and process audio
+    def capture_audio():
+        nonlocal is_recording, recording_data, buffer_data, last_speech_time, running, is_speaking
+        nonlocal audio_stream, transcription_queue
+
+        # Don't try to record if we're speaking
+        if is_speaking.is_set():
+            return False
+
+        try:
+            # Only create a new audio stream if we don't have one
+            if audio_stream is None and not is_speaking.is_set():
+                audio_stream = pyaudio_instance.open(
+                    format=FORMAT,
+                    channels=CHANNELS,
+                    rate=RATE,
+                    input=True,
+                    frames_per_buffer=CHUNK,
+                )
+
+            # Initialize or reset the recording variables
+            is_recording = False
+            recording_data = []
+            buffer_data = []
+
+            print("\nListening for speech...")
+
+            while (
+                running
+                and audio_stream
+                and audio_stream.is_active()
+                and not is_speaking.is_set()
+            ):
+                try:
+                    data = audio_stream.read(CHUNK, exception_on_overflow=False)
+                    if data:
+                        audio_array = np.frombuffer(data, dtype=np.int16)
+                        audio_float = audio_array.astype(np.float32) / 32768.0
+
+                        tensor = torch.from_numpy(audio_float).to(device)
+                        speech_prob = vad_model(tensor, RATE).item()
+                        current_time = time.time()
+
+                        if speech_prob > 0.5:  # VAD threshold
+                            last_speech_time = current_time
+                            if not is_recording:
+                                is_recording = True
+                                print("\nSpeech detected, listening...")
+                                recording_data.extend(buffer_data)
+                                buffer_data = []
+                            recording_data.append(data)
+                        else:
+                            if is_recording:
+                                if (
+                                    current_time - last_speech_time > 1
+                                ):  # silence duration
+                                    is_recording = False
+                                    print("Speech ended, transcribing...")
+
+                                    # Stop stream before transcribing
+                                    safely_close_audio_stream(audio_stream)
+                                    audio_stream = None
+
+                                    # Transcribe in this thread to avoid race conditions
+                                    transcription = transcribe_recording(recording_data)
+                                    if transcription:
+                                        transcription_queue.put(transcription)
+                                    recording_data = []
+                                    return True  # Got speech
+                            else:
+                                buffer_data.append(data)
+                                if len(buffer_data) > int(
+                                    0.65 * RATE / CHUNK
+                                ):  # buffer duration
+                                    buffer_data.pop(0)
+
+                    # Check frequently if we need to stop capturing
+                    if is_speaking.is_set():
+                        safely_close_audio_stream(audio_stream)
+                        audio_stream = None
+                        return False
+
+                except Exception as e:
+                    print(f"Error processing audio frame: {e}")
+                    time.sleep(0.1)
+
+        except Exception as e:
+            print(f"Error in audio capture: {e}")
+
+        # Close stream if we exit without finding speech
+        safely_close_audio_stream(audio_stream)
+        audio_stream = None
+
+        return False
+
+    def process_text_for_tts(text):
+        # Remove special characters that might cause issues in TTS
+        text = re.sub(r"[*<>{}()\[\]&%#@^_=+~]", "", text)
+        text = text.strip()
+        # Add spaces after periods that are followed by words (for better pronunciation)
+        text = re.sub(r"(\w)\.(\w)\.", r"\1 \2 ", text)
+        text = re.sub(r"([.!?])(\w)", r"\1 \2", text)
+        return text
+
+    # Now that functions are defined, play welcome messages
+    speak_text("Entering whisper mode. Please wait.")
 
     try:
-        silence_threshold = calibrate_silence()
-    except Exception as e:
-        return f"Error: Unable to calibrate silence due to {str(e)}"
 
-    whisper_output.append(
-        "Ready. Speak after seeing 'Listening...'. Say 'exit' or type '/wq' to quit."
-    )
-    speak_text("Whisper mode activated. Ready for your input.")
+        while running:
 
-    while True:
-        audio_data = record_audio(silence_threshold=silence_threshold)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
-            wf = wave.open(temp_audio.name, "wb")
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(16000)
-            wf.writeframes(audio_data)
-            wf.close()
+            # First check for typed input (non-blocking)
+            import select
+            import sys
 
-            result = model.transcribe(temp_audio.name)
-            text = result["text"].strip()
-            print(f"You said: {text}")
-        os.unlink(temp_audio.name)
-
-        messages.append({"role": "user", "content": text})  # Add user message
-        if text.lower() in ["exit", "/wq"]:
-            whisper_output.append("Exiting whisper mode.")
-            speak_text("Exiting whisper mode. Goodbye!")
-            break
-        if not spool:
-            llm_response = check_llm_command(
-                text, npc=npc, messages=messages, stream=stream
-            )  # Use
-
-            messages = llm_response["messages"]
-            output = llm_response["output"]
-        else:
-            if stream:
-                messages = get_stream(
-                    messages,
-                    model=model,
-                    provider=provider,
-                    npc=npc,
+            # Don't spam the console with prompts when speaking
+            if not is_speaking.is_set():
+                print(
+                    "\Speak or type your message (or 'exit' to quit): ",
+                    end="",
+                    flush=True,
                 )
+
+            rlist, _, _ = select.select([sys.stdin], [], [], 0.1)
+            if rlist:
+                user_input = sys.stdin.readline().strip()
+                if user_input.lower() in ("exit", "quit", "goodbye"):
+                    print("\nExiting whisper mode.")
+                    break
+                if user_input:
+                    print(f"\nYou (typed): {user_input}")
+                    process_input(user_input)
+                    continue  # Skip audio capture this cycle
+
+            # Then try to capture some audio (if no typed input)
+            if not is_speaking.is_set():  # Only capture if not currently speaking
+                got_speech = capture_audio()
+
+                # If we got speech, process it
+                if got_speech:
+                    try:
+                        transcription = transcription_queue.get_nowait()
+                        print(f"\nYou (spoke): {transcription}")
+                        process_input(transcription)
+                    except queue.Empty:
+                        pass
             else:
-                messages = get_conversation(
-                    messages,
-                    model=model,
-                    provider=provider,
-                    npc=npc,
-                )
+                # If we're speaking, just wait a bit without spamming the console
+                time.sleep(0.1)
 
-            output = messages[-1]["content"]
-        print(output)
-        if not continuous:
-            inp = input("Press Enter to continue or type '/q' to quit: ")
-            if inp.lower() == "/q":
-                break
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
 
-    return messages
+    finally:
+        # Set running to False to signal threads to exit
+        running = False
+        speech_thread_active.clear()
+
+        # Clean up audio resources
+        safely_close_audio_stream(audio_stream)
+
+        if pyaudio_instance:
+            pyaudio_instance.terminate()
+
+        print("\nExiting whisper mode.")
+        speak_text("Exiting whisper mode. Goodbye!")
+        time.sleep(1)
+        cleanup_temp_files()
+
+    return {"messages": messages, "output": "Whisper mode session ended."}
+
+
+def get_context_string(messages):
+    context = []
+    for message in messages[-5:]:  # Get last 5 messages for context
+        role = message.get("role", "")
+        content = message.get("content", "")
+        context.append(f"{role.capitalize()}: {content}")
+    return "\n".join(context)
+
+
+def input_with_timeout(prompt, timeout=0.1):
+    """Non-blocking input function with a timeout."""
+    import select
+    import sys
+
+    print(prompt, end="", flush=True)
+    rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+    if rlist:
+        return sys.stdin.readline().strip()
+    return None
 
 
 def enter_notes_mode(npc: Any = None) -> None:

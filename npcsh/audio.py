@@ -1,210 +1,569 @@
-# Move optional imports into try/except
-try:
-    import whisper
-    from playsound import playsound
-    from gtts import gTTS
-    import pyaudio
-except Exception as e:
-    print(f"Error importing audio dependencies: {e}")
-
+import os
 import numpy as np
 import tempfile
-import os
+import threading
 import time
-from typing import Optional, List
-from npcsh.llm_funcs import get_llm_response
+import queue
+import re
+import json
 
+import subprocess
 
-def get_audio_level(audio_data):
-    return np.max(np.abs(np.frombuffer(audio_data, dtype=np.int16)))
+try:
+    import torch
+    import pyaudio
+    import wave
+    from typing import Optional, List, Dict, Any
+    from gtts import gTTS
+    from faster_whisper import WhisperModel
+    import pygame
 
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = 16000
+    CHUNK = 512
 
-def calibrate_silence(sample_rate=16000, duration=2):
-    """
-    Function Description:
-        This function calibrates the silence level for audio recording.
-    Args:
-        None
-    Keyword Args:
-        sample_rate: The sample rate for audio recording.
-        duration: The duration in seconds for calibration.
-    Returns:
-        The silence threshold level.
-    """
+    # State Management
+    is_speaking = False
+    should_stop_speaking = False
+    tts_sequence = 0
+    recording_data = []
+    buffer_data = []
+    is_recording = False
+    last_speech_time = 0
+    running = True
 
-    p = pyaudio.PyAudio()
-    stream = p.open(
-        format=pyaudio.paInt16,
-        channels=1,
-        rate=sample_rate,
-        input=True,
-        frames_per_buffer=1024,
+    # Queues
+    audio_queue = queue.Queue()
+    tts_queue = queue.PriorityQueue()
+    cleanup_files = []
+
+    # Initialize pygame mixer
+    pygame.mixer.quit()
+    pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+
+    # Device selection
+    device = "cpu"
+    print(f"Using device: {device}")
+
+    # Load VAD model
+    print("Loading Silero VAD model...")
+    vad_model, _ = torch.hub.load(
+        repo_or_dir="snakers4/silero-vad",
+        model="silero_vad",
+        force_reload=False,
+        onnx=False,
+        verbose=False,
     )
+    vad_model.to(device)
 
-    print("Calibrating silence level. Please remain quiet...")
-    levels = []
-    for _ in range(int(sample_rate * duration / 1024)):
-        data = stream.read(1024)
-        levels.append(get_audio_level(data))
+    # Load Whisper model
+    print("Loading Whisper model...")
+    whisper_model = WhisperModel("base", device=device, compute_type="int8")
 
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-
-    avg_level = np.mean(levels)
-    silence_threshold = avg_level * 1.5  # Set threshold slightly above average
-    print(f"Silence threshold set to: {silence_threshold}")
-    return silence_threshold
+    # Conversation History Management
+    history = []
+    max_history = 10
+    memory_file = "conversation_history.json"
 
 
-def is_silent(audio_data: bytes, threshold: float) -> bool:
-    """
-    Function Description:
-        This function checks if audio data is silent based on a threshold.
-    Args:
-        audio_data: The audio data to check.
-        threshold: The silence threshold level.
-    Keyword Args:
-        None
-    Returns:
-        A boolean indicating whether the audio is silent.
-    """
-
-    return get_audio_level(audio_data) < threshold
+except:
+    print("audio dependencies not installed")
 
 
-def record_audio(
-    sample_rate: int = 16000,
-    max_duration: int = 10,
-    silence_threshold: Optional[float] = None,
-) -> bytes:
-    """
-    Function Description:
-        This function records audio from the microphone.
-    Args:
-        None
-    Keyword Args:
-        sample_rate: The sample rate for audio recording.
-        max_duration: The maximum duration in seconds.
-        silence_threshold: The silence threshold level.
-    Returns:
-        The recorded audio data.
-    """
+def convert_mp3_to_wav(mp3_file, wav_file):
+    try:
+        # Ensure the output file doesn't exist before conversion
+        if os.path.exists(wav_file):
+            os.remove(wav_file)
 
-    if silence_threshold is None:
-        silence_threshold = calibrate_silence()
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                mp3_file,
+                "-acodec",
+                "pcm_s16le",
+                "-ac",
+                "1",
+                "-ar",
+                "44100",
+                wav_file,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Error converting MP3 to WAV: {e.stderr}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error during conversion: {e}")
+        raise
 
-    p = pyaudio.PyAudio()
-    stream = p.open(
-        format=pyaudio.paInt16,
-        channels=1,
-        rate=sample_rate,
-        input=True,
-        frames_per_buffer=1024,
-    )
 
-    print("Listening... (speak now)")
-    frames = []
-    silent_chunks = 0
-    has_speech = False
-    max_silent_chunks = int(sample_rate * 3.0 / 1024)  # 3.0 seconds of silence
-    max_chunks = int(sample_rate * max_duration / 1024)  # Maximum duration in chunks
+# Check if FFmpeg is available
+def check_ffmpeg():
+    try:
+        subprocess.run(
+            ["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        return True
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False
 
-    start_time = time.time()
-    for _ in range(max_chunks):
-        data = stream.read(1024)
-        frames.append(data)
 
-        if is_silent(data, silence_threshold):
-            silent_chunks += 1
-            if has_speech and silent_chunks > max_silent_chunks:
-                break
-        else:
-            silent_chunks = 0
-            has_speech = True
+has_ffmpeg = check_ffmpeg()
 
-        if len(frames) % 10 == 0:  # Print a dot every ~0.5 seconds
-            print(".", end="", flush=True)
+# Device selection
+device = "cpu"
+print(f"Using device: {device}")
 
-        if time.time() - start_time > max_duration:
-            print("\nMax duration reached.")
+# Load VAD model
+print("Loading Silero VAD model...")
+vad_model, _ = torch.hub.load(
+    repo_or_dir="snakers4/silero-vad",
+    model="silero_vad",
+    force_reload=False,
+    onnx=False,
+    verbose=False,
+)
+vad_model.to(device)
+
+# Load Whisper model
+print("Loading Whisper model...")
+whisper_model = WhisperModel("base", device=device, compute_type="int8")
+
+# Conversation History Management
+history = []
+max_history = 10
+memory_file = "conversation_history.json"
+
+
+# History Management Functions
+def load_history():
+    global history
+    try:
+        if os.path.exists(memory_file):
+            with open(memory_file, "r") as f:
+                history = json.load(f)
+    except Exception as e:
+        print(f"Error loading conversation history: {e}")
+        history = []
+
+
+def save_history():
+    try:
+        with open(memory_file, "w") as f:
+            json.dump(history, f)
+    except Exception as e:
+        print(f"Error saving conversation history: {e}")
+
+
+def add_exchange(user_input, assistant_response):
+    global history
+    exchange = {
+        "user": user_input,
+        "assistant": assistant_response,
+        "timestamp": time.time(),
+    }
+    history.append(exchange)
+    if len(history) > max_history:
+        history.pop(0)
+    save_history()
+
+
+def get_context_string():
+    context = []
+    for exchange in history:
+        context.append(f"User: {exchange['user']}")
+        context.append(f"Assistant: {exchange['assistant']}")
+    return "\n".join(context)
+
+
+# Audio Management Functions
+def cleanup_temp_files():
+    global cleanup_files
+    for file in list(cleanup_files):
+        try:
+            if os.path.exists(file):
+                os.remove(file)
+                cleanup_files.remove(file)
+        except Exception:
+            pass
+
+
+def interrupt_speech():
+    global should_stop_speaking
+    should_stop_speaking = True
+    pygame.mixer.music.stop()
+    pygame.mixer.music.unload()
+
+    while not tts_queue.empty():
+        try:
+            _, temp_filename = tts_queue.get_nowait()
+            try:
+                if os.path.exists(temp_filename):
+                    os.remove(temp_filename)
+            except:
+                if temp_filename not in cleanup_files:
+                    cleanup_files.append(temp_filename)
+        except queue.Empty:
             break
 
-    print("\nProcessing...")
+    global tts_sequence
+    tts_sequence = 0
+
+
+def audio_callback(in_data, frame_count, time_info, status):
+    audio_queue.put(in_data)
+    return (in_data, pyaudio.paContinue)
+
+
+def transcribe_recording(audio_data):
+    if not audio_data:
+        return None
+
+    audio_np = (
+        np.frombuffer(b"".join(audio_data), dtype=np.int16).astype(np.float32) / 32768.0
+    )
+    return run_transcription(audio_np)
+
+
+def run_transcription(audio_np):
+    try:
+        temp_file = os.path.join(
+            tempfile.gettempdir(), f"temp_recording_{int(time.time())}.wav"
+        )
+        with wave.open(temp_file, "wb") as wf:
+            wf.setnchannels(CHANNELS)
+            wf.setsampwidth(2)
+            wf.setframerate(RATE)
+            wf.writeframes((audio_np * 32768).astype(np.int16).tobytes())
+
+        segments, info = whisper_model.transcribe(temp_file, language="en", beam_size=5)
+        transcription = " ".join([segment.text for segment in segments])
+
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except Exception:
+            if temp_file not in cleanup_files:
+                cleanup_files.append(temp_file)
+
+        return transcription.strip()
+
+    except Exception as e:
+        print(f"Transcription error: {str(e)}")
+        return None
+
+
+# History Management Functions
+def load_history():
+    global history
+    try:
+        if os.path.exists(memory_file):
+            with open(memory_file, "r") as f:
+                history = json.load(f)
+    except Exception as e:
+        print(f"Error loading conversation history: {e}")
+        history = []
+
+
+def save_history():
+    try:
+        with open(memory_file, "w") as f:
+            json.dump(history, f)
+    except Exception as e:
+        print(f"Error saving conversation history: {e}")
+
+
+def add_exchange(user_input, assistant_response):
+    global history
+    exchange = {
+        "user": user_input,
+        "assistant": assistant_response,
+        "timestamp": time.time(),
+    }
+    history.append(exchange)
+    if len(history) > max_history:
+        history.pop(0)
+    save_history()
+
+
+def get_context_string():
+    context = []
+    for exchange in history:
+        context.append(f"User: {exchange['user']}")
+        context.append(f"Assistant: {exchange['assistant']}")
+    return "\n".join(context)
+
+
+# Audio Management Functions
+def cleanup_temp_files():
+    global cleanup_files
+    for file in list(cleanup_files):
+        try:
+            if os.path.exists(file):
+                os.remove(file)
+                cleanup_files.remove(file)
+        except Exception:
+            pass
+
+
+def interrupt_speech():
+    global should_stop_speaking, response_generator, is_speaking, tts_sequence
+    should_stop_speaking = True
+    pygame.mixer.music.stop()
+    pygame.mixer.music.unload()
+
+    while not tts_queue.empty():
+        try:
+            _, temp_filename = tts_queue.get_nowait()
+            try:
+                if os.path.exists(temp_filename):
+                    os.remove(temp_filename)
+            except:
+                if temp_filename not in cleanup_files:
+                    cleanup_files.append(temp_filename)
+        except queue.Empty:
+            break
+
+    tts_sequence = 0
+    is_speaking = False
+
+
+def audio_callback(in_data, frame_count, time_info, status):
+    audio_queue.put(in_data)
+    return (in_data, pyaudio.paContinue)
+
+
+# Text-to-Speech Functions
+def play_audio_from_queue():
+    global is_speaking, cleanup_files, should_stop_speaking
+    next_sequence = 0
+
+    while True:
+        if should_stop_speaking:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.unload()
+
+            while not tts_queue.empty():
+                try:
+                    _, temp_filename = tts_queue.get_nowait()
+                    try:
+                        if os.path.exists(temp_filename):
+                            os.remove(temp_filename)
+                    except:
+                        if temp_filename not in cleanup_files:
+                            cleanup_files.append(temp_filename)
+                except queue.Empty:
+                    break
+
+            next_sequence = 0
+            is_speaking = False
+            should_stop_speaking = False
+            time.sleep(0.1)
+            continue
+
+        try:
+            if not tts_queue.empty():
+                sequence, temp_filename = tts_queue.queue[0]
+
+                if sequence == next_sequence:
+                    sequence, temp_filename = tts_queue.get()
+                    is_speaking = True
+
+                    try:
+                        if len(cleanup_files) > 0 and not pygame.mixer.music.get_busy():
+                            cleanup_temp_files()
+
+                        if should_stop_speaking:
+                            continue
+
+                        pygame.mixer.music.load(temp_filename)
+                        pygame.mixer.music.play()
+
+                        while (
+                            pygame.mixer.music.get_busy() and not should_stop_speaking
+                        ):
+                            pygame.time.wait(50)
+
+                        pygame.mixer.music.unload()
+
+                    except Exception as e:
+                        print(f"Audio playback error: {str(e)}")
+                    finally:
+                        try:
+                            if os.path.exists(temp_filename):
+                                os.remove(temp_filename)
+                        except:
+                            if temp_filename not in cleanup_files:
+                                cleanup_files.append(temp_filename)
+
+                        if not should_stop_speaking:
+                            next_sequence += 1
+                        is_speaking = False
+
+            time.sleep(0.05)
+        except Exception:
+            time.sleep(0.05)
+
+
+import pygame
+from gtts import gTTS
+import tempfile
+import os
+import logging
+
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger(__name__)
+
+import pyaudio
+import wave
+from gtts import gTTS
+import tempfile
+import os
+import logging
+
+import tempfile
+import uuid
+
+
+def create_and_queue_audio(text, state):
+    """Create and queue audio with state awareness for TTS/recording coordination"""
+    # Set TTS speaking flag
+    state["tts_is_speaking"] = True
+
+    if not text.strip():
+        print("Empty text, skipping TTS")
+        state["tts_is_speaking"] = False
+        return
+
+    try:
+        unique_id = uuid.uuid4()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mp3_file = os.path.join(temp_dir, f"temp_{unique_id}.mp3")
+            wav_file = os.path.join(temp_dir, f"temp_{unique_id}.wav")
+
+            tts = gTTS(text=text, lang="en", slow=False)
+            tts.save(mp3_file)
+
+            convert_mp3_to_wav(mp3_file, wav_file)
+
+            # Play audio and wait for completion
+            play_audio(wav_file, state)
+    except Exception as e:
+        print(f"Error in TTS process: {e}")
+    finally:
+        # Ensure flag is reset even if there's an error
+        state["tts_is_speaking"] = False
+        state["tts_just_finished"] = True
+
+        for file in [mp3_file, wav_file]:
+            try:
+                if os.path.exists(file):
+                    os.remove(file)
+            except Exception as e:
+                print(f"Error removing temporary file {file}: {e}")
+
+
+def play_audio(filename, state):
+    """Play audio with state awareness for TTS/recording coordination"""
+    CHUNK = 4096  # Increased chunk size
+
+    wf = wave.open(filename, "rb")
+    p = pyaudio.PyAudio()
+
+    stream = p.open(
+        format=p.get_format_from_width(wf.getsampwidth()),
+        channels=wf.getnchannels(),
+        rate=wf.getframerate(),
+        output=True,
+    )
+
+    data = wf.readframes(CHUNK)
+
+    # This is blocking until audio is done playing
+    while data and state["running"]:  # Check if system still running
+        stream.write(data)
+        data = wf.readframes(CHUNK)
 
     stream.stop_stream()
     stream.close()
     p.terminate()
 
-    return b"".join(frames)
-
-
-def speak_text(text: str) -> None:
-    """
-    Function Description:
-        This function converts text to speech and plays the audio.
-    Args:
-        text: The text to convert to speech.
-    Keyword Args:
-        None
-    Returns:
-        None
-    """
-
     try:
-        tts = gTTS(text=text, lang="en")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-            tts.save(fp.name)
-            playsound(fp.name)
-        os.unlink(fp.name)
-    except Exception as e:
-        print(f"Text-to-speech error: {e}")
+        os.unlink(filename)
+    except:
+        pass
 
 
-def process_audio(file_path: str, table_name: str) -> List:
-    """
-    Function Description:
-        This function is used to process an audio file.
-    Args:
-        file_path : str : The file path.
-        table_name : str : The table name.
-    Keyword Args:
-        None
-    Returns:
-        List : The embeddings and texts.
-    """
+def select_model():
+    models = [
+        "gpt-4o-mini",
+        "claude-haiku-3-5-latest",
+    ]
 
-    embeddings = []
-    texts = []
-    try:
-        audio, sr = librosa.load(file_path)
-        # Transcribe audio using Whisper
-        model = whisper.load_model("base")  # Or a larger model if available
-        result = model.transcribe(file_path)
-        transcribed_text = result["text"].strip()
+    while True:
+        try:
+            choice = input(
+                "\nSelect a model number (or press Enter for default): "
+            ).strip()
+            if not choice:
+                return models[0]["name"]
 
-        # Split transcribed text into chunks (adjust chunk_size as needed)
-        chunk_size = 1000
-        for i in range(0, len(transcribed_text), chunk_size):
-            chunk = transcribed_text[i : i + chunk_size]
-            text_embedding_response = get_llm_response(
-                f"Generate an embedding for: {chunk}",
-                model="text-embedding-ada-002",
-                provider="openai",
-            )  # Use a text embedding model
-            if (
-                isinstance(text_embedding_response, dict)
-                and "error" in text_embedding_response
-            ):
-                print(
-                    f"Error generating text embedding: {text_embedding_response['error']}"
-                )
+            choice = int(choice)
+            if 1 <= choice <= len(models):
+                selected_model = models[choice - 1]["name"]
+                print(f"Selected model: {selected_model}")
+                return selected_model
             else:
-                embeddings.append(text_embedding_response)  # Store the embedding
-                texts.append(chunk)  # Store the corresponding text chunk
+                print(f"Please enter a number between 1 and {len(models)}")
+        except ValueError:
+            print("Please enter a valid number")
+        except Exception as e:
+            print(f"Error selecting model: {str(e)}")
+            if models:
+                return models[0]["name"]
+            return "gemma:2b"
 
-        return embeddings, texts
 
-    except Exception as e:
-        print(f"Error processing audio: {e}")
-        return [], []  # Return empty lists in case of error
+def process_response_chunk(text_chunk):
+    if not text_chunk.strip():
+        return
+    processed_text = process_text_for_tts(text_chunk)
+    create_and_queue_audio(processed_text)
+
+
+def process_text_for_tts(text):
+    text = re.sub(r"[*<>{}()\[\]&%#@^_=+~]", "", text)
+    text = text.strip()
+    text = re.sub(r"(\w)\.(\w)\.", r"\1 \2 ", text)
+    text = re.sub(r"([.!?])(\w)", r"\1 \2", text)
+    return text
+
+
+"""
+
+To use this code, you'll need to have the following dependencies installed:
+
+```bash
+pip install numpy torch torchaudio faster-whisper pygame pyaudio gtts ollama
+```
+
+And optionally FFmpeg for audio speed adjustment:
+```bash
+# On Ubuntu/Debian
+sudo apt-get install ffmpeg
+
+# On MacOS with Homebrew
+brew install ffmpeg
+
+# On Windows with Chocolatey
+choco install ffmpeg
+```
+
+
+"""

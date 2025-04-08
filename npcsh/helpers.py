@@ -106,6 +106,11 @@ def ensure_npcshrc_exists() -> str:
             )
 
             npcshrc.write("export NPCSH_IMAGE_GEN_PROVIDER='diffusers'\n")
+            npcshrc.write(
+                "export NPCSH_VIDEO_GEN_MODEL='runwayml/stable-diffusion-v1-5'\n"
+            )
+
+            npcshrc.write("export NPCSH_VIDEO_GEN_PROVIDER='diffusers'\n")
 
             npcshrc.write("export NPCSH_API_URL=''\n")
             npcshrc.write("export NPCSH_DB_PATH='~/npcsh_history.db'\n")

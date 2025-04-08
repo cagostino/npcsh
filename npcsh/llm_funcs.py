@@ -35,40 +35,26 @@ from npcsh.npc_sysenv import (
     NPCSH_REASONING_PROVIDER,
     NPCSH_IMAGE_GEN_MODEL,
     NPCSH_IMAGE_GEN_PROVIDER,
+    NPCSH_VIDEO_GEN_MODEL,
+    NPCSH_VIDEO_GEN_PROVIDER,
     NPCSH_VISION_MODEL,
     NPCSH_VISION_PROVIDER,
     available_reasoning_models,
     available_chat_models,
 )
 
-from npcsh.stream import (
-    get_ollama_stream,
-    get_openai_stream,
-    get_anthropic_stream,
-    get_openai_like_stream,
-    get_deepseek_stream,
-    get_gemini_stream,
-)
+from npcsh.stream import get_litellm_stream
 from npcsh.conversation import (
-    get_ollama_conversation,
-    get_openai_conversation,
-    get_openai_like_conversation,
-    get_anthropic_conversation,
-    get_deepseek_conversation,
-    get_gemini_conversation,
+    get_litellm_conversation,
 )
-
 from npcsh.response import (
-    get_ollama_response,
-    get_openai_response,
-    get_anthropic_response,
-    get_openai_like_response,
-    get_deepseek_response,
-    get_gemini_response,
+    get_litellm_response,
 )
 from npcsh.image_gen import (
-    generate_image_openai,
-    generate_image_hf_diffusion,
+    generate_image_litellm,
+)
+from npcsh.video_gen import (
+    generate_video_diffusers,
 )
 
 from npcsh.embeddings import (
@@ -121,23 +107,11 @@ def generate_image(
             os.path.expanduser("~/.npcsh/images/")
             + f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         )
-
-    # if provider == "ollama":
-    #    image = generate_image_ollama(prompt, model)
-    if provider == "openai":
-        image = generate_image_openai(
-            prompt,
-            model,
-            npc=npc,
-        )
-    # elif provider == "anthropic":
-    #    image = generate_image_anthropic(prompt, model, anthropic_api_key)
-    # elif provider == "openai-like":
-    #    image = generate_image_openai_like(prompt, model, npc.api_url, openai_api_key)
-    elif provider == "diffusers":
-        image = generate_image_hf_diffusion(prompt, model)
-    else:
-        image = None
+    generate_image_litellm(
+        prompt=prompt,
+        model=model,
+        provider=provider,
+    )
     # save image
     # check if image is a PIL image
     if isinstance(image, PIL.Image.Image):
@@ -209,6 +183,7 @@ def get_llm_response(
     """
     if model is not None and provider is not None:
         pass
+
     elif provider is None and model is not None:
         provider = lookup_provider(model)
 
@@ -228,84 +203,17 @@ def get_llm_response(
             model = "llama3.2"
     # print(provider, model)
     # print(provider, model)
-    if provider == "ollama":
-        if model is None:
-            if images is not None:
-                model = "llama:7b"
-            else:
-                model = "llama3.2"
-        elif images is not None and model not in [
-            "x/llama3.2-vision",
-            "llama3.2-vision",
-            "llava-llama3",
-            "bakllava",
-            "moondream",
-            "llava-phi3",
-            "minicpm-v",
-            "hhao/openbmb-minicpm-llama3-v-2_5",
-            "aiden_lu/minicpm-v2.6",
-            "xuxx/minicpm2.6",
-            "benzie/llava-phi-3",
-            "mskimomadto/chat-gph-vision",
-            "xiayu/openbmb-minicpm-llama3-v-2_5",
-            "0ssamaak0/xtuner-llava",
-            "srizon/pixie",
-            "jyan1/paligemma-mix-224",
-            "qnguyen3/nanollava",
-            "knoopx/llava-phi-2",
-            "nsheth/llama-3-lumimaid-8b-v0.1-iq-imatrix",
-            "bigbug/minicpm-v2.5",
-        ]:
-            model = "llava:7b"
-        # print(model)
-        return get_ollama_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
-    elif provider == "gemini":
-        if model is None:
-            model = "gemini-2.0-flash"
-        return get_gemini_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
 
-    elif provider == "deepseek":
-        if model is None:
-            model = "deepseek-chat"
-        # print(prompt, model, provider)
-        return get_deepseek_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
-    elif provider == "openai":
-        if model is None:
-            model = "gpt-4o-mini"
-        # print(model)
-        return get_openai_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
-    elif provider == "openai-like":
-        if api_url is None:
-            raise ValueError("api_url is required for openai-like provider")
-        return get_openai_like_response(
-            prompt,
-            model,
-            api_url,
-            api_key,
-            npc=npc,
-            messages=messages,
-            images=images,
-            **kwargs,
-        )
-
-    elif provider == "anthropic":
-        if model is None:
-            model = "claude-3-haiku-20240307"
-        return get_anthropic_response(
-            prompt, model, npc=npc, messages=messages, images=images, **kwargs
-        )
-    else:
-        # print(provider)
-        # print(model)
-        return "Error: Invalid provider specified."
+    response = get_litellm_response(
+        prompt,
+        model=model,
+        provider=provider,
+        npc=npc,
+        api_url=api_url,
+        api_key=api_key,
+        **kwargs,
+    )
+    return response
 
 
 def get_stream(
@@ -334,6 +242,7 @@ def get_stream(
     if model is not None and provider is not None:
         pass
     elif model is not None and provider is None:
+        print(provider)
         provider = lookup_provider(model)
     elif npc is not None:
         if npc.provider is not None:
@@ -346,32 +255,50 @@ def get_stream(
         provider = "ollama"
         model = "llama3.2"
     # print(model, provider)
-    if provider == "ollama":
-        return get_ollama_stream(messages, model, npc=npc, images=images, **kwargs)
-    elif provider == "openai":
-        return get_openai_stream(
-            messages, model, npc=npc, api_key=api_key, images=images, **kwargs
-        )
-    elif provider == "anthropic":
-        return get_anthropic_stream(
-            messages, model, npc=npc, api_key=api_key, images=images, **kwargs
-        )
-    elif provider == "openai-like":
-        return get_openai_like_stream(
-            messages,
-            model,
-            api_url,
-            npc=npc,
-            api_key=api_key,
-            images=images,
-            **kwargs,
-        )
-    elif provider == "deepseek":
-        return get_deepseek_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
-    elif provider == "gemini":
-        return get_gemini_stream(messages, model, npc=npc, api_key=api_key, **kwargs)
-    else:
-        return "Error: Invalid provider specified."
+
+    return get_litellm_stream(
+        messages,
+        model=model,
+        provider=provider,
+        npc=npc,
+        api_url=api_url,
+        api_key=api_key,
+        images=images,
+        **kwargs,
+    )
+
+
+def generate_video(
+    prompt,
+    model: str = NPCSH_VIDEO_GEN_MODEL,
+    provider: str = NPCSH_VIDEO_GEN_PROVIDER,
+    npc: Any = None,
+    device: str = "cpu",
+    output_path="",
+    num_inference_steps=10,
+    num_frames=10,
+    height=256,
+    width=256,
+    messages: list = None,
+):
+    """
+    Function Description:
+        This function generates a video using the Stable Diffusion API.
+    Args:
+        prompt (str): The prompt for generating the video.
+        model_id (str): The Hugging Face model ID to use for Stable Diffusion.
+        device (str): The device to run the model on ('cpu' or 'cuda').
+    Returns:
+        PIL.Image: The generated image.
+    """
+    output_path = generate_video_diffusers(
+        prompt,
+        model,
+        npc=npc,
+        device=device,
+    )
+    if provider == "diffusers":
+        return {"output": "output path at " + output_path, "messages": messages}
 
 
 def get_conversation(
@@ -394,7 +321,6 @@ def get_conversation(
     Returns:
         List[Dict[str, str]]: The list of messages in the conversation.
     """
-
     if model is not None and provider is not None:
         pass  # Use explicitly provided model and provider
     elif model is not None and provider is None:
@@ -407,30 +333,15 @@ def get_conversation(
         provider = "ollama"
         model = "llava:7b" if images is not None else "llama3.2"
 
-    # print(provider, model)
-    if provider == "ollama":
-        return get_ollama_conversation(
-            messages, model, npc=npc, images=images, **kwargs
-        )
-    elif provider == "openai":
-        return get_openai_conversation(
-            messages, model, npc=npc, images=images, **kwargs
-        )
-    elif provider == "openai-like":
-        return get_openai_like_conversation(
-            messages, model, api_url, npc=npc, images=images, **kwargs
-        )
-    elif provider == "anthropic":
-        return get_anthropic_conversation(
-            messages, model, npc=npc, images=images, **kwargs
-        )
-    elif provider == "gemini":
-        return get_gemini_conversation(messages, model, npc=npc, **kwargs)
-    elif provider == "deepseek":
-        return get_deepseek_conversation(messages, model, npc=npc, **kwargs)
-
-    else:
-        return "Error: Invalid provider specified."
+    return get_litellm_conversation(
+        messages,
+        model=model,
+        provider=provider,
+        npc=npc,
+        api_url=api_url,
+        images=images,
+        **kwargs,
+    )
 
 
 def execute_llm_question(
@@ -751,6 +662,7 @@ def check_llm_command(
     n_docs=5,
     stream=False,
     context=None,
+    whisper=False,
 ):
     """This function checks an LLM command.
     Args:
@@ -843,7 +755,6 @@ ReAct choices then will enter reasoning flow
         if len(npc.resolved_npcs) == 0:
             prompt += "No NPCs available for alternative answers."
         else:
-
             prompt += f"""
             Available NPCs for alternative answers:
 
@@ -944,6 +855,27 @@ ReAct choices then will enter reasoning flow
         {context}
 
         """
+    if whisper:
+        prompt += f"""
+        IMPORTANT!!!
+
+        This check is part of a npcsh whisper mode conversation.
+
+        This mode is a mode wherein the user speaks and receives
+        audio that has been played through TTS.
+        Thus, consider it to be a more casual conversation
+        and engage in regular conversation
+        unless they specifically mention in their request.
+        And if something is confusing or seems like it needs
+        additional context,
+        do not worry too mucuh about it because this
+        information is likely contained within the historical messages between
+        the user and the LLM and you can let the downstream
+        agent navigate asking followup questions .
+
+
+        """
+
     action_response = get_llm_response(
         prompt,
         model=model,
@@ -973,11 +905,11 @@ ReAct choices then will enter reasoning flow
         response_content_parsed = response_content
 
     action = response_content_parsed.get("action")
-    explanation = response_content["explanation"]
+    explanation = response_content_parsed.get("explanation")
     print(f"action chosen: {action}")
     print(f"explanation given: {explanation}")
 
-    print(response_content)
+    # print(response_content)
     if response_content_parsed.get("tool_name"):
         print(f"tool name: {response_content_parsed.get('tool_name')}")
 
@@ -1112,7 +1044,7 @@ ReAct choices then will enter reasoning flow
 
         # print(npc_names)
         npcs = []
-        print(tool_names, npc_names)
+        # print(tool_names, npc_names)
         if isinstance(npc_names, list):
             if len(npc_names) == 0:
                 # if no npcs are specified, just have the npc take care of it itself instead of trying to force it to generate npc names for sequences all the time
@@ -1143,11 +1075,11 @@ ReAct choices then will enter reasoning flow
                     retrieved_docs=retrieved_docs,
                     stream=stream,
                 )
-                print(result)
+                # print(result)
                 results_tool_calls.append(result)
                 messages = result.get("messages", messages)
                 output += result.get("output", "")
-                print(results_tool_calls)
+                # print(results_tool_calls)
         else:
             for npc_obj in npcs:
                 result = npc.handle_agent_pass(
@@ -1161,7 +1093,7 @@ ReAct choices then will enter reasoning flow
 
                 messages = result.get("messages", messages)
                 results_tool_calls.append(result.get("response"))
-                print(messages[-1])
+                # print(messages[-1])
         # import pdb
 
         # pdb.set_trace()
@@ -2064,6 +1996,7 @@ def handle_request_input(
     context: str,
     model: str = NPCSH_CHAT_MODEL,
     provider: str = NPCSH_CHAT_PROVIDER,
+    whisper: bool = False,
 ):
     """
     Analyze text and decide what to request from the user
@@ -2096,7 +2029,7 @@ def handle_request_input(
         result = json.loads(result)
 
     user_input = request_user_input(
-        {"reason": result["request_reason"], "prompt": result["request_prompt"]}
+        {"reason": result["request_reason"], "prompt": result["request_prompt"]},
     )
     return user_input
 

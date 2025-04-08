@@ -69,6 +69,105 @@ CORS(
 )
 
 
+def get_locally_available_models(project_directory):
+    # check if anthropic, gemini, openai keys exist in project folder env
+    # also try to get ollama
+    available_models_providers = []
+    # get the project env
+    env_path = os.path.join(project_directory, ".env")
+    env_vars = {}
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        env_vars[key.strip()] = value.strip().strip("\"'")
+    # check if the keys exist in the env
+    if "ANTHROPIC_API_KEY" in env_vars:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        models = client.models.list()
+        for model in models.data:
+
+            available_models_providers.append(
+                {
+                    "model": model.id,
+                    "provider": "anthropic",
+                }
+            )
+
+    if "OPENAI_API_KEY" in env_vars:
+        import openai
+
+        openai.api_key = env_vars["OPENAI_API_KEY"]
+        models = openai.models.list()
+
+        for model in models.data:
+            if (
+                (
+                    "gpt" in model.id
+                    or "o1" in model.id
+                    or "o3" in model.id
+                    or "chat" in model.id
+                )
+                and "audio" not in model.id
+                and "realtime" not in model.id
+            ):
+
+                available_models_providers.append(
+                    {
+                        "model": model.id,
+                        "provider": "openai",
+                    }
+                )
+    if "GEMINI_API_KEY" in env_vars:
+        import google.generativeai as gemini
+
+        gemini.configure(api_key=env_vars["GEMINI_API_KEY"])
+        models = gemini.list_models()
+        # available_models_providers.append(
+        #    {
+        #        "model": "gemini-2.5-pro",
+        #        "provider": "gemini",
+        #    }
+        # )
+        available_models_providers.append(
+            {
+                "model": "gemini-2.0-flash-lite",
+                "provider": "gemini",
+            }
+        )
+
+    if "DEEPSEEK_API_KEY" in env_vars:
+        available_models_providers.append(
+            {"model": "deepseek-chat", "provider": "deepseek"}
+        )
+        available_models_providers.append(
+            {"model": "deepseek-reasoner", "provider": "deepseek"}
+        )
+
+    try:
+        import ollama
+
+        models = ollama.list()
+        for model in models:
+            if "embed" not in model.model:
+                mod = model.model
+                available_models_providers.append(
+                    {
+                        "model": mod,
+                        "provider": "ollama",
+                    }
+                )
+
+    except Exception as e:
+        print(f"Error loading ollama models: {e}")
+    return available_models_providers
+
+
 def get_db_connection():
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -342,6 +441,67 @@ def save_project_settings():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/models", methods=["GET"])
+def get_models():
+    """
+    Endpoint to retrieve available models based on the current project path.
+    Checks for local configurations (.env) and Ollama.
+    """
+    current_path = request.args.get("currentPath")
+    if not current_path:
+        # Fallback to a default path or user home if needed,
+        # but ideally the frontend should always provide it.
+        current_path = os.path.expanduser("~/.npcsh")  # Or handle error
+        print("Warning: No currentPath provided for /api/models, using default.")
+        # return jsonify({"error": "currentPath parameter is required"}), 400
+
+    try:
+        # Reuse the existing function to detect models
+        available_models = get_locally_available_models(current_path)
+
+        # Optionally, add more details or format the response if needed
+        # Example: Add a display name
+        formatted_models = []
+        for m in available_models:
+            # Basic formatting, customize as needed
+            text_only = (
+                "(text only)"
+                if m["provider"] == "ollama"
+                and m["model"] in ["llama3.2", "deepseek-v3", "phi4"]
+                else ""
+            )
+            # Handle specific known model names for display
+            display_model = m["model"]
+            if "claude-3-5-haiku-latest" in m["model"]:
+                display_model = "claude-3.5-haiku"
+            elif "claude-3-5-sonnet-latest" in m["model"]:
+                display_model = "claude-3.5-sonnet"
+            elif "gemini-1.5-flash" in m["model"]:
+                display_model = "gemini-1.5-flash"  # Handle multiple versions if needed
+            elif "gemini-2.0-flash-lite-preview-02-05" in m["model"]:
+                display_model = "gemini-2.0-flash-lite-preview"
+
+            display_name = f"{display_model} | {m['provider']} {text_only}".strip()
+
+            formatted_models.append(
+                {
+                    "value": m["model"],  # Use the actual model ID as the value
+                    "provider": m["provider"],
+                    "display_name": display_name,
+                }
+            )
+
+        return jsonify({"models": formatted_models, "error": None})
+
+    except Exception as e:
+        print(f"Error getting available models: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
+        # Return an empty list or a specific error structure
+        return jsonify({"models": [], "error": str(e)}), 500
+
+
 @app.route("/api/stream", methods=["POST"])
 def stream():
     """SSE stream that takes messages, models, providers, and attachments from frontend."""
@@ -422,9 +582,6 @@ def stream():
     )
     message_id = command_history.generate_message_id()
 
-    # if len(images) > 0:
-    # go straight to get stream instead of executing , will continue this way to avoid npc
-    # loading issues for now.
     stream_response = get_stream(
         messages,
         images=images,
@@ -433,19 +590,6 @@ def stream():
         npc=npc if isinstance(npc, NPC) else None,
     )
 
-    """else:
-
-        stream_response = execute_command_stream(
-            commandstr,
-            command_history,
-            db_path,
-            npc_compiler,
-            model=model,
-            provider=provider,
-            messages=messages,
-            images=images,  # Pass the processed images
-        )  # Get all conversation messages so far
-    """
     final_response = ""  # To accumulate the assistant's response
 
     complete_response = []  # List to store all chunks
@@ -453,100 +597,31 @@ def stream():
     def event_stream():
         for response_chunk in stream_response:
             chunk_content = ""
-
-            # Extract content based on model type
-            if model.startswith("gpt-4o"):
-                chunk_content = "".join(
-                    choice.delta.content
+            chunk_content = "".join(
+                choice.delta.content
+                for choice in response_chunk.choices
+                if choice.delta.content is not None
+            )
+            if chunk_content:
+                complete_response.append(chunk_content)
+            chunk_data = {
+                "id": response_chunk.id,
+                "object": response_chunk.object,
+                "created": response_chunk.created,
+                "model": response_chunk.model,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "delta": {
+                            "content": choice.delta.content,
+                            "role": choice.delta.role,
+                        },
+                        "finish_reason": choice.finish_reason,
+                    }
                     for choice in response_chunk.choices
-                    if choice.delta.content is not None
-                )
-                if chunk_content:
-                    complete_response.append(chunk_content)
-                chunk_data = {
-                    "id": response_chunk.id,
-                    "object": response_chunk.object,
-                    "created": response_chunk.created,
-                    "model": response_chunk.model,
-                    "choices": [
-                        {
-                            "index": choice.index,
-                            "delta": {
-                                "content": choice.delta.content,
-                                "role": choice.delta.role,
-                            },
-                            "finish_reason": choice.finish_reason,
-                        }
-                        for choice in response_chunk.choices
-                    ],
-                }
-                yield f"data: {json.dumps(chunk_data)}\n\n"
-
-            elif model.startswith("llama"):
-                chunk_content = response_chunk["message"]["content"]
-                if chunk_content:
-                    complete_response.append(chunk_content)
-                chunk_data = {
-                    "id": None,
-                    "object": None,
-                    "created": response_chunk["created_at"],
-                    "model": response_chunk["model"],
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {
-                                "content": chunk_content,
-                                "role": response_chunk["message"]["role"],
-                            },
-                            "finish_reason": response_chunk.get("done_reason"),
-                        }
-                    ],
-                }
-                yield f"data: {json.dumps(chunk_data)}\n\n"
-
-            elif model.startswith("claude"):
-                print(response_chunk)
-                if response_chunk.type == "message_start":
-                    chunk_data = {
-                        "id": None,
-                        "object": None,
-                        "created": None,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {
-                                    "content": "",
-                                    "role": "assistant",
-                                },
-                                "finish_reason": "",
-                            }
-                        ],
-                    }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-
-                if response_chunk.type == "content_block_delta":
-                    chunk_content = response_chunk.delta.text
-                    if chunk_content:
-                        complete_response.append(chunk_content)
-                    chunk_data = {
-                        "id": None,
-                        "object": None,
-                        "created": None,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {
-                                    "content": chunk_content,
-                                    "role": "assistant",
-                                },
-                                "finish_reason": response_chunk.delta.type,
-                            }
-                        ],
-                    }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-
+                ],
+            }
+            yield f"data: {json.dumps(chunk_data)}\n\n"
             save_conversation_message(
                 command_history,
                 conversation_id,
@@ -1198,101 +1273,33 @@ def stream_raw():
         for response_chunk in stream_response:
             chunk_content = ""
 
-            # Extract content based on model type
-            if model.startswith("gpt-4o"):
-                chunk_content = "".join(
-                    choice.delta.content
+            chunk_content = "".join(
+                choice.delta.content
+                for choice in response_chunk.choices
+                if choice.delta.content is not None
+            )
+            if chunk_content:
+                complete_response.append(chunk_content)
+            chunk_data = {
+                "type": "content",  # Added type
+                "id": response_chunk.id,
+                "object": response_chunk.object,
+                "created": response_chunk.created,
+                "model": response_chunk.model,
+                "choices": [
+                    {
+                        "index": choice.index,
+                        "delta": {
+                            "content": choice.delta.content,
+                            "role": choice.delta.role,
+                        },
+                        "finish_reason": choice.finish_reason,
+                    }
                     for choice in response_chunk.choices
-                    if choice.delta.content is not None
-                )
-                if chunk_content:
-                    complete_response.append(chunk_content)
-                chunk_data = {
-                    "type": "content",  # Added type
-                    "id": response_chunk.id,
-                    "object": response_chunk.object,
-                    "created": response_chunk.created,
-                    "model": response_chunk.model,
-                    "choices": [
-                        {
-                            "index": choice.index,
-                            "delta": {
-                                "content": choice.delta.content,
-                                "role": choice.delta.role,
-                            },
-                            "finish_reason": choice.finish_reason,
-                        }
-                        for choice in response_chunk.choices
-                    ],
-                }
-                yield f"{json.dumps(chunk_data)}\n\n"
+                ],
+            }
+            yield f"{json.dumps(chunk_data)}\n\n"
 
-            elif model.startswith("llama"):
-                chunk_content = response_chunk["message"]["content"]
-                if chunk_content:
-                    complete_response.append(chunk_content)
-                chunk_data = {
-                    "type": "content",  # Added type
-                    "id": None,
-                    "object": None,
-                    "created": response_chunk["created_at"],
-                    "model": response_chunk["model"],
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {
-                                "content": chunk_content,
-                                "role": response_chunk["message"]["role"],
-                            },
-                            "finish_reason": response_chunk.get("done_reason"),
-                        }
-                    ],
-                }
-                yield f"{json.dumps(chunk_data)}\n\n"
-            elif model.startswith("claude"):
-                print(response_chunk)
-                if response_chunk.type == "message_start":
-                    chunk_data = {
-                        "type": "message_start",  # Added type
-                        "id": None,
-                        "object": None,
-                        "created": None,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {
-                                    "content": "",
-                                    "role": "assistant",
-                                },
-                                "finish_reason": "",
-                            }
-                        ],
-                    }
-                    yield f"{json.dumps(chunk_data)}\n\n"
-                if response_chunk.type == "content_block_delta":
-                    chunk_content = response_chunk.delta.text
-                    if chunk_content:
-                        complete_response.append(chunk_content)
-                    chunk_data = {
-                        "type": "content",  # Added type
-                        "content": chunk_content,
-                        "id": None,
-                        "object": None,
-                        "created": None,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {
-                                    "content": chunk_content,
-                                    "role": "assistant",
-                                },
-                                "finish_reason": response_chunk.delta.type,
-                            }
-                        ],
-                    }
-                    yield f"{json.dumps(chunk_data)}\n\n"
             if save_to_sqlite3:
                 save_conversation_message(
                     command_history,
