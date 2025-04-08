@@ -14,6 +14,7 @@ from npcsh.npc_sysenv import get_system_message
 def get_litellm_conversation(
     messages: List[Dict[str, str]],
     model: str,
+    provider: str,
     npc: Any = None,
     tools: list = None,
     api_key: str = None,

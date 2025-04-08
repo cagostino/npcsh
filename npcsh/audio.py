@@ -6,71 +6,69 @@ import time
 import queue
 import re
 import json
-import torch
-import pyaudio
-import wave
-from typing import Optional, List, Dict, Any
-from gtts import gTTS
-from faster_whisper import WhisperModel
-import pygame
-
-# Audio Configuration
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 16000
-CHUNK = 512
-
-# State Management
-is_speaking = False
-should_stop_speaking = False
-tts_sequence = 0
-recording_data = []
-buffer_data = []
-is_recording = False
-last_speech_time = 0
-running = True
-
-# Queues
-audio_queue = queue.Queue()
-tts_queue = queue.PriorityQueue()
-cleanup_files = []
-
-# Initialize pygame mixer
-pygame.mixer.quit()
-pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
-
-# Device selection
-device = "cpu"
-print(f"Using device: {device}")
-
-# Load VAD model
-print("Loading Silero VAD model...")
-vad_model, _ = torch.hub.load(
-    repo_or_dir="snakers4/silero-vad",
-    model="silero_vad",
-    force_reload=False,
-    onnx=False,
-    verbose=False,
-)
-vad_model.to(device)
-
-# Load Whisper model
-print("Loading Whisper model...")
-whisper_model = WhisperModel("base", device=device, compute_type="int8")
-
-# Conversation History Management
-history = []
-max_history = 10
-memory_file = "conversation_history.json"
-
-# Import the get_llm_response function
-from npcsh.llm_funcs import get_llm_response
-from npcsh.npc_sysenv import NPCSH_CHAT_PROVIDER, NPCSH_CHAT_MODEL, NPCSH_API_URL
-import subprocess
-
-print(NPCSH_CHAT_PROVIDER, NPCSH_CHAT_MODEL, NPCSH_API_URL)
 
 import subprocess
+
+try:
+    import torch
+    import pyaudio
+    import wave
+    from typing import Optional, List, Dict, Any
+    from gtts import gTTS
+    from faster_whisper import WhisperModel
+    import pygame
+
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = 16000
+    CHUNK = 512
+
+    # State Management
+    is_speaking = False
+    should_stop_speaking = False
+    tts_sequence = 0
+    recording_data = []
+    buffer_data = []
+    is_recording = False
+    last_speech_time = 0
+    running = True
+
+    # Queues
+    audio_queue = queue.Queue()
+    tts_queue = queue.PriorityQueue()
+    cleanup_files = []
+
+    # Initialize pygame mixer
+    pygame.mixer.quit()
+    pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+
+    # Device selection
+    device = "cpu"
+    print(f"Using device: {device}")
+
+    # Load VAD model
+    print("Loading Silero VAD model...")
+    vad_model, _ = torch.hub.load(
+        repo_or_dir="snakers4/silero-vad",
+        model="silero_vad",
+        force_reload=False,
+        onnx=False,
+        verbose=False,
+    )
+    vad_model.to(device)
+
+    # Load Whisper model
+    print("Loading Whisper model...")
+    whisper_model = WhisperModel("base", device=device, compute_type="int8")
+
+    # Conversation History Management
+    history = []
+    max_history = 10
+    memory_file = "conversation_history.json"
+
+
+except:
+    print("audio dependencies not installed")
 
 
 def convert_mp3_to_wav(mp3_file, wav_file):
