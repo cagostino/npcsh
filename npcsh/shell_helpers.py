@@ -2900,7 +2900,7 @@ def enter_whisper_mode(
                         generate_and_play_speech(text_to_speak)
 
                         # Delay after speech to prevent echo
-                        time.sleep(0.05 * len(text_to_speak))
+                        time.sleep(0.005 * len(text_to_speak))
                         print(len(text_to_speak))
 
                         # Clear the speaking flag to allow listening again
