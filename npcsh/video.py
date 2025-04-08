@@ -1,6 +1,9 @@
-# video.py 
+# video.py
+
 
 def process_video(file_path, table_name):
+    # implement with moon dream
+
     embeddings = []
     texts = []
     try:

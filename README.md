@@ -66,16 +66,32 @@ response = get_llm_response("What is the capital of France? Respond with a json 
                             model='llama3.2',
                             provider='ollama',
                             format='json')
+print(response)
+# assistant's response is contained in the 'response' key for easier access
+assistant_response = response['response']
+print(assistant_response)
+# access messages too
+messages = response['messages']
+print(messages)
+
+
 #openai's gpt-4o-mini
+from npcsh.llm_funcs import get_llm_response
+
 response = get_llm_response("What is the capital of France? Respond with a json object containing 'capital' as the key and the capital as the value.",
                             model='gpt-4o-mini',
                             provider='openai',
                             format='json')
+print(response)
 # anthropic's claude haikue 3.5 latest
+from npcsh.llm_funcs import get_llm_response
+
 response = get_llm_response("What is the capital of France? Respond with a json object containing 'capital' as the key and the capital as the value.",
-                            model='claude-haiku-3-5-latest',
+                            model='claude-3-5-haiku-latest',
                             provider='anthropic',
                             format='json')
+
+
 
 # alternatively, if you have NPCSH_CHAT_MODEL / NPCSH_CHAT_PROVIDER set in your ~/.npcshrc, it will use those values
 response = get_llm_response("What is the capital of France? Respond with a json object containing 'capital' as the key and the capital as the value.",
