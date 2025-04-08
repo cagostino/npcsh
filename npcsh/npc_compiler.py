@@ -525,6 +525,7 @@ class Tool:
         self.description = tool_data.get("description", "")
         self.steps = self.parse_steps(tool_data.get("steps", []))
 
+
     def parse_step(self, step: Union[dict, str]) -> dict:
         if isinstance(step, dict):
             return {
@@ -536,6 +537,12 @@ class Tool:
 
     def parse_steps(self, steps: list) -> list:
         return [self.parse_step(step) for step in steps]
+
+    def to_mcp(self):
+        # turn description into doc string
+        # turn name into function name
+        #create a python function systematically
+        # for natural language we wrap the code as triple quoted material and have "get_llm_response" for that.
 
     def execute(
         self,
