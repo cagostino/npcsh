@@ -447,8 +447,8 @@ def main():
             args.spell,
             model=args.model,
             provider=args.provider,
-            height=args.height,
-            width=args.width,
+            height=int(args.height),
+            width=int(args.width),
         )
         print(f"Image generated at: {image_path}")
 
