@@ -176,7 +176,7 @@ def get_litellm_response(
         # so the proviuder should only ever be openai-like
         if provider == "openai-like":
             api_params["api_base"] = api_url
-
+            provider = "openai"
     if format == "json":
         api_params["response_format"] = {"type": "json_object"}
     elif format is not None:
@@ -215,58 +215,58 @@ def get_litellm_response(
             ]:
                 api_params[key] = value
 
-    try:
-        # print(api_params)
-        # litellm completion appears to have some
-        # ollama issues, so will default to our
-        # custom implementation until we can revisit
-        # when its likely more better supported
-        resp = completion(
-            **api_params,
-        )
+    # try:
+    # print(api_params)
+    # litellm completion appears to have some
+    # ollama issues, so will default to our
+    # custom implementation until we can revisit
+    # when its likely more better supported
+    resp = completion(
+        **api_params,
+    )
 
-        # Get the raw response content
-        llm_response = resp.choices[0].message.content
+    # Get the raw response content
+    llm_response = resp.choices[0].message.content
 
-        # Prepare return dict
-        items_to_return = {
-            "response": llm_response,
-            "messages": messages,
-            "raw_response": resp,  # Include the full response for debugging
+    # Prepare return dict
+    items_to_return = {
+        "response": llm_response,
+        "messages": messages,
+        "raw_response": resp,  # Include the full response for debugging
+    }
+
+    # Handle JSON format requests
+    # print(format)
+    if format == "json":
+        try:
+            if isinstance(llm_response, str):
+                # print("converting the json")
+                loaded = json.loads(llm_response)
+            else:
+                loaded = llm_response  # Assume it's already parsed
+            if "json" in loaded:
+                items_to_return["response"] = loaded["json"]
+            else:
+                items_to_return["response"] = loaded
+
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"JSON parsing error: {str(e)}")
+            print(f"Raw response: {llm_response}")
+            items_to_return["error"] = "Invalid JSON response"
+            return items_to_return
+
+    # Add assistant response to message history
+    items_to_return["messages"].append(
+        {
+            "role": "assistant",
+            "content": (
+                llm_response if isinstance(llm_response, str) else str(llm_response)
+            ),
         }
+    )
 
-        # Handle JSON format requests
-        print(format)
-        if format == "json":
-            try:
-                if isinstance(llm_response, str):
-                    print("converting the json")
-                    loaded = json.loads(llm_response)
-                else:
-                    loaded = llm_response  # Assume it's already parsed
-                if "json" in loaded:
-                    items_to_return["response"] = loaded["json"]
-                else:
-                    items_to_return["response"] = loaded
+    return items_to_return
 
-            except (json.JSONDecodeError, TypeError) as e:
-                print(f"JSON parsing error: {str(e)}")
-                print(f"Raw response: {llm_response}")
-                items_to_return["error"] = "Invalid JSON response"
-                return items_to_return
-
-        # Add assistant response to message history
-        items_to_return["messages"].append(
-            {
-                "role": "assistant",
-                "content": (
-                    llm_response if isinstance(llm_response, str) else str(llm_response)
-                ),
-            }
-        )
-
-        return items_to_return
-
-    except Exception as e:
-        print(f"Error in get_litellm_response: {str(e)}")
-        return {"error": str(e), "messages": messages, "response": None}
+    # except Exception as e:
+    #    print(f"Error in get_litellm_response: {str(e)}")
+    #    return {"error": str(e), "messages": messages, "response": None}

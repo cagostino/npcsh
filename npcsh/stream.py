@@ -75,13 +75,8 @@ def get_litellm_stream(
     # Prepare API call parameters
     # print("provider", provider)
     # print("model", model)
-    if provider is not None:
-        model_str = f"{provider}/{model}"
-    else:
-        model_str = model
 
     api_params = {
-        "model": model_str,
         "messages": messages,
         "stream": True,
     }
@@ -92,8 +87,14 @@ def get_litellm_stream(
         api_params["api_key"] = api_key
 
     if api_url is not None and provider == "openai-like":
-        api_params["api_url"] = api_url
+        api_params["api_base"] = api_url
+        provider = "openai"
 
+    if provider is not None:
+        model_str = f"{provider}/{model}"
+    else:
+        model_str = model
+    api_params["model"] = model_str
     # Add tools if provided
     if tools:
         api_params["tools"] = tools

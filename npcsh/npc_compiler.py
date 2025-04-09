@@ -2,6 +2,7 @@ import subprocess
 import sqlite3
 import numpy as np
 import os
+import sqlalchemy
 import yaml
 from jinja2 import Environment, FileSystemLoader, Template, Undefined
 import pandas as pd
@@ -162,7 +163,6 @@ def load_npc_team(template_path):
 
 
 def get_template_npc_team(template, template_dir="~/.npcsh/npc_team/templates/"):
-
     # get the working directory where the
 
     npc_team = load_npc_team(template_dir + template)
@@ -177,7 +177,6 @@ def generate_npcs_from_area_of_expertise(
     provider=None,
     npc=None,
 ):
-
     prompt = f"""
     Here are the areas of expertise that a user requires a team of agents to be developed for.
 
@@ -570,7 +569,6 @@ class Tool:
 
         # Process Steps
         for i, step in enumerate(self.steps):
-
             context = self.execute_step(
                 step,
                 context,
@@ -624,19 +622,31 @@ class Tool:
         except:
             print("error rendering engine")
             rendered_engine = engine
-        print(f"proceeding with engine: {rendered_engine}")
-        print("rendered code: ", rendered_code)
+        # print(f"proceeding with engine: {rendered_engine}")
+        # print("rendered code: ", rendered_code)
         if rendered_engine == "natural":
             if len(rendered_code.strip()) > 0:
                 # print(f"Executing natural language step: {rendered_code}")
                 if stream:
                     messages = messages.copy() if messages else []
                     messages.append({"role": "user", "content": rendered_code})
-                    return get_stream(messages, model=model, provider=provider, npc=npc)
+                    return get_stream(
+                        messages,
+                        model=model,
+                        provider=provider,
+                        npc=npc,
+                        api_key=npc.api_key,
+                        api_url=npc.api_url,
+                    )
 
                 else:
                     llm_response = get_llm_response(
-                        rendered_code, model=model, provider=provider, npc=npc
+                        rendered_code,
+                        model=model,
+                        provider=provider,
+                        npc=npc,
+                        api_key=npc.api_key,
+                        api_url=npc.api_url,
                     )
                     response_text = llm_response.get("response", "")
                     # Store both in context for reference
@@ -667,6 +677,7 @@ class Tool:
                 "fnmatch": fnmatch,
                 "pathlib": pathlib,
                 "subprocess": subprocess,
+                "sqlalchemy": sqlalchemy,
             }
             new_locals = {}
             exec_env = context.copy()
@@ -785,6 +796,7 @@ class NPC:
         model: str = None,
         provider: str = None,
         api_url: str = None,
+        api_key: str = None,
         db_conn=None,
         all_tools: list = None,  # all available tools in global and project, this is an anti pattern i need to solve eventually but for now it works
         use_global_tools: bool = False,
@@ -793,6 +805,7 @@ class NPC:
         project_npc_directory: str = None,
         global_tools_directory: str = None,
         project_tools_directory: str = None,
+        context: dict = None,
     ):
         # 2. Load global tools from ~/.npcsh/npc_team/tools
         if global_tools_directory is None:
@@ -860,6 +873,7 @@ class NPC:
 
         self.provider = provider
         self.api_url = api_url
+        self.api_key = api_key
         self.all_tools = all_tools or []
         self.all_tools_dict = {tool.tool_name: tool for tool in self.all_tools}
         if self.tools:
@@ -972,6 +986,8 @@ class NPC:
             command,
             model=self.model,
             provider=self.provider,
+            api_url=self.api_url,
+            api_key=self.api_key,
             npc=self,
             retrieved_docs=retrieved_docs,
             messages=messages,
@@ -1308,144 +1324,147 @@ class NPCTeam:
             context=self.context,
             shared_context=self.shared_context,
         )
-        try:
-            while True:
-                try:
-                    result = self.foreman._check_llm_command(
-                        request,
-                        context=self.context,
-                        shared_context=self.shared_context,
-                    )
+        # try:
+        while True:
+            try:
+                result = self.foreman._check_llm_command(
+                    request,
+                    context=self.context,
+                    shared_context=self.shared_context,
+                )
+                print(result)
 
-                    # Track execution history and init npc messages if needed
-                    if "execution_history" not in self.shared_context:
-                        self.shared_context["execution_history"] = []
-                    if "npc_messages" not in self.shared_context:
-                        self.shared_context["npc_messages"] = {}
+                # Track execution history and init npc messages if needed
+                if "execution_history" not in self.shared_context:
+                    self.shared_context["execution_history"] = []
+                if "npc_messages" not in self.shared_context:
+                    self.shared_context["npc_messages"] = {}
 
-                    # Save result and maintain NPC message history
-                    if isinstance(result, dict):
-                        self.shared_context["execution_history"].append(result)
-                        if result.get("messages") and result.get("npc_name"):
-                            if (
-                                result["npc_name"]
-                                not in self.shared_context["npc_messages"]
-                            ):
-                                self.shared_context["npc_messages"][
-                                    result["npc_name"]
-                                ] = []
-                            self.shared_context["npc_messages"][
-                                result["npc_name"]
-                            ].extend(result["messages"])
-
-                    # Check if complete
-                    follow_up = get_llm_response(
-                        f"""Context: User request '{request}' returned:
-                        {result}
-
-                        Instructions:
-                        Analyze if this result fully addresses the request. In your evaluation you must not be
-                        too harsh. While there may be numerous refinements that can be made to improve the output
-                        to "fully address" the request, it will be typically better for the user to
-                        have a higher rate of interactive feedback such that we will not lose track of the
-                        real aim and get stuck in a rut hyper-fixating.
-                            Thus it is better to consider results as complete if they satisfy the bare minimum
-                            of the request and provide a good starting point for further refinement.
-
-                        Return a JSON object with two fields:
-                            -'complete' with boolean value.
-                            -'explanation' for incompleteness
-                        Do not include markdown formatting or ```json tags.
-                        Return only the JSON object.""",
-                        model=self.foreman.model,
-                        provider=self.foreman.provider,
-                        npc=self.foreman,
-                        format="json",
-                    )
-
-                    if isinstance(follow_up, dict) and isinstance(
-                        follow_up.get("response"), dict
-                    ):
-                        print(
-                            "response finished? ",
-                            follow_up.get("response", {}).get("complete", False),
-                        )
-                        print(
-                            "explanation provided",
-                            follow_up.get("response", {}).get("explanation", ""),
+                # Save result and maintain NPC message history
+                if isinstance(result, dict):
+                    self.shared_context["execution_history"].append(result)
+                    if result.get("messages") and result.get("npc_name"):
+                        if (
+                            result["npc_name"]
+                            not in self.shared_context["npc_messages"]
+                        ):
+                            self.shared_context["npc_messages"][result["npc_name"]] = []
+                        self.shared_context["npc_messages"][result["npc_name"]].extend(
+                            result["messages"]
                         )
 
-                        if not follow_up["response"].get("complete", False):
-                            return self.orchestrate(
-                                request
-                                + " /n The request has not yet been fully completed."
-                                + follow_up["response"]["explanation"]
-                                + " /n"
-                                + "please ensure that you tackle only the remaining parts of the request"
-                            )
-                        else:
-                            # Get final summary and recommendations
-                            debrief = get_llm_response(
-                                f"""Context:
-                                Original request: {request}
+                # Check if complete
+                follow_up = get_llm_response(
+                    f"""Context: User request '{request}' returned:
+                    {result}
 
-                                Execution history: {self.shared_context['execution_history']}
+                    Instructions:
+                    Analyze if this result fully addresses the request. In your evaluation you must not be
+                    too harsh. While there may be numerous refinements that can be made to improve the output
+                    to "fully address" the request, it will be typically better for the user to
+                    have a higher rate of interactive feedback such that we will not lose track of the
+                    real aim and get stuck in a rut hyper-fixating.
+                        Thus it is better to consider results as complete if they satisfy the bare minimum
+                        of the request and provide a good starting point for further refinement.
 
-                                Instructions:
-                                Provide summary of actions taken and any recommendations.
-                                Return a JSON object with fields:
-                                - 'summary': Overview of what was accomplished
-                                - 'recommendations': Suggested next steps
-                                Do not include markdown formatting or ```json tags.
-                                Return only the JSON object.""",
-                                model=self.foreman.model,
-                                provider=self.foreman.provider,
-                                npc=self.foreman,
-                                format="json",
-                            )
+                    Return a JSON object with two fields:
+                        -'complete' with boolean value.
+                        -'explanation' for incompleteness
+                    Do not include markdown formatting or ```json tags.
+                    Return only the JSON object.""",
+                    model=self.foreman.model,
+                    provider=self.foreman.provider,
+                    api_key=self.foreman.api_key,
+                    api_url=self.foreman.api_url,
+                    npc=self.foreman,
+                    format="json",
+                )
 
-                            return {
-                                "debrief": debrief.get("response"),
-                                "execution_history": self.shared_context[
-                                    "execution_history"
-                                ],
-                            }
+                if isinstance(follow_up, dict) and isinstance(
+                    follow_up.get("response"), dict
+                ):
+                    print(
+                        "response finished? ",
+                        follow_up.get("response", {}).get("complete", False),
+                    )
+                    print(
+                        "explanation provided",
+                        follow_up.get("response", {}).get("explanation", ""),
+                    )
 
-                    return result
-
-                except KeyboardInterrupt:
-                    print("\nExecution interrupted. Options:")
-                    print("1. Provide additional context")
-                    print("2. Skip this step")
-                    print("3. Resume execution")
-
-                    choice = input("Enter choice (1-3): ")
-
-                    if choice == "1":
-                        new_context = input("Enter additional context: ")
-                        self.context["additional_context"] = new_context
-                        continue
-                    elif choice == "2":
-                        return {"response": "Step skipped by user"}
-                    elif choice == "3":
-                        continue
+                    if not follow_up["response"].get("complete", False):
+                        return self.orchestrate(
+                            request
+                            + " /n The request has not yet been fully completed."
+                            + follow_up["response"]["explanation"]
+                            + " /n"
+                            + "please ensure that you tackle only the remaining parts of the request"
+                        )
                     else:
-                        print("Invalid choice, resuming...")
-                        continue
+                        # Get final summary and recommendations
+                        debrief = get_llm_response(
+                            f"""Context:
+                            Original request: {request}
 
-        except Exception as e:
-            # Get the full traceback
-            tb_lines = traceback.format_exc().splitlines()
+                            Execution history: {self.shared_context['execution_history']}
 
-            # Keep first 2 lines and last 3 lines
-            if len(tb_lines) > 5:
-                limited_tb = "\n".join(tb_lines[:2] + ["..."] + tb_lines[-3:])
-            else:
-                limited_tb = "\n".join(tb_lines)
+                            Instructions:
+                            Provide summary of actions taken and any recommendations.
+                            Return a JSON object with fields:
+                            - 'summary': Overview of what was accomplished
+                            - 'recommendations': Suggested next steps
+                            Do not include markdown formatting or ```json tags.
+                            Return only the JSON object.""",
+                            model=self.foreman.model,
+                            provider=self.foreman.provider,
+                            api_key=self.foreman.api_key,
+                            api_url=self.foreman.api_url,
+                            npc=self.foreman,
+                            format="json",
+                        )
 
-            print(f"Error in orchestration: {str(e)}")
-            print(f"Limited traceback:\n{limited_tb}")
-            return {"error": f"{str(e)}\n{limited_tb}"}
+                        return {
+                            "debrief": debrief.get("response"),
+                            "execution_history": self.shared_context[
+                                "execution_history"
+                            ],
+                        }
+
+                return result
+
+            except KeyboardInterrupt:
+                print("\nExecution interrupted. Options:")
+                print("1. Provide additional context")
+                print("2. Skip this step")
+                print("3. Resume execution")
+
+                choice = input("Enter choice (1-3): ")
+
+                if choice == "1":
+                    new_context = input("Enter additional context: ")
+                    self.context["additional_context"] = new_context
+                    continue
+                elif choice == "2":
+                    return {"response": "Step skipped by user"}
+                elif choice == "3":
+                    continue
+                else:
+                    print("Invalid choice, resuming...")
+                    continue
+
+        # except Exception as e:
+        # Get the full traceback
+        # tb_lines = traceback.format_exc().splitlines()
+
+        # Keep first 2 lines and last 3 lines
+        # if len(tb_lines) > 5:
+        #    limited_tb = "\n".join(tb_lines[:2] + ["..."] + tb_lines[-3:])
+        # else:
+        #    limited_tb = "\n".join(tb_lines)
+
+        # print(f"Error in orchestration: {str(e)}")
+        # print(f"Limited traceback:\n{limited_tb}")
+        # return {"error": f"{str(e)}\n{limited_tb}"}
 
 
 # perhaps the npc compiling is more than just for jinja reasons.
@@ -1603,7 +1622,6 @@ class NPCCompiler:
         # print(self.dirs)
         for directory in self.dirs:
             if os.path.exists(directory):
-
                 for filename in os.listdir(directory):
                     if filename.endswith(".npc"):
                         npc_path = os.path.join(directory, filename)
@@ -2774,9 +2792,9 @@ class ModelCompiler:
                     )
 
                     # Optionally pull the synthesized data into a new column
-                    df["ai_analysis"] = (
-                        synthesized_df  # Adjust as per what synthesize returns
-                    )
+                    df[
+                        "ai_analysis"
+                    ] = synthesized_df  # Adjust as per what synthesize returns
 
             return df
 

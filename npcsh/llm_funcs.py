@@ -663,7 +663,7 @@ def check_llm_command(
     stream=False,
     context=None,
     whisper=False,
-    synthesisze=False,
+    synthesize=False,
 ):
     """This function checks an LLM command.
     Args:
@@ -876,6 +876,7 @@ ReAct choices then will enter reasoning flow
 
 
         """
+    print(api_url, api_key)
 
     action_response = get_llm_response(
         prompt,
@@ -986,17 +987,26 @@ ReAct choices then will enter reasoning flow
         # print(npc)
         # get tge actual npc object from the npc.resolved_npcs
         npc_to_pass_obj = None
+        print(npc_to_pass)
+        agent_passes = []
         for npc_obj in npc.resolved_npcs:
-            if npc_to_pass in npc_obj:
-                npc_to_pass_obj = npc_obj[npc_to_pass]
-                break
-        return npc.handle_agent_pass(
-            npc_to_pass_obj,
-            command,
-            messages=messages,
-            retrieved_docs=retrieved_docs,
-            n_docs=n_docs,
-        )
+            for npc_name in npc_to_pass:
+                if npc_name in npc_obj:
+                    npc_to_pass_obj = npc_obj[npc_name]
+                    agent_passes.append(
+                        npc.handle_agent_pass(
+                            npc_to_pass_obj,
+                            command,
+                            messages=messages,
+                            retrieved_docs=retrieved_docs,
+                            n_docs=n_docs,
+                        )
+                    )
+        output = ""
+        print(agent_passes)
+        for agent_pass in agent_passes:
+            output += str(agent_pass.get("response")    )
+        return {"messages": messages, "output": output}
     elif action == "request_input":
         explanation = response_content_parsed.get("explanation")
 
@@ -1140,8 +1150,9 @@ def handle_tool_call(
         the tool call.
 
     """
-    # print(npc)
+    print(npc)
     print("handling tool call")
+    print(command)
     if not npc:
         print(
             f"No tools available for NPC '{npc.name}' or tools_dict is empty. Available tools: {available_tools}"
