@@ -81,7 +81,13 @@ base_requirements = [
 ]
 
 # API integration requirements
-api_requirements = ["anthropic", "openai", "google-generativeai", "google-genai"]
+api_requirements = [
+    "litellm",
+    "anthropic",
+    "openai",
+    "google-generativeai",
+    "google-genai",
+]
 
 # Local ML/AI requirements
 local_requirements = [
@@ -107,7 +113,7 @@ extra_files = package_files("npcsh/npc_team/")
 
 setup(
     name="npcsh",
-    version="0.3.32",
+    version="0.3.33",
     packages=find_packages(exclude=["tests*"]),
     install_requires=base_requirements,  # Only install base requirements by default
     extras_require={
