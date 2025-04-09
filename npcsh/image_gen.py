@@ -21,6 +21,8 @@ def generate_image_diffusers(
     prompt: str,
     model: str = "runwayml/stable-diffusion-v1-5",
     device: str = "cpu",
+    height: int = 256,
+    width: int = 256,
 ):
     """
     Function Description:
@@ -39,7 +41,7 @@ def generate_image_diffusers(
     pipe = pipe.to(device)
 
     # Generate the image
-    image = pipe(prompt)
+    image = pipe(prompt, height=height, width=width)
     image = image.images[0]
     # ["sample"][0]
     image.show()
@@ -51,8 +53,11 @@ def generate_image_litellm(
     prompt: str,
     model: str = NPCSH_IMAGE_GEN_MODEL,
     provider: str = NPCSH_IMAGE_GEN_PROVIDER,
+    height: int = 256,
+    width: int = 256,
+    n_images: int = 1,
     api_key: str = None,
-    size: str = None,
+    api_url: str = None,
     npc=None,
 ) -> str:
     """
@@ -61,7 +66,8 @@ def generate_image_litellm(
     Args:
         prompt (str): The prompt for generating the image.
         model (str): The model to use for generating the image.
-        api_key (str): The API key for accessing the OpenAI API.
+        api_key (str): The API key  .
+        api_url (str): The API URL  LITELLM DOES NOT YET SUPPORT CUSTOM.
     Keyword Args:
         None
     Returns:
@@ -69,11 +75,30 @@ def generate_image_litellm(
     """
     if model is None:
         model = "runwayml/stable-diffusion-v1-5"
-    if size is None:
-        size = "1024x1024"
+    if provider == "openai":
+        if "dall" not in model:
+            model = "dall-e-2"
     if provider == "diffusers":
-        return generate_image_diffusers(prompt, model)
+        return generate_image_diffusers(prompt, model, height=height, width=width)
     else:
+        print(f"{height}x{width}")
+
+        if f"{height}x{width}" not in [
+            "256x256",
+            "512x512",
+            "1024x1024",
+            "1024x1792",
+            "1792x1024",
+        ]:
+            raise ValueError(
+                f"Invalid image size: {height}x{width}. Please use one of the following: 256x256, 512x512, 1024x1024, 1024x1792, 1792x1024"
+            )
+        print(model, provider)
         return image_generation(
-            prompt=prompt, model=f"{provider}/{model}", n=2, size="240x240"
+            prompt=prompt,
+            model=f"{provider}/{model}",
+            n=n_images,
+            size=f"{height}x{width}",
+            api_key=api_key,
+            api_base=api_url,
         )

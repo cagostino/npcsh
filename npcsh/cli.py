@@ -37,10 +37,10 @@ from npcsh.plonk import plonk, action_space
 from npcsh.search import search_web
 from npcsh.shell_helpers import *
 import os
+import sqlite3
 
 # check if ./npc_team exists
 if os.path.exists("./npc_team"):
-
     npc_directory = os.path.abspath("./npc_team/")
 else:
     npc_directory = os.path.expanduser("~/.npcsh/npc_team/")
@@ -49,7 +49,6 @@ npc_compiler = NPCCompiler(npc_directory, NPCSH_DB_PATH)
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="NPC utilities")
     known_commands = {
         "assemble",
@@ -73,9 +72,10 @@ def main():
         "ots",
         "whisper",
     }
+    has_command = any(arg in known_commands for arg in sys.argv[1:])
 
     # Only add prompt as default if first arg isn't a known command
-    if len(sys.argv) > 1 and sys.argv[1] not in known_commands:
+    if not has_command:
         parser.add_argument(
             "prompt", nargs="?", help="Generic prompt to send to the default LLM"
         )
@@ -89,10 +89,10 @@ def main():
             type=str,
             default=NPCSH_CHAT_PROVIDER,
         )
+
         parser.add_argument(
             "-n", "--npc", help="name of the NPC", type=str, default="sibiji"
         )
-
         args = parser.parse_args()
         db_conn = sqlite3.connect(NPCSH_DB_PATH)
         if args.npc is None or args.npc == "sibiji":
@@ -317,6 +317,8 @@ def main():
 
     # Image generation
     vixynt_parser = subparsers.add_parser("vixynt", help="generate an image")
+    vixynt_parser.add_argument("--height", "-ht", help="the height of the image")
+    vixynt_parser.add_argument("--width", "-wd", help="the width of the image")
     vixynt_parser.add_argument("spell", help="the prompt to generate the image")
 
     # Screenshot analysis
@@ -445,6 +447,8 @@ def main():
             args.spell,
             model=args.model,
             provider=args.provider,
+            height=args.height,
+            width=args.width,
         )
         print(f"Image generated at: {image_path}")
 
@@ -514,14 +518,12 @@ def main():
                 autogen=args.autogen,
             )
         elif args.type == "tool":
-
             create_new_tool(
                 name=args.name,
                 description=args.description,
                 autogen=args.autogen,
             )
         elif args.type == "assembly_line":
-
             create_new_assembly_line(
                 name=args.name,
                 description=args.description,

@@ -77,6 +77,8 @@ def generate_image(
     provider: str = NPCSH_IMAGE_GEN_PROVIDER,
     filename: str = None,
     npc: Any = None,
+    height: int = 256,
+    width: int = 256,
 ):
     """This function generates an image using the specified provider and model.
     Args:
@@ -107,10 +109,12 @@ def generate_image(
             os.path.expanduser("~/.npcsh/images/")
             + f"image_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         )
-    generate_image_litellm(
+    image = generate_image_litellm(
         prompt=prompt,
         model=model,
         provider=provider,
+        height=height,
+        width=width,
     )
     # save image
     # check if image is a PIL image
@@ -1005,7 +1009,7 @@ ReAct choices then will enter reasoning flow
         output = ""
         print(agent_passes)
         for agent_pass in agent_passes:
-            output += str(agent_pass.get("response")    )
+            output += str(agent_pass.get("response"))
         return {"messages": messages, "output": output}
     elif action == "request_input":
         explanation = response_content_parsed.get("explanation")
