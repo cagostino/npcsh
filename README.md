@@ -12,7 +12,7 @@
 - `npcsh` stores your executed commands, conversations, generated images, captured screenshots, and more in a central database
 
 - `npcsh` is a drop-in replacement for one's bash shell with natural language processing capabilities and a suite of built-in tools (macros) for tasks like voice control, image generation, and web searching.
-- 
+
 - `npcsh` is extensible through its python library implementation and offers a simple CLI interface with the `npc` cli.
 
 - `npcsh` integrates with local and enterprise LLM providers like Ollama, LMStudio, OpenAI, Anthropic, Gemini, and Deepseek, making it a versatile tool for both simple commands and sophisticated AI-driven tasks.
