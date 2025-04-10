@@ -56,7 +56,7 @@ Users can take advantage of `npcsh` through its custom shell or through a comman
 Integrate npcsh into your Python projects for additional flexibility. Below are a few examples of how to use the library programmatically.
 
 
-### Example 1: usisng npcsh's get_llm_response and get_stream
+### Example 1: using npcsh's get_llm_response and get_stream
 
 ```python
 from npcsh.llm_funcs import get_llm_response
