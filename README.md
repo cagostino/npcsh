@@ -6,12 +6,13 @@
 # npcsh
 
 
-- `npcsh` is a python-based AI Agent framework designed to integrate Large Language Models (LLMs) and Agents into one's daily workflow by making them available and easily configurable through a command line shell as well as an extensible python library.
+- `npcsh` is a python-based AI Agent framework designed to integrate Large Language Models (LLMs) and Agents into one's daily workflow by making them available and easily configurable through a command line shell as well as an extensible python library. It allows users to create custom NPCs (AI agents) with specific personalities and capabilities for complex workflows and to orchestrate them directly or to provide a REST server which can receive HTTP requests.
+
 
 - `npcsh` stores your executed commands, conversations, generated images, captured screenshots, and more in a central database
 
-- The NPC shell understands natural language commands and provides a suite of built-in tools (macros) for tasks like voice control, image generation, and web searching, while allowing users to create custom NPCs (AI agents) with specific personalities and capabilities for complex workflows.
-
+- `npcsh` is a drop-in replacement for one's bash shell with natural language processing capabilities and a suite of built-in tools (macros) for tasks like voice control, image generation, and web searching.
+- 
 - `npcsh` is extensible through its python library implementation and offers a simple CLI interface with the `npc` cli.
 
 - `npcsh` integrates with local and enterprise LLM providers like Ollama, LMStudio, OpenAI, Anthropic, Gemini, and Deepseek, making it a versatile tool for both simple commands and sophisticated AI-driven tasks.
