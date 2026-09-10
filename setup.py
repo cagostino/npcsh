@@ -97,12 +97,6 @@ setup(
     entry_points={
         "console_scripts": [
             "npc-init=npcpy.init:main",
-            "npc-claude=npcpy.launcher:main",
-            "npc-codex=npcpy.launcher:main",
-            "npc-gemini=npcpy.launcher:main",
-            "npc-opencode=npcpy.launcher:main",
-            "npc-aider=npcpy.launcher:main",
-            "npc-amp=npcpy.launcher:main",
             "npc-plugin=npcpy.plugin_setup:main",
             "jinx2skill=npcpy.convert:_cli_jinx_to_skill",
             "skill2jinx=npcpy.convert:_cli_skill_to_jinx",

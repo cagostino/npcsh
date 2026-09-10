@@ -681,12 +681,6 @@ npcsh                        # Interactive shell with agents, tools, and jinxes
 # Scaffold a new team
 npc-init
 
-# Launch AI coding tools as an NPC from your team
-npc-claude --npc corca       # Claude Code
-npc-codex --npc analyst      # Codex
-npc-gemini                   # Gemini CLI (interactive picker)
-npc-opencode / npc-aider / npc-amp
-
 # Register MCP server + hooks for deeper integration
 npc-plugin claude
 ```
