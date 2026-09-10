@@ -3967,11 +3967,11 @@ class Agent(NPC):
                     disp_args = disp_args[:200] + "…"
                 if len(disp_res) > 400:
                     disp_res = disp_res[:400] + "…"
-                _log(f"[agent:{self.name}]   → {name}({disp_args}) = {disp_res}")
+                log(f"[agent:{self.name}]   → {name}({disp_args}) = {disp_res}")
 
             prompt = None
 
-        _log(f"[agent:{self.name}] hit max_iterations={max_iterations}")
+        log(f"[agent:{self.name}] hit max_iterations={max_iterations}")
         return last_content or "Max iterations reached without a final answer."
 
     def _extract_tool_call(self, tc):
